@@ -165,3 +165,34 @@ export interface Review {
   user: { id: string; name: string }
   createdAt: string
 }
+
+/** Body for POST/PATCH /businesses. */
+export interface BusinessInput {
+  name: string
+  category: Category
+  description?: string
+  phone?: string
+  logoUrl?: string
+  coverUrl?: string
+  address: Address
+  location: GeoPoint
+  collectionInstructions?: string
+  isActive?: boolean
+}
+
+/** Body for POST/PATCH /offers (PATCH omits businessId). */
+export interface OfferInput {
+  businessId: string
+  title: string
+  description: string
+  category?: Category
+  tags?: string[]
+  priceMinor: number
+  originalPriceMinor: number
+  quantityTotal: number
+  maxPerReservation?: number
+  pickupStart: string
+  pickupEnd: string
+}
+
+export type OfferPatch = Partial<Omit<OfferInput, 'businessId'>> & { status?: 'active' | 'paused' }

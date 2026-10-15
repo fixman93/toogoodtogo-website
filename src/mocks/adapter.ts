@@ -2,10 +2,12 @@
  * Axios adapter that answers API calls from the demo dataset while the real
  * backend is not configured (VITE_API_MODE=mock). It intentionally mirrors
  * only the public REST contract — it is not a second backend. State is kept
- * in localStorage for the current day so reservations survive a reload.
+ * in this browser's localStorage. Each new day the seeded demo offers are
+ * regenerated; locations and offers created in the partner portal are kept.
  */
 import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
-import type { Favorite, Offer, OfferQuery, Reservation, User } from '@/api/types'
+import type { Business, BusinessInput, Favorite, Offer, OfferInput, OfferPatch, OfferQuery, Reservation, User } from '@/api/types'
+import { market } from '@/config/markets'
 import { distanceMeters } from '@/lib/geo'
 import { zonedDateParts } from '@/lib/time'
 import {
@@ -17,7 +19,9 @@ import {
   toSummary,
 } from './data'
 
-const STORAGE_KEY = 'zalogaj.mockdb.v1'
+const STORAGE_KEY = 'zalogaj.mockdb.v2'
+/** Ids of records created through the partner portal survive the daily reset. */
+const USER_CREATED = 'new-'
 const CANCEL_CUTOFF_MINUTES = 30
 const LATENCY_MS = 250
 
@@ -25,6 +29,7 @@ type StoredUser = User & { password: string }
 interface MockDb {
   day: string
   users: StoredUser[]
+  businesses: Business[]
   offers: Offer[]
   reservations: (Reservation & { userId: string })[]
   favorites: (Pick<Favorite, 'id' | 'targetType' | 'targetId' | 'createdAt'> & { userId: string })[]
@@ -35,6 +40,7 @@ function freshDb(): MockDb {
   return {
     day: new Date().toDateString(),
     users: mockUsers,
+    businesses: mockBusinesses,
     offers,
     reservations: buildMockReservations(offers),
     favorites: [
@@ -48,8 +54,14 @@ function loadDb(): MockDb {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
-      const db = JSON.parse(raw) as MockDb
-      if (db.day === new Date().toDateString()) return db
+      const stored = JSON.parse(raw) as MockDb
+      if (stored.day === new Date().toDateString()) return stored
+      // New day: fresh demo offers with today's pickup times, keep everything users created.
+      return {
+        ...stored,
+        day: new Date().toDateString(),
+        offers: [...buildMockOffers(), ...stored.offers.filter((o) => o.id.startsWith(USER_CREATED))],
+      }
     }
   } catch {
     /* ignore corrupt storage */
@@ -113,7 +125,35 @@ const withCancelFlag = (r: Reservation): Reservation => ({
 })
 
 function ownsBusiness(user: StoredUser, businessId: string) {
-  return user.role === 'admin' || mockBusinesses.some((b) => b.id === businessId && b.ownerId === user.id)
+  return user.role === 'admin' || db.businesses.some((b) => b.id === businessId && b.ownerId === user.id)
+}
+
+function findBusiness(id: unknown) {
+  return db.businesses.find((b) => b.id === id) ?? fail(404, 'NOT_FOUND', 'Lokal nije pronađen.')
+}
+
+function requireOwner(config: InternalAxiosRequestConfig, businessId: string) {
+  const user = requireUser(config)
+  if (user.role !== 'business' && user.role !== 'admin') fail(403, 'FORBIDDEN', 'Nemate dozvolu za ovu radnju.')
+  const business = findBusiness(businessId)
+  if (!ownsBusiness(user, business.id)) fail(403, 'FORBIDDEN', 'Ovaj lokal ne pripada vašem nalogu.')
+  return business
+}
+
+/** Offers embed a business summary; always serve the current one. */
+function withBusiness(o: Offer): Offer {
+  const business = db.businesses.find((b) => b.id === o.businessId)
+  return {
+    ...o,
+    business: business ? toSummary(business) : o.business,
+    status: new Date(o.pickupEnd).getTime() <= Date.now() ? 'expired' : o.status,
+  }
+}
+
+function checkOffer(o: Pick<Offer, 'priceMinor' | 'originalPriceMinor' | 'pickupStart' | 'pickupEnd' | 'quantityTotal'>) {
+  if (!(o.priceMinor > 0) || o.priceMinor >= o.originalPriceMinor) fail(400, 'INVALID_PRICE', 'Cena mora biti niža od redovne.')
+  if (!(o.quantityTotal >= 1)) fail(400, 'VALIDATION_ERROR', 'Broj kesa mora biti najmanje 1.')
+  if (o.pickupEnd <= o.pickupStart) fail(400, 'INVALID_PICKUP', 'Kraj preuzimanja mora biti posle početka.')
 }
 
 function forStaff(r: MockDb['reservations'][number]): Reservation {
@@ -145,6 +185,7 @@ function queryOffers(query: OfferQuery) {
 
   let items = db.offers
     .filter((o) => o.status === 'active' && new Date(o.pickupEnd).getTime() > now)
+    .map(withBusiness)
     .map((o) => (origin ? { ...o, distanceMeters: Math.round(distanceMeters(origin, o.business.location)) } : o))
     .filter((o) => {
       if (query.category && o.category !== query.category) return false
@@ -181,11 +222,12 @@ function queryOffers(query: OfferQuery) {
 
 function expandFavorite(f: MockDb['favorites'][number]): Favorite {
   if (f.targetType === 'business') {
-    const business = mockBusinesses.find((b) => b.id === f.targetId)
+    const business = db.businesses.find((b) => b.id === f.targetId && b.isActive)
     const activeOfferCount = db.offers.filter((o) => o.businessId === f.targetId && o.quantityAvailable > 0).length
     return { ...f, business: business ? { ...toSummary(business), activeOfferCount } : undefined }
   }
-  return { ...f, offer: db.offers.find((o) => o.id === f.targetId) }
+  const offer = db.offers.find((o) => o.id === f.targetId)
+  return { ...f, offer: offer && withBusiness(offer) }
 }
 
 function code() {
@@ -232,17 +274,108 @@ const routes: [string, RegExp, Handler][] = [
   ['GET', /^\/offers$/, ({ query }) => ({ data: queryOffers(query as OfferQuery) })],
   ['GET', /^\/offers\/([\w-]+)$/, ({ params }) => {
     const offer = db.offers.find((o) => o.id === params[0]) ?? fail(404, 'NOT_FOUND', 'Ponuda nije pronađena.')
-    return { data: { data: offer } }
+    return { data: { data: withBusiness(offer) } }
+  }],
+  ['POST', /^\/offers$/, ({ config, body }) => {
+    const input = body as unknown as OfferInput
+    const business = requireOwner(config, input.businessId)
+    if (new Date(input.pickupEnd).getTime() <= Date.now()) fail(400, 'PICKUP_IN_PAST', 'Vreme preuzimanja mora biti u budućnosti.')
+    const offer: Offer = {
+      id: `${USER_CREATED}${Date.now()}`,
+      businessId: business.id,
+      business: toSummary(business),
+      title: input.title,
+      description: input.description,
+      category: input.category ?? business.category,
+      imageUrl: business.coverUrl,
+      tags: input.tags ?? [],
+      priceMinor: input.priceMinor,
+      originalPriceMinor: input.originalPriceMinor,
+      currency: business.currency,
+      quantityTotal: input.quantityTotal,
+      quantityAvailable: input.quantityTotal,
+      maxPerReservation: Math.min(input.maxPerReservation ?? 4, input.quantityTotal),
+      pickupStart: input.pickupStart,
+      pickupEnd: input.pickupEnd,
+      timezone: business.timezone,
+      status: 'active',
+      reservedCount: 0,
+    }
+    checkOffer(offer)
+    db.offers = [...db.offers, offer]
+    save()
+    return { status: 201, data: { data: withBusiness(offer) } }
+  }],
+  ['PATCH', /^\/offers\/([\w-]+)$/, ({ config, params, body }) => {
+    const offer = db.offers.find((o) => o.id === params[0]) ?? fail(404, 'NOT_FOUND', 'Ponuda nije pronađena.')
+    requireOwner(config, offer.businessId)
+    const patch = body as OfferPatch
+    const next = { ...offer, ...patch } as Offer
+    if (patch.quantityTotal != null) {
+      next.quantityAvailable = offer.quantityAvailable + (patch.quantityTotal - offer.quantityTotal)
+      if (next.quantityAvailable < 0) fail(409, 'QUANTITY_BELOW_RESERVED', 'Količina ne može biti manja od već rezervisanih kesa.')
+    }
+    checkOffer(next)
+    if ((patch.pickupEnd || patch.status === 'active') && new Date(next.pickupEnd).getTime() <= Date.now()) {
+      fail(400, 'PICKUP_IN_PAST', 'Vreme preuzimanja mora biti u budućnosti.')
+    }
+    Object.assign(offer, next)
+    save()
+    return { data: { data: withBusiness(offer) } }
+  }],
+  ['DELETE', /^\/offers\/([\w-]+)$/, ({ config, params }) => {
+    const offer = db.offers.find((o) => o.id === params[0]) ?? fail(404, 'NOT_FOUND', 'Ponuda nije pronađena.')
+    requireOwner(config, offer.businessId)
+    if (db.reservations.some((r) => r.offer.id === offer.id && (r.status === 'confirmed' || r.status === 'pending_payment'))) {
+      fail(409, 'HAS_ACTIVE_RESERVATIONS', 'Ponuda ima aktivne rezervacije. Prvo ih otkažite ili pauzirajte ponudu.')
+    }
+    db.offers = db.offers.filter((o) => o.id !== offer.id)
+    save()
+    return { status: 204, data: '' }
   }],
 
   ['GET', /^\/businesses$/, ({ config, query }) => {
-    let items = mockBusinesses
-    if (query.owner === 'me') items = items.filter((b) => b.ownerId === requireUser(config).id)
-    return { data: paginate(items) }
+    let items = db.businesses.filter((b) => b.isActive)
+    if (query.owner === 'me') {
+      const user = requireUser(config)
+      items = db.businesses.filter((b) => b.ownerId === user.id)
+    }
+    return { data: paginate(items, 1, 100) }
   }],
-  ['GET', /^\/businesses\/([\w-]+)$/, ({ params }) => {
-    const business = mockBusinesses.find((b) => b.id === params[0]) ?? fail(404, 'NOT_FOUND', 'Lokal nije pronađen.')
+  ['POST', /^\/businesses$/, ({ config, body }) => {
+    const user = requireUser(config)
+    if (user.role !== 'business' && user.role !== 'admin') fail(403, 'FORBIDDEN', 'Nemate dozvolu za ovu radnju.')
+    const input = body as unknown as BusinessInput
+    if (!input.name || !input.address?.street || !input.address?.city || !input.location) fail(400, 'VALIDATION_ERROR', 'Neispravni podaci.')
+    const business: Business = {
+      ...input,
+      id: `${USER_CREATED}${Date.now()}`,
+      ownerId: user.id,
+      timezone: market.timezone,
+      currency: market.currency,
+      rating: { average: 0, count: 0 },
+      isActive: true,
+    }
+    db.businesses = [...db.businesses, business]
+    save()
+    return { status: 201, data: { data: business } }
+  }],
+  ['GET', /^\/businesses\/([\w-]+)$/, ({ params }) => ({ data: { data: findBusiness(params[0]) } })],
+  ['PATCH', /^\/businesses\/([\w-]+)$/, ({ config, params, body }) => {
+    const business = requireOwner(config, params[0])
+    Object.assign(business, body as Partial<BusinessInput>)
+    // Mirrors the API: deactivating a location pauses its live offers.
+    if (business.isActive === false) db.offers.filter((o) => o.businessId === business.id && o.status === 'active').forEach((o) => (o.status = 'paused'))
+    save()
     return { data: { data: business } }
+  }],
+  ['GET', /^\/businesses\/([\w-]+)\/offers$/, ({ config, params }) => {
+    const business = requireOwner(config, params[0])
+    const items = db.offers
+      .filter((o) => o.businessId === business.id)
+      .map(withBusiness)
+      .sort((a, b) => b.pickupStart.localeCompare(a.pickupStart))
+    return { data: paginate(items, 1, 100) }
   }],
   ['GET', /^\/businesses\/([\w-]+)\/reviews$/, ({ params }) => ({ data: paginate(buildMockReviews(params[0])) })],
 
@@ -282,6 +415,7 @@ const routes: [string, RegExp, Handler][] = [
     const user = requireUser(config)
     const quantity = Number(body.quantity ?? 1)
     const offer = db.offers.find((o) => o.id === body.offerId) ?? fail(404, 'NOT_FOUND', 'Ponuda nije pronađena.')
+    if (offer.status !== 'active' || new Date(offer.pickupEnd).getTime() <= Date.now()) fail(409, 'OFFER_UNAVAILABLE', 'Ponuda trenutno nije dostupna.')
     if (quantity < 1 || quantity > offer.maxPerReservation) fail(400, 'INVALID_QUANTITY', `Možeš rezervisati najviše ${offer.maxPerReservation}.`)
     if (offer.quantityAvailable < quantity) fail(409, 'SOLD_OUT', 'Nema dovoljno dostupnih kesa.')
     offer.quantityAvailable -= quantity
@@ -300,7 +434,7 @@ const routes: [string, RegExp, Handler][] = [
       pickupEnd: offer.pickupEnd,
       timezone: offer.timezone,
       offer: { id: offer.id, title: offer.title, imageUrl: offer.imageUrl },
-      business: offer.business,
+      business: withBusiness(offer).business,
       payment: { status: 'not_required', method: 'pay_at_pickup' },
       canCancel: true,
       createdAt: new Date().toISOString(),

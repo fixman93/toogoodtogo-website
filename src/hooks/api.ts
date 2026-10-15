@@ -1,7 +1,7 @@
 /** TanStack Query hooks — the only way screens read or mutate server state. */
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { businessesApi, favoritesApi, offersApi, reservationsApi } from '@/api/services'
-import type { Favorite, FavoriteTarget, OfferQuery, Reservation } from '@/api/types'
+import type { BusinessInput, Favorite, FavoriteTarget, OfferInput, OfferPatch, OfferQuery, Reservation } from '@/api/types'
 import { useAuth } from '@/features/auth/auth-context'
 
 export function useOffers(query: OfferQuery, options: { enabled?: boolean } = {}) {
@@ -136,4 +136,53 @@ export function useFavoriteToggle(targetType: FavoriteTarget, targetId: string) 
 
 export function useBusiness(id: string | undefined) {
   return useQuery({ queryKey: ['businesses', 'detail', id], queryFn: () => businessesApi.get(id!), enabled: !!id, staleTime: 300_000 })
+}
+
+// ---------------------------------------------------------------------------
+// Partner portal
+
+export function useBusinessOffers(businessId: string | undefined) {
+  return useQuery({
+    queryKey: ['businesses', businessId, 'offers'],
+    queryFn: () => businessesApi.offers(businessId!),
+    enabled: !!businessId,
+  })
+}
+
+/** Create (no id) or update a location. */
+export function useSaveBusiness() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string; body: BusinessInput }) => (id ? businessesApi.update(id, body) : businessesApi.create(body)),
+    onSuccess: (business) => queryClient.setQueryData(['businesses', 'detail', business.id], business),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['businesses'] })
+      queryClient.invalidateQueries({ queryKey: ['offers'] })
+    },
+  })
+}
+
+/** Create (OfferInput) or update (id + OfferPatch) an offer. */
+export function useSaveOffer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { id: string; body: OfferPatch } | { id?: undefined; body: OfferInput }) =>
+      input.id ? offersApi.update(input.id, input.body) : offersApi.create(input.body as OfferInput),
+    onSuccess: (offer) => queryClient.setQueryData(['offers', 'detail', offer.id], offer),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['offers'] })
+      queryClient.invalidateQueries({ queryKey: ['businesses'] })
+    },
+  })
+}
+
+export function useDeleteOffer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: offersApi.remove,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['offers'] })
+      queryClient.invalidateQueries({ queryKey: ['businesses'] })
+    },
+  })
 }

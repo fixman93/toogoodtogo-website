@@ -4,6 +4,8 @@ import { AuthPage } from '@/pages/AuthPage'
 import { BrowsePage } from '@/pages/BrowsePage'
 import { BusinessDashboardPage } from '@/pages/BusinessDashboardPage'
 import { BusinessScanPage } from '@/pages/BusinessScanPage'
+import { LocationFormPage } from '@/pages/partner/LocationFormPage'
+import { OfferFormPage } from '@/pages/partner/OfferFormPage'
 import { DiscoverPage } from '@/pages/DiscoverPage'
 import { FavoritesPage } from '@/pages/FavoritesPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -27,6 +29,10 @@ const router = createBrowserRouter([
       { path: 'register', element: <AuthPage mode="register" /> },
       { path: 'business', element: <BusinessDashboardPage /> },
       { path: 'business/scan', element: <BusinessScanPage /> },
+      { path: 'business/locations/new', element: <LocationFormPage /> },
+      { path: 'business/locations/:id/edit', element: <LocationFormPage /> },
+      { path: 'business/offers/new', element: <OfferFormPage /> },
+      { path: 'business/offers/:id/edit', element: <OfferFormPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

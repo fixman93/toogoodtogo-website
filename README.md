@@ -153,17 +153,35 @@ Safeguards:
 over HTTPS (e.g. `@vitejs/plugin-basic-ssl`) or use a tunnel. Manual code entry
 works everywhere.
 
-## Business portal (foundation)
+## Partner portal
 
-`/business` is visible to `business` and `admin` accounts. It shows the
-partner's locations and live offers, and links to the scanner. The backend
-already supports the full management flow, protected by ownership checks:
+Visible to `business` and `admin` accounts at `/business`. Account → locations → offers:
 
-* `POST/PATCH /api/businesses`
-* `POST/PATCH/DELETE /api/offers`
-* `GET /api/reservations?businessId=…`
+* **One account can run many locations** (`/business/locations/new`). Each
+  location has its own address and map pin, phone, pickup instructions and
+  images. The pin can be found from the address (OpenStreetMap Nominatim) or
+  set with "Koristi moju trenutnu lokaciju".
+* **Each location has many offers** (`/business/offers/new`). An offer has a
+  title, description, category, tags, regular and discounted price, number of
+  bags, a per-customer limit, and a pickup date and time window in the
+  location's timezone.
+* **Actions per offer:**
+  * **Uredi:** edit the offer. The bag count can't drop below what's already
+    reserved.
+  * **Pauziraj / Aktiviraj:** pause or reactivate. Paused offers are hidden
+    from customers.
+  * **Ponovi:** a copy for the next free day.
+  * **Obriši:** delete. Blocked while there are active reservations.
+* Past offers are listed separately, and "Ponovi" works on them too.
+* **Skeniraj kod** (`/business/scan`) handles pickups (see above).
 
-The next step is adding forms for these endpoints.
+The API enforces ownership on every call: a partner only ever sees and changes
+their own locations and offers (`GET /api/businesses/:id/offers` is the
+owner-only list that includes paused and past offers). In mock mode, partner
+changes are saved in that browser only.
+
+Planned next: recurring offers (e.g. "every weekday 19:30–20:30, 8 bags"),
+image upload, and staff accounts per location.
 
 ## Not included yet
 

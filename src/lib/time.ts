@@ -32,3 +32,25 @@ export function zonedTime(dayOffset: number, hhmm: string, timeZone: string, now
   const guess = new Date(Date.UTC(year, month - 1, day + dayOffset, h, m))
   return new Date(guess.getTime() - tzOffset(guess, timeZone))
 }
+
+/** UTC instant for a calendar date ("YYYY-MM-DD") and wall-clock time ("HH:mm") in `timeZone`. */
+export function zonedDateTimeToUtc(date: string, hhmm: string, timeZone: string): Date {
+  const [y, m, d] = date.split('-').map(Number)
+  const [h, min] = hhmm.split(':').map(Number)
+  const guess = new Date(Date.UTC(y, m - 1, d, h, min))
+  return new Date(guess.getTime() - tzOffset(guess, timeZone))
+}
+
+/** Form-friendly local parts of an instant: { date: "YYYY-MM-DD", time: "HH:mm" } in `timeZone`. */
+export function toZonedInput(iso: string | Date, timeZone: string) {
+  const at = typeof iso === 'string' ? new Date(iso) : iso
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at)
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at)
+  return { date, time }
+}
+
+/** "YYYY-MM-DD" `days` after the given local date. */
+export function addDays(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+}

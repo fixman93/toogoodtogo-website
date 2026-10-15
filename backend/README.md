@@ -120,6 +120,7 @@ Base path: `/api`. Requests and responses are JSON.
 | `GET /businesses/:id` | public | Inactive businesses are visible only to the owner or an admin |
 | `POST /businesses` | business, admin | Timezone and currency default from the market |
 | `PATCH /businesses/:id` | owner, admin | Syncs denormalized offer fields; deactivating pauses offers |
+| `GET /businesses/:id/offers` | owner, admin | All of a location's offers incl. paused and past (partner portal) |
 | `GET /businesses/:id/reviews` | public | |
 | `POST /businesses/:id/reviews` | user | Needs one of *your* **collected** reservations at that business; one review per reservation |
 | `GET /offers` | public | `q, category, businessId, lat, lng, maxDistanceKm, maxPriceMinor, pickupDay=today\|tomorrow, timeOfDay=morning\|afternoon\|evening, sort=distance\|price\|popularity\|pickup, page, limit` |

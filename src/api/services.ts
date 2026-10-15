@@ -8,9 +8,12 @@ import type {
   ApiSuccess,
   AuthResult,
   Business,
+  BusinessInput,
   Favorite,
   FavoriteTarget,
   Offer,
+  OfferInput,
+  OfferPatch,
   OfferQuery,
   Reservation,
   Review,
@@ -29,12 +32,19 @@ export const authApi = {
 export const offersApi = {
   list: (params: OfferQuery = {}) => api.get<ApiList<Offer>>('/offers', { params }).then((res) => res.data),
   get: (id: string) => unwrap<Offer>(api.get(`/offers/${id}`)),
+  create: (body: OfferInput) => unwrap<Offer>(api.post('/offers', body)),
+  update: (id: string, body: OfferPatch) => unwrap<Offer>(api.patch(`/offers/${id}`, body)),
+  remove: (id: string) => api.delete(`/offers/${id}`).then(() => undefined),
 }
 
 export const businessesApi = {
   list: (params: { owner?: 'me'; city?: string } = {}) =>
     api.get<ApiList<Business>>('/businesses', { params }).then((res) => res.data),
   get: (id: string) => unwrap<Business>(api.get(`/businesses/${id}`)),
+  create: (body: BusinessInput) => unwrap<Business>(api.post('/businesses', body)),
+  update: (id: string, body: Partial<BusinessInput>) => unwrap<Business>(api.patch(`/businesses/${id}`, body)),
+  /** Partner view: every offer of the location, including paused and past ones. */
+  offers: (id: string) => api.get<ApiList<Offer>>(`/businesses/${id}/offers`).then((res) => res.data),
   reviews: (id: string) => api.get<ApiList<Review>>(`/businesses/${id}/reviews`).then((res) => res.data),
   addReview: (id: string, body: { reservationId: string; rating: number; comment?: string }) =>
     unwrap<Review>(api.post(`/businesses/${id}/reviews`, body)),

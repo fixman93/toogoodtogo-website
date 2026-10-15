@@ -1,18 +1,16 @@
 import { useCallback, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
-import { ArrowLeft, CheckCircle2, Clock, Loader2, Lock, ShoppingBag, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Clock, Loader2, ShoppingBag, XCircle } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import type { Business, Reservation } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
-import { RequireAuth } from '@/components/common/RequireAuth'
-import { EmptyState } from '@/components/common/StateViews'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useAuth } from '@/features/auth/auth-context'
 import { CameraScanner } from '@/features/business/CameraScanner'
+import { PartnerGuard } from '@/features/business/PartnerGuard'
 import { useBusinessReservations, useCollectReservation, useMyBusinesses } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney, formatPickupWindow } from '@/lib/format'
@@ -89,7 +87,6 @@ function ExpectedPickups({ business, onGiveOut, pendingId }: { business: Busines
 }
 
 function Scanner() {
-  const { hasRole } = useAuth()
   const businesses = useMyBusinesses()
   const collect = useCollectReservation()
   const [outcome, setOutcome] = useState<Outcome | null>(null)
@@ -133,8 +130,6 @@ function Scanner() {
     if (!code.trim()) return
     void run({ code }).then(() => setCode(''))
   }
-
-  if (!hasRole('business', 'admin')) return <EmptyState icon={Lock} title={t('business.noAccess')} />
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -195,9 +190,9 @@ export function BusinessScanPage() {
         </Link>
       </Button>
       <PageHeader title={t('business.scanTitle')} subtitle={t('business.scanIntro')} />
-      <RequireAuth>
+      <PartnerGuard>
         <Scanner />
-      </RequireAuth>
+      </PartnerGuard>
     </div>
   )
 }

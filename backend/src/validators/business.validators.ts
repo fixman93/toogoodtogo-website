@@ -19,8 +19,9 @@ export const createBusinessBody = z.object({
   name: z.string().trim().min(2).max(120),
   category,
   description: z.string().max(2000).optional(),
-  logoUrl: z.url().optional(),
-  coverUrl: z.url().optional(),
+  // Empty string clears the image (the UI then shows a category placeholder).
+  logoUrl: z.union([z.url(), z.literal('')]).optional(),
+  coverUrl: z.union([z.url(), z.literal('')]).optional(),
   phone: z.string().max(40).optional(),
   address,
   location: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }),

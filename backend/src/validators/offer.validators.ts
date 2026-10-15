@@ -19,7 +19,7 @@ const offerFields = {
   title: z.string().trim().min(2).max(120),
   description: z.string().trim().min(10).max(2000),
   category: category.optional(),
-  imageUrl: z.url().optional(),
+  imageUrl: z.union([z.url(), z.literal('')]).optional(),
   tags: z.array(z.string().trim().max(30)).max(10).optional(),
   priceMinor: z.number().int().positive(),
   originalPriceMinor: z.number().int().positive(),
@@ -52,3 +52,5 @@ export const updateOfferBody = checkOffer(
 export type OfferListQuery = z.infer<typeof offerListQuery>
 export type CreateOfferInput = z.infer<typeof createOfferBody>
 export type UpdateOfferInput = z.infer<typeof updateOfferBody>
+
+export const manageOffersQuery = z.object({ ...pagination, limit: z.coerce.number().int().min(1).max(200).default(100) })

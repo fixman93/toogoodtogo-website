@@ -82,6 +82,20 @@ export async function list(query: OfferListQuery) {
   }
 }
 
+/**
+ * Partner view of one location's offers: includes paused and past offers
+ * (the public list only shows live ones). Newest pickup first.
+ */
+export async function listForBusiness(businessId: string, actor: Actor, page: number, limit: number) {
+  const business = await assertBusinessAccess(businessId, actor)
+  const filter = { business: business._id, status: { $ne: 'archived' } }
+  const [items, total] = await Promise.all([
+    Offer.find(filter).sort({ pickupStart: -1 }).skip((page - 1) * limit).limit(limit),
+    Offer.countDocuments(filter),
+  ])
+  return { items: items.map((o) => serializeOffer(o, business)), meta: { page, limit, total } }
+}
+
 export async function get(id: string) {
   const offer = await Offer.findById(id)
   if (!offer || offer.status === 'archived') throw ApiError.notFound('Ponuda nije pronađena.')
@@ -121,6 +135,9 @@ export async function update(id: string, input: UpdateOfferInput, actor: Actor) 
   const merged = { ...offer.toObject(), ...input }
   if (merged.priceMinor >= merged.originalPriceMinor) throw ApiError.badRequest('Cena mora biti niža od redovne.', 'INVALID_PRICE')
   if (merged.pickupEnd <= merged.pickupStart) throw ApiError.badRequest('Kraj preuzimanja mora biti posle početka.', 'INVALID_PICKUP')
+  if ((input.pickupEnd || input.status === 'active') && merged.pickupEnd <= new Date()) {
+    throw ApiError.badRequest('Vreme preuzimanja mora biti u budućnosti.', 'PICKUP_IN_PAST')
+  }
 
   const { quantityTotal, ...fields } = input
   const filter: Record<string, unknown> = { _id: offer._id }
