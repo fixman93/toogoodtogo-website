@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import { Leaf, Search } from 'lucide-react'
+import { Link, useNavigate } from 'react-router'
+import { Leaf, Map as MapIcon, Search } from 'lucide-react'
 import { CategoryChips } from '@/components/offers/CategoryChips'
 import { OfferCarousel } from '@/components/offers/OfferCarousel'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useLocation } from '@/features/location/location-context'
 import { useOffers } from '@/hooks/api'
@@ -49,6 +50,13 @@ export function DiscoverPage() {
       </section>
 
       <CategoryChips value={undefined} onChange={(category) => navigate(category ? `/browse?category=${category}` : '/browse')} />
+
+      <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto">
+        <Link to="/browse?view=map">
+          <MapIcon />
+          {t('map.showOnMap')}
+        </Link>
+      </Button>
 
       <OfferCarousel
         title={t('discover.nearby')}

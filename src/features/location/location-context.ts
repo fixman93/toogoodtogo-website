@@ -10,7 +10,8 @@ export interface UserLocation extends GeoPoint {
 export interface LocationContextValue {
   location: UserLocation
   setCity: (cityId: string) => void
-  locateDevice: () => Promise<void>
+  /** Asks the device for its real position; resolves true on success. */
+  locateDevice: () => Promise<boolean>
   isLocating: boolean
   error: string | null
 }

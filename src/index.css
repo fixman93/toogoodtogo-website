@@ -88,3 +88,45 @@
 @utility pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* Map pins (Leaflet divIcons): anchor the pill's bottom-center on the point. */
+.zl-pin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding-bottom: 6px;
+  cursor: pointer;
+  transition: transform 150ms ease;
+}
+.zl-pin::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -2px) rotate(45deg);
+  background: white;
+  box-shadow: 1px 1px 2px oklch(0 0 0 / 0.15);
+  z-index: -1;
+}
+.zl-pin--selected {
+  transform: translate(-50%, -100%) scale(1.15);
+}
+.zl-me {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border-radius: 9999px;
+  background: oklch(0.6 0.18 255 / 0.25);
+}
+.zl-me span {
+  position: absolute;
+  inset: 4px;
+  border-radius: 9999px;
+  background: oklch(0.6 0.18 255);
+  box-shadow: 0 0 0 2px white;
+}
+.leaflet-container {
+  font-family: inherit;
+}

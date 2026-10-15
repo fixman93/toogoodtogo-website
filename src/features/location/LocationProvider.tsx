@@ -33,24 +33,31 @@ export function LocationProvider({ children }: { children: ReactNode }) {
 
   const locateDevice = useCallback(
     () =>
-      new Promise<void>((resolve) => {
+      new Promise<boolean>((resolve) => {
+        // Browsers only expose geolocation on HTTPS (or localhost).
+        if (!window.isSecureContext) {
+          setError(t('location.insecure'))
+          return resolve(false)
+        }
         if (!('geolocation' in navigator)) {
-          setError(t('location.denied'))
-          return resolve()
+          setError(t('location.unavailable'))
+          return resolve(false)
         }
         setIsLocating(true)
+        setError(null)
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             persist({ lat: pos.coords.latitude, lng: pos.coords.longitude, label: t('location.current'), source: 'gps' })
             setIsLocating(false)
-            resolve()
+            resolve(true)
           },
-          () => {
-            setError(t('location.denied'))
+          (err) => {
+            setError(err.code === err.PERMISSION_DENIED ? t('location.denied') : t('location.unavailable'))
             setIsLocating(false)
-            resolve()
+            resolve(false)
           },
-          { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
+          // Precise fix for "nearest"; reuse a position up to 1 minute old.
+          { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 },
         )
       }),
     [persist],

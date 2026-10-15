@@ -161,6 +161,23 @@ Safeguards:
 over HTTPS (e.g. `@vitejs/plugin-basic-ssl`) or use a tunnel. Manual code entry
 works everywhere.
 
+## Map and "nearest"
+
+* **Pretraga → Mapa** (`/browse?view=map`, also linked from Discover) shows
+  every location with live offers as a price pin (Leaflet + OpenStreetMap
+  tiles, no API key). Tapping a pin lists that location's offers. Panning or
+  zooming loads offers for the visible area (and a bit around it), and the
+  category, price and time filters still apply.
+* **Najbliže meni** uses the device's real GPS position: it shows a blue dot,
+  re-centers the map and sorts by real distance. Distances on cards are always
+  measured from the user, not from the map center. Geolocation only works on
+  HTTPS or localhost; denied or unavailable positions show a clear message.
+* Leaflet is lazy-loaded, so it only downloads when the map is opened.
+* OpenStreetMap labels in Serbia are Cyrillic. For Latin-script labels, or
+  heavier traffic (OSM's tile policy), switch the `TileLayer` URL in
+  `src/features/map/OffersMap.tsx` to a provider such as MapTiler (`sr-Latn`
+  labels, needs an API key).
+
 ## Partner portal
 
 Visible to `business` and `admin` accounts at `/business`. Account → locations → offers:

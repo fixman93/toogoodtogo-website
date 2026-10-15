@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
-import { SearchX, Search, SlidersHorizontal } from 'lucide-react'
+import { List, Loader2, LocateFixed, Map as MapIcon, SearchX, Search, SlidersHorizontal } from 'lucide-react'
 import { CATEGORIES, type Category, type OfferQuery, type OfferSort, type PickupDay, type TimeOfDay } from '@/api/types'
 import { Sheet } from '@/components/common/Sheet'
 import { EmptyState, ErrorState, OfferCardSkeleton } from '@/components/common/StateViews'
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/select'
 import { market } from '@/config/markets'
 import { useLocation } from '@/features/location/location-context'
+import { MapView } from '@/features/map/MapView'
 import { useOffers } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney } from '@/lib/format'
@@ -62,7 +63,8 @@ function FilterGroup({ label, children }: { label: string; children: ReactNode }
 
 export function BrowsePage() {
   const [params, setParams] = useSearchParams()
-  const { location } = useLocation()
+  const { location, locateDevice, isLocating, error: locationError } = useLocation()
+  const view = params.get('view') === 'map' ? 'map' : 'list'
   const [search, setSearch] = useState(params.get('q') ?? '')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [limit, setLimit] = useState(PAGE_SIZE)
@@ -102,17 +104,24 @@ export function BrowsePage() {
     limit,
   }
   const activeFilterCount = FILTER_KEYS.filter((k) => params.has(k)).length
-  const { data, isLoading, isError, refetch, isFetching } = useOffers(query)
+  const { data, isLoading, isError, refetch, isFetching } = useOffers(query, { enabled: view === 'list' })
+
+  /** Use the device's real position and sort by it. */
+  const nearMe = async () => {
+    if (await locateDevice()) setParam('sort', 'distance')
+  }
 
   const filters = (
     <div className="space-y-6">
-      <FilterGroup label={t('browse.distance')}>
-        <Segmented
-          value={query.maxDistanceKm ? String(query.maxDistanceKm) : undefined}
-          onChange={(v) => setParam('maxDistanceKm', v)}
-          options={[{ value: undefined, label: t('browse.distanceAny') }, ...DISTANCES.map((d) => ({ value: String(d), label: `${d} km` }))]}
-        />
-      </FilterGroup>
+      {view === 'list' && (
+        <FilterGroup label={t('browse.distance')}>
+          <Segmented
+            value={query.maxDistanceKm ? String(query.maxDistanceKm) : undefined}
+            onChange={(v) => setParam('maxDistanceKm', v)}
+            options={[{ value: undefined, label: t('browse.distanceAny') }, ...DISTANCES.map((d) => ({ value: String(d), label: `${d} km` }))]}
+          />
+        </FilterGroup>
+      )}
       <FilterGroup label={t('browse.maxPrice')}>
         <Segmented
           value={query.maxPriceMinor ? String(query.maxPriceMinor) : undefined}
@@ -190,57 +199,93 @@ export function BrowsePage() {
         </Button>
       </div>
 
-      <CategoryChips value={query.category} onChange={(c) => setParam('category', c)} className="mb-5" />
+      <CategoryChips value={query.category} onChange={(c) => setParam('category', c)} className="mb-4" />
+
+      <div className="mb-5 flex flex-wrap items-center gap-2">
+        <div role="tablist" aria-label={t('map.title')} className="inline-flex rounded-full bg-muted p-1">
+          {(['list', 'map'] as const).map((id) => (
+            <button
+              key={id}
+              role="tab"
+              type="button"
+              aria-selected={view === id}
+              onClick={() => setParam('view', id === 'map' ? 'map' : undefined)}
+              className={cn(
+                'flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-all',
+                view === id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+              )}
+            >
+              {id === 'map' ? <MapIcon className="size-4" /> : <List className="size-4" />}
+              {t(id === 'map' ? 'browse.viewMap' : 'browse.viewList')}
+            </button>
+          ))}
+        </div>
+        <Button variant={location.source === 'gps' ? 'secondary' : 'outline'} size="sm" className="h-11" onClick={nearMe} disabled={isLocating}>
+          {isLocating ? <Loader2 className="animate-spin" /> : <LocateFixed />}
+          {t('location.nearMe')}
+        </Button>
+        {locationError && (
+          <p role="alert" className="basis-full text-sm font-medium text-destructive">
+            {locationError}
+          </p>
+        )}
+      </div>
 
       <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8">
         <aside className="hidden lg:block">
           <div className="sticky top-24 rounded-2xl border bg-card p-5">{filters}</div>
         </aside>
 
-        <div>
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-muted-foreground" aria-live="polite">
-              {!isLoading && t('browse.results', { count: total })}
-            </p>
-            <label className="flex items-center gap-2 text-sm">
-              <span className="hidden font-medium text-muted-foreground sm:inline">{t('browse.sort')}</span>
-              <NativeSelect value={query.sort} onChange={(e) => setParam('sort', e.target.value)} className="h-10 w-auto rounded-full">
-                {SORTS.map((s) => (
-                  <option key={s} value={s}>
-                    {t(`browse.sort.${s}`)}
-                  </option>
-                ))}
-              </NativeSelect>
-            </label>
-          </div>
-
-          {isError ? (
-            <ErrorState onRetry={() => refetch()} />
-          ) : isLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-              {Array.from({ length: 6 }, (_, i) => (
-                <OfferCardSkeleton key={i} />
-              ))}
+        {view === 'map' ? (
+          <MapView
+            filters={{ q: query.q, category: query.category, maxPriceMinor: query.maxPriceMinor, pickupDay: query.pickupDay, timeOfDay: query.timeOfDay }}
+          />
+        ) : (
+          <div>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-muted-foreground" aria-live="polite">
+                {!isLoading && t('browse.results', { count: total })}
+              </p>
+              <label className="flex items-center gap-2 text-sm">
+                <span className="hidden font-medium text-muted-foreground sm:inline">{t('browse.sort')}</span>
+                <NativeSelect value={query.sort} onChange={(e) => setParam('sort', e.target.value)} className="h-10 w-auto rounded-full">
+                  {SORTS.map((s) => (
+                    <option key={s} value={s}>
+                      {t(`browse.sort.${s}`)}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </label>
             </div>
-          ) : total === 0 ? (
-            <EmptyState icon={SearchX} title={t('browse.emptyTitle')} text={t('browse.emptyText')} />
-          ) : (
-            <>
-              <div className={cn('grid gap-4 transition-opacity sm:grid-cols-2 2xl:grid-cols-3', isFetching && 'opacity-70')}>
-                {data!.data.map((offer) => (
-                  <OfferCard key={offer.id} offer={offer} />
+
+            {isError ? (
+              <ErrorState onRetry={() => refetch()} />
+            ) : isLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <OfferCardSkeleton key={i} />
                 ))}
               </div>
-              {data!.data.length < total && (
-                <div className="mt-6 flex justify-center">
-                  <Button variant="outline" onClick={() => setLimit((l) => l + PAGE_SIZE)} disabled={isFetching}>
-                    {t('discover.seeAll')}
-                  </Button>
+            ) : total === 0 ? (
+              <EmptyState icon={SearchX} title={t('browse.emptyTitle')} text={t('browse.emptyText')} />
+            ) : (
+              <>
+                <div className={cn('grid gap-4 transition-opacity sm:grid-cols-2 2xl:grid-cols-3', isFetching && 'opacity-70')}>
+                  {data!.data.map((offer) => (
+                    <OfferCard key={offer.id} offer={offer} />
+                  ))}
                 </div>
-              )}
-            </>
-          )}
-        </div>
+                {data!.data.length < total && (
+                  <div className="mt-6 flex justify-center">
+                    <Button variant="outline" onClick={() => setLimit((l) => l + PAGE_SIZE)} disabled={isFetching}>
+                      {t('discover.seeAll')}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <Sheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title={t('browse.filters')}>

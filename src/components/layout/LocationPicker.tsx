@@ -34,8 +34,7 @@ export function LocationPicker({ className }: { className?: string }) {
           type="button"
           disabled={isLocating}
           onClick={async () => {
-            await locateDevice()
-            setOpen(false)
+            if (await locateDevice()) setOpen(false)
           }}
           className="mb-3 flex h-12 w-full items-center gap-3 rounded-xl bg-secondary px-4 font-semibold text-secondary-foreground"
         >
