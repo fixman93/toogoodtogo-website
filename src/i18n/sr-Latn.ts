@@ -140,7 +140,6 @@ export const srLatn = {
   'auth.submitRegister': 'Napravi nalog',
   'auth.noAccount': 'Nemaš nalog?',
   'auth.haveAccount': 'Već imaš nalog?',
-  'auth.demoHint': 'Demo nalog: {email} / {password}',
   'auth.required': 'Za ovo je potrebna prijava',
   'auth.requiredText': 'Prijavi se ili napravi nalog da bi video ovu stranicu.',
   'auth.logout': 'Odjavi se',
@@ -209,7 +208,6 @@ export const srLatn = {
   'partner.status.soldOut': 'Rasprodata',
   'partner.locationActive': 'Aktivna',
   'partner.locationInactive': 'Neaktivna',
-  'partner.demoNote': 'Demo režim: izmene se čuvaju samo u ovom pregledaču.',
 
   'partner.section.basic': 'Osnovni podaci',
   'partner.section.address': 'Adresa i mapa',
@@ -267,6 +265,7 @@ export const srLatn = {
   'partner.error.belowReserved': 'Već je rezervisano {count} – ne možeš staviti manje.',
   'partner.error.url': 'Unesi ispravan link (https://…).',
 
+  'common.new': 'Novo',
   'common.loading': 'Učitavanje…',
   'common.errorTitle': 'Nešto nije u redu',
   'common.errorText': 'Nismo uspeli da učitamo podatke. Pokušaj ponovo.',
@@ -278,7 +277,6 @@ export const srLatn = {
   'common.reviews': { one: '{count} ocena', few: '{count} ocene', other: '{count} ocena' },
   'common.notFoundTitle': 'Stranica ne postoji',
   'common.goHome': 'Na početnu',
-  'common.mockMode': 'Demo podaci',
 } as const
 
 export type MessageKey = keyof typeof srLatn

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { ChevronDown, Clock, Copy, MapPin, Pause, Pencil, Play, Plus, ScanLine, Store } from 'lucide-react'
-import { isMockMode } from '@/api/client'
 import type { Business, Offer } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -180,7 +179,6 @@ function Dashboard() {
           </Link>
         </Button>
       </div>
-      {isMockMode && <p className="text-xs text-muted-foreground">{t('partner.demoNote')}</p>}
 
       {businesses.length === 0 ? (
         <EmptyState

@@ -1,8 +1,6 @@
 import { Link, NavLink, Outlet, useLocation as useRouterLocation } from 'react-router'
 import { useEffect } from 'react'
-import { isMockMode } from '@/api/client'
 import { Logo } from '@/components/common/Logo'
-import { Badge } from '@/components/ui/badge'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { LocationPicker } from './LocationPicker'
@@ -44,11 +42,6 @@ export function AppShell() {
               </NavLink>
             ))}
           </nav>
-          {isMockMode && (
-            <Badge variant="muted" className="ml-auto md:ml-0" title="VITE_API_MODE=mock">
-              {t('common.mockMode')}
-            </Badge>
-          )}
         </div>
       </header>
 

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation as useRouterLocation, useNavigate } from 'react-router'
 import { Loader2 } from 'lucide-react'
-import { ApiError, isMockMode } from '@/api/client'
+import { ApiError } from '@/api/client'
 import { LogoMark } from '@/components/common/Logo'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -81,11 +81,6 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             {t(isLogin ? 'auth.register' : 'auth.login')}
           </Link>
         </p>
-        {isLogin && isMockMode && (
-          <p className="mt-4 rounded-xl bg-muted p-3 text-center text-xs text-muted-foreground">
-            {t('auth.demoHint', { email: 'ana@primer.rs', password: 'lozinka123' })}
-          </p>
-        )}
       </Card>
     </div>
   )

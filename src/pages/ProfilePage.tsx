@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Bell, ChevronRight, Globe, Leaf, LogOut, RotateCcw, Store, Wallet } from 'lucide-react'
-import { isMockMode } from '@/api/client'
+import { Bell, ChevronRight, Globe, Leaf, LogOut, Store, Wallet } from 'lucide-react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { RequireAuth } from '@/components/common/RequireAuth'
 import { Button } from '@/components/ui/button'
@@ -110,20 +109,6 @@ function Profile() {
           <LogOut />
           {t('auth.logout')}
         </Button>
-        {isMockMode && (
-          <Button
-            variant="ghost"
-            className="w-full text-muted-foreground"
-            onClick={async () => {
-              const { resetMockDb } = await import('@/mocks/adapter')
-              resetMockDb()
-              window.location.reload()
-            }}
-          >
-            <RotateCcw />
-            Resetuj demo podatke
-          </Button>
-        )}
       </div>
     </div>
   )

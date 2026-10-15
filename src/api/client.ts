@@ -1,9 +1,5 @@
-import axios, { AxiosError, type AxiosAdapter } from 'axios'
+import axios, { AxiosError } from 'axios'
 import type { ApiErrorBody } from './types'
-
-/** "mock" (default until the backend is deployed) or "http". */
-export const API_MODE = import.meta.env.VITE_API_MODE ?? 'mock'
-export const isMockMode = API_MODE === 'mock'
 
 const TOKEN_KEY = 'zalogaj.token'
 
@@ -28,19 +24,13 @@ export class ApiError extends Error {
 }
 
 /**
- * In mock mode requests never leave the browser: a lazily loaded adapter
- * answers them with the same JSON envelopes the Express API returns.
+ * Same-origin "/api" by default: Vite proxies it in development and
+ * vercel.json rewrites it to the Heroku API in production.
  */
-const mockAdapter: AxiosAdapter = async (config) => {
-  const { handleMockRequest } = await import('@/mocks/adapter')
-  return handleMockRequest(config)
-}
-
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? '/api',
   timeout: 15_000,
   headers: { 'Content-Type': 'application/json' },
-  ...(isMockMode ? { adapter: mockAdapter } : {}),
 })
 
 api.interceptors.request.use((config) => {

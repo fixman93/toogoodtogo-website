@@ -24,56 +24,58 @@ commands. The same REST API is meant to serve future native iOS/Android apps.
 │   ├── hooks/api.ts        # TanStack Query hooks (only way screens load data)
 │   ├── i18n/               # Message catalogues (sr-Latn) + t()
 │   ├── lib/                # formatting (money/time/distance), geo, time zones
-│   ├── mocks/              # Demo data + axios mock adapter (VITE_API_MODE=mock)
 │   └── pages/              # Discover, Browse, Offer, Reservations, Favorites, Profile, Auth, Business
 ├── backend/                # Express API (see backend/README.md)
 ├── components.json         # shadcn/ui CLI config
-└── .env.example            # Frontend environment variables
+├── .env.example            # Frontend environment variables (local overrides → .env.local)
+├── .env.production         # Production API URL used by Vercel builds (no secrets)
+└── vercel.json             # SPA routing for Vercel
 ```
 
-## Quick start
+## Deployment
 
-Requirements: Node.js 20.19+ (or 22.12+) and npm.
+| Part | Where | Notes |
+| --- | --- | --- |
+| Web app | Vercel (`toogoodtogo-website.vercel.app`) | Builds use `.env.production` → API on Heroku |
+| API | Heroku app `toogoodtogo-web` | Monorepo buildpack + `APP_BASE=backend`; config in Heroku Config Vars |
+| Database | MongoDB Atlas, database `zalogaj` | Network Access must allow Heroku (`0.0.0.0/0`) |
 
-### 1. Web app only, with demo data (no backend needed)
+## Quick start (local development)
+
+Requirements: Node.js 22 and npm.
 
 ```bash
+# Terminal 1 – API (needs backend/.env with MONGODB_URI and JWT_SECRET)
+cd backend
+npm install
+npm run dev              # http://localhost:4000/api
+
+# Terminal 2 – web app
 npm install
 npm run dev              # http://localhost:5173
 ```
 
-Mock mode is the default. Demo login: `ana@primer.rs` / `lozinka123`.
-Reservations and favorites made in mock mode are kept in `localStorage` for
-the current day. You can reset them from the Profile page.
+The browser calls `/api/...` on the Vite origin, and Vite proxies those calls
+to the backend, so no CORS setup is needed. To develop the UI without running
+the backend locally, set
+`VITE_API_PROXY_TARGET=https://toogoodtogo-web-cfccb22f0618.herokuapp.com` in
+`.env.local`. A phone on the same Wi-Fi can open
+`http://<your-computer-ip>:5173` (start Vite with `npm run dev -- --host`).
 
-### 2. Web app + real API
+### Test accounts
 
-```bash
-# Terminal 1 – API
-cd backend
-cp .env.example .env     # fill in MONGODB_URI and JWT_SECRET
-npm install
-npm run seed             # demo data (refuses to run in production)
-npm run dev              # http://localhost:4000/api
+`cd backend && npm run seed` replaces the database with clean test data:
 
-# Terminal 2 – web app
-cp .env.example .env.local
-# set VITE_API_MODE=http in .env.local
-npm run dev
-```
+* **Test Partner** (`test.partner@zalogaj.rs`): three locations, *Test
+  Pekara – Dorćol / Vračar / Novi Beograd*, with offers for the next 3 days.
+* **Test Kupac** (`test.kupac@zalogaj.rs`).
 
-In development the browser calls `/api/...` on the Vite origin, and Vite
-proxies those calls to the backend. That means no CORS setup is needed, and a
-phone on the same Wi-Fi can open `http://<your-computer-ip>:5173` (start Vite
-with `npm run dev -- --host`).
+The script prints the password (or set `SEED_PASSWORD`). Re-run it to get
+fresh offers. It refuses to wipe a database that contains any other (real)
+account.
 
-Seeded accounts all use the password `lozinka123`:
-
-| E-mail | Role |
-| --- | --- |
-| `ana@primer.rs` | customer (has upcoming, collected and cancelled reservations) |
-| `marko@pekaraklas.rs` | business – owns *Pekara Klas* (open `/business`) |
-| `admin@zalogaj.rs` | admin |
+To make your own registered account a partner or admin:
+`cd backend && npm run set-role -- you@example.com business` (or `admin`).
 
 ## Frontend commands
 
@@ -84,12 +86,11 @@ Seeded accounts all use the password `lozinka123`:
 | `npm run preview` | Serve the production build |
 | `npm run lint` | ESLint (ignores `backend/`, which is linted by its own type-check) |
 
-## Frontend environment variables (`.env.local`)
+## Frontend environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `VITE_API_MODE` | `mock` | `mock` = bundled demo data; `http` = real API |
-| `VITE_API_URL` | `/api` | API base URL. In production use the full URL, e.g. `https://api.zalogaj.rs/api` |
+| `VITE_API_URL` | `/api` | API base URL. `.env.production` sets the Heroku URL for Vercel builds |
 | `VITE_API_PROXY_TARGET` | `http://localhost:4000` | Where the dev server proxies `/api` |
 | `VITE_MARKET` | `RS` | Market from `src/config/markets.ts` |
 
@@ -99,17 +100,11 @@ Seeded accounts all use the password `lozinka123`:
 
 ```
 page → hooks/api.ts (TanStack Query) → api/services.ts → api/client.ts (Axios) → REST API
-                                                              └─ mock mode: mocks/adapter.ts
 ```
 
 * Screens never call Axios directly. They use hooks such as `useOffers` and
   `useCreateReservation`, so loading, error and empty states work the same
   everywhere.
-* In mock mode, a lazy-loaded **Axios adapter** answers requests with the same
-  JSON envelopes the Express API returns (`{ data }`, `{ data, meta }`,
-  `{ error: { code, message } }`). Switching to the backend is just
-  `VITE_API_MODE=http`, with no screen changes. The mock data lives in
-  `src/mocks/` and is never imported by UI components.
 * `api/types.ts` documents the API contract. Money is always an **integer in
   minor units** (`priceMinor: 29900` = 299 RSD) plus a currency code. Dates are
   UTC ISO strings, shown in the business's timezone.
@@ -177,8 +172,7 @@ Visible to `business` and `admin` accounts at `/business`. Account → locations
 
 The API enforces ownership on every call: a partner only ever sees and changes
 their own locations and offers (`GET /api/businesses/:id/offers` is the
-owner-only list that includes paused and past offers). In mock mode, partner
-changes are saved in that browser only.
+owner-only list that includes paused and past offers).
 
 Planned next: recurring offers (e.g. "every weekday 19:30–20:30, 8 bags"),
 image upload, and staff accounts per location.

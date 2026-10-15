@@ -9,7 +9,7 @@ TypeScript, MongoDB (Mongoose 8), Zod validation and JWT bearer auth.
 cd backend
 cp .env.example .env
 npm install
-npm run seed      # optional demo data (development only)
+npm run seed      # test partner + customer (development only)
 npm run dev       # http://localhost:4000/api, check /api/health
 ```
 
@@ -18,7 +18,8 @@ npm run dev       # http://localhost:4000/api, check /api/health
 | `npm run dev` | Start with auto-reload (`tsx watch`) |
 | `npm run build` / `npm start` | Compile to `dist/` / run the compiled server |
 | `npm run typecheck` | TypeScript check only |
-| `npm run seed` | **Drops the database** and loads Serbian demo data. Refuses when `NODE_ENV=production` |
+| `npm run seed` | **Drops the database** and loads one test partner (3 locations, offers for 3 days) + a test customer. Refuses when `NODE_ENV=production` or when real accounts exist (`--force` overrides) |
+| `npm run set-role -- <email> <customer\|business\|admin>` | Grant a role to an existing account (e.g. make yourself admin) |
 
 ### Environment variables
 
@@ -153,7 +154,8 @@ src/
 ├── routes/                 # Routers mounted under /api
 ├── utils/                  # ApiError, response helpers, serializers, time zones, transactions
 ├── types/                  # Express request augmentation
-└── seed/                   # Demo data + seed script
+├── scripts/                # set-role CLI
+└── seed/                   # Test data + seed script
 ```
 
 Design notes:

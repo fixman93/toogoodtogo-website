@@ -26,8 +26,9 @@ export function formatDistance(meters?: number | null): string | null {
   return `${decimal.format(meters / 1000)} km`
 }
 
-export function formatRating(value: number): string {
-  return decimal.format(value)
+/** "4,7", or "Novo" for a business without reviews yet. */
+export function formatRating(rating: { average: number; count: number }): string {
+  return rating.count > 0 ? decimal.format(rating.average) : t('common.new')
 }
 
 function dayKey(date: Date, timeZone: string) {

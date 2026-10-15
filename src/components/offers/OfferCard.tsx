@@ -51,7 +51,7 @@ export function OfferCard({ offer, className }: { offer: Offer; className?: stri
           </p>
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Star className="size-3.5 shrink-0 fill-warning text-warning" />
-            <span className="font-semibold text-foreground">{formatRating(offer.business.rating.average)}</span>
+            <span className="font-semibold text-foreground">{formatRating(offer.business.rating)}</span>
             {distance && (
               <>
                 <span aria-hidden>·</span>

@@ -171,8 +171,10 @@ export function OfferDetailsPage() {
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <span className="flex items-center gap-1">
                 <Star className="size-4 fill-warning text-warning" />
-                <strong>{formatRating(business.rating.average)}</strong>
-                <span className="text-muted-foreground">({t('common.reviews', { count: business.rating.count })})</span>
+                <strong>{formatRating(business.rating)}</strong>
+                {business.rating.count > 0 && (
+                  <span className="text-muted-foreground">({t('common.reviews', { count: business.rating.count })})</span>
+                )}
               </span>
               {distance && (
                 <span className="flex items-center gap-1 text-muted-foreground">

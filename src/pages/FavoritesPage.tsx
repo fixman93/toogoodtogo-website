@@ -27,7 +27,7 @@ function FavoriteBusiness({ favorite }: { favorite: Favorite }) {
           <p className="truncate text-lg font-bold">{business.name}</p>
           <p className="flex items-center gap-1.5 truncate text-sm text-muted-foreground">
             <Star className="size-3.5 fill-warning text-warning" />
-            {formatRating(business.rating.average)}
+            {formatRating(business.rating)}
             <span aria-hidden>·</span>
             <MapPin className="size-3.5" />
             {business.address.street}, {business.address.city}
