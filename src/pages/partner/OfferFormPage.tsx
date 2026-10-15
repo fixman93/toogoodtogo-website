@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ArrowLeft, Loader2, Pause, Play, Store, Trash2 } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import { CATEGORIES, type Business, type Category, type Offer, type OfferInput } from '@/api/types'
+import { ALLERGENS, CATEGORIES, type Allergen, type Business, type Category, type Offer, type OfferInput } from '@/api/types'
 import { FormField, FormSection } from '@/components/common/FormField'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
@@ -29,6 +29,9 @@ interface FormState {
   description: string
   category: Category
   tags: string[]
+  contentType: 'surprise' | 'known'
+  contents: string
+  allergens: Allergen[]
   originalPrice: string
   price: string
   quantity: string
@@ -60,6 +63,9 @@ function initialState(mode: Mode, businesses: Business[], preferredBusinessId: s
       description: source.description,
       category: source.category,
       tags: source.tags,
+      contentType: source.contentType ?? 'surprise',
+      contents: (source.contents ?? []).join('\n'),
+      allergens: source.allergens ?? [],
       originalPrice: String(source.originalPriceMinor / minorUnits),
       price: String(source.priceMinor / minorUnits),
       quantity: String(source.quantityTotal),
@@ -76,6 +82,9 @@ function initialState(mode: Mode, businesses: Business[], preferredBusinessId: s
     description: t(`partner.template.${business.category}`),
     category: business.category,
     tags: [],
+    contentType: 'surprise',
+    contents: '',
+    allergens: [],
     originalPrice: '',
     price: '',
     quantity: '5',
@@ -103,7 +112,7 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
     // A field's error disappears as soon as the user edits it.
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e))
   }
-  const field = (key: Exclude<keyof FormState, 'tags' | 'category'>) => ({
+  const field = (key: Exclude<keyof FormState, 'tags' | 'category' | 'contentType' | 'allergens'>) => ({
     id: key,
     value: form[key],
     'aria-invalid': !!errors[key] || undefined,
@@ -118,6 +127,7 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
     const next: typeof errors = {}
     if (form.title.trim().length < 2) next.title = t('partner.error.required')
     if (form.description.trim().length < 10) next.description = t('partner.error.required')
+    if (form.contentType === 'known' && !form.contents.trim()) next.contents = t('partner.error.required')
     if (!(original > 0)) next.originalPrice = t('partner.error.positive')
     if (!(price > 0)) next.price = t('partner.error.positive')
     else if (price >= original) next.price = t('partner.error.priceLower')
@@ -140,6 +150,9 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
       description: form.description.trim(),
       category: form.category,
       tags: form.tags,
+      contentType: form.contentType,
+      contents: form.contentType === 'known' ? form.contents.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 20) : [],
+      allergens: form.allergens,
       priceMinor: Math.round(price * minorUnits),
       originalPriceMinor: Math.round(original * minorUnits),
       quantityTotal: Number(form.quantity),
@@ -215,6 +228,49 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
             </div>
           </FormField>
         </div>
+      </FormSection>
+
+      <FormSection title={t('partner.field.contentType')}>
+        <div className="flex flex-wrap gap-2" role="radiogroup">
+          {(['surprise', 'known'] as const).map((type) => (
+            <button
+              key={type}
+              type="button"
+              role="radio"
+              aria-checked={form.contentType === type}
+              onClick={() => set('contentType', type)}
+              className={cn(
+                'h-11 rounded-full border px-4 text-sm font-semibold transition-colors',
+                form.contentType === type ? 'border-primary bg-secondary text-primary' : 'bg-card hover:bg-muted',
+              )}
+            >
+              {t(`partner.contentType.${type}`)}
+            </button>
+          ))}
+        </div>
+        {form.contentType === 'known' && (
+          <FormField label={t('partner.field.contents')} htmlFor="contents" error={errors.contents} hint={t('partner.field.contentsHint')}>
+            <Textarea {...field('contents')} placeholder={'3 bureka\n2 sendviča'} />
+          </FormField>
+        )}
+        <FormField label={t('partner.field.allergens')} hint={t('partner.field.allergensHint')}>
+          <div className="flex flex-wrap gap-2">
+            {ALLERGENS.map((a) => {
+              const on = form.allergens.includes(a)
+              return (
+                <button
+                  key={a}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => set('allergens', on ? form.allergens.filter((x) => x !== a) : [...form.allergens, a])}
+                  className={cn('h-9 rounded-full border px-3 text-sm font-medium transition-colors', on ? 'border-primary bg-secondary text-primary' : 'bg-card hover:bg-muted')}
+                >
+                  {t(`allergen.${a}`)}
+                </button>
+              )
+            })}
+          </div>
+        </FormField>
       </FormSection>
 
       <FormSection title={t('partner.section.price')}>

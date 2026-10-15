@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express'
 import { currentUser } from '../middleware/auth.js'
 import * as reservationService from '../services/reservation.service.js'
+import { ApiError } from '../utils/ApiError.js'
 import { list, ok } from '../utils/respond.js'
 import { idParams } from '../validators/common.js'
 import { collectByCodeBody, createReservationBody, reservationListQuery } from '../validators/reservation.validators.js'
@@ -28,4 +29,14 @@ export async function collectReservation(req: Request, res: Response) {
 
 export async function collectByCode(req: Request, res: Response) {
   ok(res, await reservationService.collectByCode(collectByCodeBody.parse(req.body), currentUser(req)))
+}
+
+export async function shareReservation(req: Request, res: Response) {
+  ok(res, await reservationService.share(idParams.parse(req.params).id, currentUser(req)))
+}
+
+export async function sharedPass(req: Request, res: Response) {
+  const token = String(req.params.token ?? '')
+  if (!/^[\w-]{10,64}$/.test(token)) throw ApiError.notFound('Link nije važeći.')
+  ok(res, await reservationService.sharedPass(token))
 }

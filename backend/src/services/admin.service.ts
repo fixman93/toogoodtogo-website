@@ -5,13 +5,15 @@
  */
 import { env } from '../config/env.js'
 import { getMarket } from '../config/markets.js'
-import { Business, Offer, Reservation, User, type Role } from '../models/index.js'
+import { Business, Offer, Reservation, Review, User, type Role } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { serializeBusiness, serializeUser } from '../utils/serializers.js'
 import { escapeRegex } from '../utils/text.js'
 import { zonedTime } from '../utils/time.js'
 import type { AdminBusinessesQuery, AdminUsersQuery } from '../validators/admin.validators.js'
 import type { Actor } from './access.service.js'
+import { audit } from './audit.service.js'
+import { toDto } from './reservation.service.js'
 
 export async function stats() {
   const tz = getMarket(env.DEFAULT_MARKET).timezone
@@ -44,7 +46,7 @@ export async function stats() {
 }
 
 export async function listUsers(query: AdminUsersQuery) {
-  const filter: Record<string, unknown> = {}
+  const filter: Record<string, unknown> = { deletedAt: null }
   if (query.role) filter.role = query.role
   if (query.q) {
     const rx = new RegExp(escapeRegex(query.q), 'i')
@@ -60,7 +62,7 @@ export async function listUsers(query: AdminUsersQuery) {
   ])
   const byOwner = new Map(counts.map((c) => [String(c._id), c.count]))
   return {
-    items: users.map((u) => ({ ...serializeUser(u), businessCount: byOwner.get(u.id) ?? 0 })),
+    items: users.map((u) => ({ ...serializeUser(u), isBlocked: u.isBlocked, businessCount: byOwner.get(u.id) ?? 0 })),
     meta: { page: query.page, limit: query.limit, total },
   }
 }
@@ -72,8 +74,10 @@ export async function setRole(userId: string, role: Role, actor: Actor) {
   if (user.role === 'admin' && role !== 'admin' && (await User.countDocuments({ role: 'admin' })) <= 1) {
     throw ApiError.conflict('Aplikacija mora imati bar jednog admina.', 'LAST_ADMIN')
   }
+  const previous = user.role
   user.role = role
   await user.save()
+  void audit(actor, { action: 'user.role', targetType: 'user', targetId: user._id, summary: `${user.email}: ${previous} → ${role}` })
   const businessCount = await Business.countDocuments({ owner: user._id })
   return { ...serializeUser(user), businessCount }
 }
@@ -109,4 +113,81 @@ export async function listBusinesses(query: AdminBusinessesQuery) {
     }),
     meta: { page: query.page, limit: query.limit, total },
   }
+}
+
+export async function setBlocked(userId: string, blocked: boolean, actor: Actor) {
+  if (userId === actor.id) throw ApiError.conflict('Ne možeš blokirati sopstveni nalog.', 'CANNOT_BLOCK_SELF')
+  const user = await User.findById(userId)
+  if (!user || user.deletedAt) throw ApiError.notFound('Korisnik nije pronađen.')
+  if (blocked && user.role === 'admin') throw ApiError.conflict('Admin nalog se ne može blokirati. Prvo mu promeni ulogu.', 'CANNOT_BLOCK_ADMIN')
+  user.isBlocked = blocked
+  await user.save()
+  void audit(actor, { action: blocked ? 'user.block' : 'user.unblock', targetType: 'user', targetId: user._id, summary: `${blocked ? 'Blokiran' : 'Odblokiran'}: ${user.email}` })
+  const businessCount = await Business.countDocuments({ owner: user._id, deletedAt: null })
+  return { ...serializeUser(user), isBlocked: user.isBlocked, businessCount }
+}
+
+/** All reservations on the platform (newest first), searchable by pickup code. */
+export async function listReservations(query: { status?: string; q?: string; page: number; limit: number }, actor: Actor) {
+  const filter: Record<string, unknown> = {}
+  if (query.status) filter.status = query.status
+  if (query.q) {
+    const rx = new RegExp(escapeRegex(query.q), 'i')
+    filter.$or = [{ code: rx }, { offerTitle: rx }]
+  }
+  const [rows, total] = await Promise.all([
+    Reservation.find(filter).sort({ createdAt: -1 }).skip((query.page - 1) * query.limit).limit(query.limit).lean(),
+    Reservation.countDocuments(filter),
+  ])
+  return { items: await toDto(rows, actor), meta: { page: query.page, limit: query.limit, total } }
+}
+
+export async function listReviews(query: { hidden?: boolean; page: number; limit: number }) {
+  const filter = query.hidden == null ? {} : query.hidden ? { isHidden: true } : { isHidden: { $ne: true } }
+  const [rows, total] = await Promise.all([
+    Review.find(filter).sort({ createdAt: -1 }).skip((query.page - 1) * query.limit).limit(query.limit).lean(),
+    Review.countDocuments(filter),
+  ])
+  const [users, businesses] = await Promise.all([
+    User.find({ _id: { $in: rows.map((r) => r.user) } }).select('name email').lean(),
+    Business.find({ _id: { $in: rows.map((r) => r.business) } }).select('name').lean(),
+  ])
+  const userById = new Map(users.map((u) => [u._id.toString(), u]))
+  const businessById = new Map(businesses.map((b) => [b._id.toString(), b]))
+  return {
+    items: rows.map((r) => ({
+      id: r._id.toString(),
+      rating: r.rating,
+      comment: r.comment,
+      isHidden: !!r.isHidden,
+      createdAt: r.createdAt.toISOString(),
+      user: userById.get(r.user.toString()) ? { name: userById.get(r.user.toString())!.name, email: userById.get(r.user.toString())!.email } : null,
+      business: businessById.get(r.business.toString()) ? { id: r.business.toString(), name: businessById.get(r.business.toString())!.name } : null,
+    })),
+    meta: { page: query.page, limit: query.limit, total },
+  }
+}
+
+/** Hide/unhide a review and keep the business average consistent (atomic update). */
+export async function setReviewHidden(id: string, hidden: boolean, actor: Actor) {
+  const review = await Review.findOneAndUpdate({ _id: id, isHidden: hidden ? { $ne: true } : true }, { $set: { isHidden: hidden } }, { new: true })
+  if (!review) throw ApiError.conflict('Ocena je već u tom stanju ili ne postoji.', 'NO_CHANGE')
+  const sign = hidden ? -1 : 1
+  const newCount = { $add: ['$rating.count', sign] }
+  await Business.updateOne({ _id: review.business }, [
+    {
+      $set: {
+        'rating.average': {
+          $cond: [
+            { $lte: [newCount, 0] },
+            0,
+            { $divide: [{ $add: [{ $multiply: ['$rating.average', '$rating.count'] }, sign * review.rating] }, newCount] },
+          ],
+        },
+        'rating.count': { $max: [newCount, 0] },
+      },
+    },
+  ])
+  void audit(actor, { action: hidden ? 'review.hide' : 'review.show', targetType: 'review', targetId: review._id, summary: `${hidden ? 'Sakrivena' : 'Vraćena'} ocena ${review.rating}★` })
+  return { id: review.id as string, isHidden: review.isHidden }
 }

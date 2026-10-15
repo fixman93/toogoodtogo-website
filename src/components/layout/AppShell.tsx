@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { Logo } from '@/components/common/Logo'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
+import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { LocationPicker } from './LocationPicker'
 import { NAV_ITEMS } from './nav-items'
 
@@ -42,6 +43,9 @@ export function AppShell() {
               </NavLink>
             ))}
           </nav>
+          <div className="ml-auto md:ml-0">
+            <NotificationBell />
+          </div>
         </div>
       </header>
 

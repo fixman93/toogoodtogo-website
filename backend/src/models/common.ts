@@ -24,4 +24,26 @@ export const pointSchema = new Schema<GeoPoint>(
   { _id: false },
 )
 
+/** The 14 allergens that must be declared in the EU/Serbia. */
+export const ALLERGENS = [
+  'gluten',
+  'crustaceans',
+  'eggs',
+  'fish',
+  'peanuts',
+  'soy',
+  'milk',
+  'nuts',
+  'celery',
+  'mustard',
+  'sesame',
+  'sulphites',
+  'lupin',
+  'molluscs',
+] as const
+export type Allergen = (typeof ALLERGENS)[number]
+
+/** Rough CO2e avoided per rescued bag (kg), used for the customer's impact stats. */
+export const CO2E_KG_PER_BAG = 2.7
+
 export const moneyMinor = { type: Number, required: true, min: 0, validate: Number.isInteger }

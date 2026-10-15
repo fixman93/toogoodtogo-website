@@ -11,6 +11,10 @@ export interface IUser {
   locale: string
   countryCode: string
   phone?: string
+  /** Blocked by an admin: cannot sign in or use the API. */
+  isBlocked: boolean
+  /** Set when the user deleted their account (personal data is anonymized). */
+  deletedAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -24,6 +28,8 @@ const userSchema = new Schema<IUser>(
     locale: { type: String, default: 'sr-Latn-RS' },
     countryCode: { type: String, default: 'RS', uppercase: true, minlength: 2, maxlength: 2 },
     phone: { type: String, trim: true },
+    isBlocked: { type: Boolean, default: false },
+    deletedAt: Date,
   },
   { timestamps: true },
 )

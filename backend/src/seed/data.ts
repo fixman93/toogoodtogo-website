@@ -3,7 +3,7 @@
  * locations) plus one test customer. Clearly marked "Test" so it is never
  * mistaken for a real business.
  */
-import type { Category } from '../models/index.js'
+import type { Allergen, Category } from '../models/index.js'
 
 const img = (id: string, w = 900) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=70`
 
@@ -24,6 +24,7 @@ export interface SeedLocation {
   description: string
   instructions: string
   phone: string
+  openingHours: string
 }
 
 export const testLocations: SeedLocation[] = [
@@ -40,6 +41,7 @@ export const testLocations: SeedLocation[] = [
     description: 'Test lokacija. Hleb na kiselom testu, kifle i pite.',
     instructions: 'Pokaži QR kod na kasi. Kese su spremne iza pulta.',
     phone: '+381 11 000 0001',
+    openingHours: 'Pon–Sub 7–21, Ned 8–14',
   },
   {
     name: 'Test Pekara – Vračar',
@@ -54,6 +56,7 @@ export const testLocations: SeedLocation[] = [
     description: 'Test lokacija. Zanatska peciva i slatki program.',
     instructions: 'Preuzimanje na pultu desno od ulaza.',
     phone: '+381 11 000 0002',
+    openingHours: 'Pon–Pet 7–20, Sub 8–15, Ned zatvoreno',
   },
   {
     name: 'Test Pekara – Novi Beograd',
@@ -68,6 +71,7 @@ export const testLocations: SeedLocation[] = [
     description: 'Test lokacija. Peciva i kafa za poneti.',
     instructions: 'Pokaži kod na kasi, bez čekanja u redu.',
     phone: '+381 11 000 0003',
+    openingHours: 'Svaki dan 6–22',
   },
 ]
 
@@ -81,6 +85,8 @@ export interface SeedOfferTemplate {
   from: string
   to: string
   tags?: string[]
+  allergens?: Allergen[]
+  contents?: string[]
   /** Only at these location indexes (default: all). */
   locations?: number[]
 }
@@ -96,6 +102,7 @@ export const testOfferTemplates: SeedOfferTemplate[] = [
     quantity: 4,
     from: '07:30',
     to: '08:30',
+    allergens: ['gluten', 'milk', 'sesame'],
   },
   {
     title: 'Kesa iznenađenja – pecivo',
@@ -107,6 +114,7 @@ export const testOfferTemplates: SeedOfferTemplate[] = [
     from: '19:30',
     to: '20:30',
     tags: ['vegetarian'],
+    allergens: ['gluten', 'milk', 'eggs'],
   },
   {
     title: 'Slatka kesa',
@@ -117,6 +125,8 @@ export const testOfferTemplates: SeedOfferTemplate[] = [
     quantity: 3,
     from: '18:00',
     to: '19:00',
+    allergens: ['gluten', 'milk', 'eggs', 'nuts'],
+    contents: ['2 kroasana', '1 mafin', '2 kolača po izboru pekara'],
     locations: [1],
   },
 ]

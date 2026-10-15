@@ -32,8 +32,9 @@ function readUser(req: Request, strict: boolean): Request['user'] | null {
 export async function authenticate(req: Request, _res: Response, next: NextFunction) {
   const token = readUser(req, true)
   if (!token) throw ApiError.unauthorized()
-  const user = await User.findById(token.id).select('role').lean()
-  if (!user) throw ApiError.unauthorized('Nalog više ne postoji.', 'USER_NOT_FOUND')
+  const user = await User.findById(token.id).select('role isBlocked deletedAt').lean()
+  if (!user || user.deletedAt) throw ApiError.unauthorized('Nalog više ne postoji.', 'USER_NOT_FOUND')
+  if (user.isBlocked) throw ApiError.forbidden('Nalog je blokiran. Kontaktiraj podršku.', 'ACCOUNT_BLOCKED')
   req.user = { id: token.id, role: user.role }
   next()
 }

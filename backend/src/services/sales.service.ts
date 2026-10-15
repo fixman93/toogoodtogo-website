@@ -40,7 +40,7 @@ function add(target: Counts, source: Counts) {
 }
 
 /** UTC range of a local calendar day ("YYYY-MM-DD") in `tz`. */
-function dayRange(date: string | undefined, tz: string) {
+export function dayRange(date: string | undefined, tz: string) {
   const now = new Date()
   if (!date) return { date: new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now), start: zonedTime(0, '00:00', tz, now), end: zonedTime(1, '00:00', tz, now) }
   // Anchor at local noon of that day, then take its midnight boundaries.

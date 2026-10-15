@@ -42,6 +42,8 @@ export interface IReservation {
   }
   cancelledAt?: Date
   cancelledBy?: 'customer' | 'business' | 'system'
+  /** Secret for the "send to a friend" pickup link. */
+  shareToken?: string
   collectedAt?: Date
   createdAt: Date
   updatedAt: Date
@@ -74,6 +76,7 @@ const reservationSchema = new Schema<IReservation>(
     cancelledAt: Date,
     cancelledBy: { type: String, enum: ['customer', 'business', 'system'] },
     collectedAt: Date,
+    shareToken: { type: String, unique: true, sparse: true },
   },
   { timestamps: true },
 )

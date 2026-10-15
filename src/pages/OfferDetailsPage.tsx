@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { ArrowLeft, CalendarClock, ExternalLink, Info, Loader2, MapPin, Minus, PackageOpen, Plus, ShoppingBag, Star } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Bell, BellRing, Clock, CalendarClock, ExternalLink, Info, Loader2, MapPin, Minus, PackageOpen, Plus, ShoppingBag, Star } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import type { Offer } from '@/api/types'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -14,9 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/features/auth/auth-context'
 import { useLocation } from '@/features/location/location-context'
-import { useBusiness, useBusinessReviews, useCreateReservation, useOffer } from '@/hooks/api'
+import { ReviewList } from '@/components/offers/ReviewList'
+import { useBusiness, useCreateReservation, useOffer, useToggleWaitlist, useWaitlist } from '@/hooks/api'
 import { t } from '@/i18n'
-import { discountPercent, formatDate, formatDistance, formatMoney, formatPickupWindow, formatRating } from '@/lib/format'
+import { discountPercent, formatDistance, formatMoney, formatPickupWindow, formatRating } from '@/lib/format'
 import { directionsUrl, distanceMeters, osmEmbedUrl } from '@/lib/geo'
 
 function ReservePanel({ offer }: { offer: Offer }) {
@@ -54,6 +55,7 @@ function ReservePanel({ offer }: { offer: Offer }) {
           </div>
         </div>
       )}
+      {soldOut && <WaitlistButton offerId={offer.id} />}
       <Button size="lg" className="w-full" disabled={soldOut || reserve.isPending} onClick={submit}>
         {reserve.isPending && <Loader2 className="animate-spin" />}
         {soldOut
@@ -69,30 +71,6 @@ function ReservePanel({ offer }: { offer: Offer }) {
       )}
       <p className="text-center text-xs text-muted-foreground">{t('offer.payAtPickup')}</p>
     </div>
-  )
-}
-
-function Reviews({ businessId }: { businessId: string }) {
-  const { data, isLoading } = useBusinessReviews(businessId)
-  if (isLoading) return <Skeleton className="h-24" />
-  if (!data?.data.length) return <p className="text-sm text-muted-foreground">{t('offer.noReviews')}</p>
-  return (
-    <ul className="space-y-4">
-      {data.data.map((review) => (
-        <li key={review.id} className="space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-bold">{review.user.name}</span>
-            <span className="flex items-center gap-0.5" aria-label={`${review.rating}/5`}>
-              {Array.from({ length: 5 }, (_, i) => (
-                <Star key={i} className={i < review.rating ? 'size-3.5 fill-warning text-warning' : 'size-3.5 text-border'} />
-              ))}
-            </span>
-          </div>
-          {review.comment && <p className="text-sm text-muted-foreground">{review.comment}</p>}
-          <p className="text-xs text-muted-foreground/80">{formatDate(review.createdAt)}</p>
-        </li>
-      ))}
-    </ul>
   )
 }
 
@@ -167,7 +145,11 @@ export function OfferDetailsPage() {
               <CategoryIcon className="size-4" />
               {t(`category.${offer.category}`)}
             </p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">{business.name}</h1>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+              <Link to={`/businesses/${business.id}`} className="hover:underline">
+                {business.name}
+              </Link>
+            </h1>
             <p className="mt-0.5 text-lg font-semibold text-primary">{offer.title}</p>
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <span className="flex items-center gap-1">
@@ -217,7 +199,38 @@ export function OfferDetailsPage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm leading-relaxed">
               <p>{offer.description}</p>
-              <p className="rounded-xl bg-muted p-3 text-muted-foreground">{t('offer.surpriseNote')}</p>
+              {offer.contentType === 'known' && offer.contents.length > 0 ? (
+                <div className="rounded-xl bg-secondary/60 p-3">
+                  <p className="mb-1.5 font-semibold text-secondary-foreground">{t('offer.knownContents')}</p>
+                  <ul className="list-inside list-disc space-y-0.5">
+                    {offer.contents.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="rounded-xl bg-muted p-3 text-muted-foreground">{t('offer.surpriseNote')}</p>
+              )}
+              <div>
+                <p className="mb-1.5 flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle className="size-4 text-accent-foreground" />
+                  {t('offer.allergens')}
+                </p>
+                {offer.allergens.length ? (
+                  <>
+                    <div className="flex flex-wrap gap-1.5">
+                      {offer.allergens.map((a) => (
+                        <Badge key={a} variant="outline">
+                          {t(`allergen.${a}`)}
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted-foreground">{t('offer.allergensNote')}</p>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">{t('offer.allergensNone')}</p>
+                )}
+              </div>
               {offer.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {offer.tags.map((tag) => (
@@ -264,7 +277,7 @@ export function OfferDetailsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Reviews businessId={business.id} />
+              <ReviewList businessId={business.id} />
             </CardContent>
           </Card>
         </div>
@@ -289,7 +302,7 @@ export function OfferDetailsPage() {
 
 function InstructionsCard({ businessId }: { businessId: string }) {
   const { data } = useBusiness(businessId)
-  if (!data?.collectionInstructions) return null
+  if (!data?.collectionInstructions && !data?.openingHours) return null
   return (
     <Card>
       <CardHeader>
@@ -298,7 +311,45 @@ function InstructionsCard({ businessId }: { businessId: string }) {
           {t('offer.instructions')}
         </CardTitle>
       </CardHeader>
-      <CardContent className="text-sm leading-relaxed">{data.collectionInstructions}</CardContent>
+      <CardContent className="space-y-2 text-sm leading-relaxed">
+        {data.collectionInstructions && <p>{data.collectionInstructions}</p>}
+        {data.openingHours && (
+          <p className="flex items-start gap-2 text-muted-foreground">
+            <Clock className="mt-0.5 size-4 shrink-0" />
+            {t('offer.openingHours')}: {data.openingHours}
+          </p>
+        )}
+        <Link to={`/businesses/${businessId}`} className="inline-block font-semibold text-primary hover:underline">
+          {t('offer.viewBusiness')} →
+        </Link>
+      </CardContent>
     </Card>
+  )
+}
+
+/** "Obavesti me" for sold-out offers (signed-in users). */
+function WaitlistButton({ offerId }: { offerId: string }) {
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const waitlist = useWaitlist()
+  const toggle = useToggleWaitlist()
+  const joined = waitlist.data?.includes(offerId) ?? false
+  return (
+    <div className="space-y-1">
+      <Button
+        variant={joined ? 'secondary' : 'accent'}
+        className="w-full"
+        disabled={toggle.isPending}
+        onClick={() => (user ? toggle.mutate({ offerId, join: !joined }) : navigate('/login', { state: { from: `/offers/${offerId}` } }))}
+      >
+        {joined ? <BellRing /> : <Bell />}
+        {joined ? t('offer.waitlistJoined') : t('offer.waitlistJoin')}
+      </Button>
+      {joined && (
+        <button type="button" className="w-full text-center text-xs text-muted-foreground underline" onClick={() => toggle.mutate({ offerId, join: false })}>
+          {t('offer.waitlistLeave')}
+        </button>
+      )}
+    </div>
   )
 }

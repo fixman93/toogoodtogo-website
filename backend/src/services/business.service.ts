@@ -7,10 +7,14 @@ import { serializeBusiness } from '../utils/serializers.js'
 import { escapeRegex, slugify } from '../utils/text.js'
 import type { CreateBusinessInput, UpdateBusinessInput } from '../validators/business.validators.js'
 import { assertBusinessAccess, isAdmin, type Actor } from './access.service.js'
+import { audit } from './audit.service.js'
 
 const toPoint = ({ lat, lng }: { lat: number; lng: number }) => ({ type: 'Point' as const, coordinates: [lng, lat] as [number, number] })
 
-export async function list(query: { owner?: 'me'; city?: string; category?: string; page: number; limit: number }, actor?: Actor) {
+export async function list(
+  query: { owner?: 'me'; city?: string; category?: string; sort: 'name' | 'new'; page: number; limit: number },
+  actor?: Actor,
+) {
   // `deletedAt: null` also matches documents without the field.
   const filter: Record<string, unknown> = { deletedAt: null }
   if (query.owner === 'me') {
@@ -23,7 +27,7 @@ export async function list(query: { owner?: 'me'; city?: string; category?: stri
   if (query.category) filter.category = query.category
 
   const [items, total] = await Promise.all([
-    Business.find(filter).sort({ name: 1 }).skip((query.page - 1) * query.limit).limit(query.limit),
+    Business.find(filter).sort(query.sort === 'new' ? { createdAt: -1 } : { name: 1 }).skip((query.page - 1) * query.limit).limit(query.limit),
     Business.countDocuments(filter),
   ])
   return { items: items.map(serializeBusiness), meta: { page: query.page, limit: query.limit, total } }
@@ -63,6 +67,14 @@ export async function update(id: string, input: UpdateBusinessInput, actor: Acto
     { $set: { businessName: business.name, city: business.address.city, location: business.location, timezone: business.timezone } },
   )
   if (input.isActive === false) await Offer.updateMany({ business: business._id, status: 'active' }, { $set: { status: 'paused' } })
+  if (isAdmin(actor) && business.owner.toString() !== actor.id && input.isActive != null) {
+    void audit(actor, {
+      action: input.isActive ? 'business.activate' : 'business.deactivate',
+      targetType: 'business',
+      targetId: business._id,
+      summary: `${input.isActive ? 'Uključena' : 'Isključena'} lokacija: ${business.name}`,
+    })
+  }
 
   return serializeBusiness(business)
 }

@@ -8,13 +8,13 @@ import type { Actor } from './access.service.js'
 export async function list(businessId: string, page: number, limit: number) {
   if (!(await Business.exists({ _id: businessId }))) throw ApiError.notFound('Lokal nije pronađen.')
   const [items, total] = await Promise.all([
-    Review.find({ business: businessId })
+    Review.find({ business: businessId, isHidden: { $ne: true } })
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .populate<{ user: { _id: Types.ObjectId; name: string } | null }>('user', 'name')
       .lean(),
-    Review.countDocuments({ business: businessId }),
+    Review.countDocuments({ business: businessId, isHidden: { $ne: true } }),
   ])
   return {
     items: items.map((r) => serializeReview(r, r.user)),

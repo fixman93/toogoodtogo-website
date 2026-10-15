@@ -1,13 +1,15 @@
 import { Types, type PipelineStage } from 'mongoose'
 import { env } from '../config/env.js'
 import { MARKETS, getMarket } from '../config/markets.js'
-import { Business, Offer, Reservation, ACTIVE_RESERVATION_STATUSES, type IBusiness, type IOffer } from '../models/index.js'
+import { Business, Favorite, Offer, Reservation, ACTIVE_RESERVATION_STATUSES, type IBusiness, type IOffer } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { serializeOffer } from '../utils/serializers.js'
 import { escapeRegex } from '../utils/text.js'
 import { zonedTime } from '../utils/time.js'
 import type { CreateOfferInput, OfferFilters, OfferListQuery, OfferLocationsQuery, UpdateOfferInput } from '../validators/offer.validators.js'
 import { assertBusinessAccess, type Actor } from './access.service.js'
+import { notify } from './notification.service.js'
+import { notifyIfAvailable } from './waitlist.service.js'
 
 type OfferWithBusiness = IOffer & { _id: Types.ObjectId; distanceMeters?: number; businessDoc: IBusiness & { _id: Types.ObjectId } }
 
@@ -61,8 +63,23 @@ export async function list(query: OfferListQuery) {
   if (sort === 'distance' && hasOrigin) sortStage.distanceMeters = 1
   else if (sort === 'price') sortStage.priceMinor = 1
   else if (sort === 'popularity') sortStage.reservedCount = -1
+  else if (sort === 'rating') sortStage['rating'] = -1
   sortStage.pickupStart = 1
   sortStage._id = 1
+
+  if (sort === 'rating') {
+    // Rating lives on the business: join it before sorting (unrated last).
+    pipeline.push(
+      { $lookup: { from: 'businesses', localField: 'business', foreignField: '_id', as: 'ratingDoc', pipeline: [{ $project: { rating: 1 } }] } },
+      {
+        $addFields: {
+          rating: {
+            $cond: [{ $gt: [{ $first: '$ratingDoc.rating.count' }, 0] }, { $first: '$ratingDoc.rating.average' }, -1],
+          },
+        },
+      },
+    )
+  }
 
   pipeline.push(
     { $addFields: { soldOut: { $eq: ['$quantityAvailable', 0] } } },
@@ -187,6 +204,13 @@ export async function create(input: CreateOfferInput, actor: Actor) {
     businessName: business.name,
     city: business.address.city,
   })
+
+  // Tell everyone who follows this location (favorites).
+  const followers = await Favorite.find({ targetType: 'business', targetId: business._id }).select('user').lean()
+  void notify(
+    followers.map((f) => f.user),
+    { type: 'offer_new', title: `Nova ponuda: ${business.name}`, body: offer.title, link: `/offers/${offer.id}` },
+  )
   return serializeOffer(offer, business)
 }
 
@@ -216,6 +240,8 @@ export async function update(id: string, input: UpdateOfferInput, actor: Actor) 
 
   const updated = await Offer.findOneAndUpdate(filter, change, { new: true, runValidators: true })
   if (!updated) throw ApiError.conflict('Količina ne može biti manja od već rezervisanih kesa.', 'QUANTITY_BELOW_RESERVED')
+  // More bags or re-activated: let the waitlist know.
+  if ((change.$inc?.quantityAvailable ?? 0) > 0 || input.status === 'active') void notifyIfAvailable(updated._id)
   return serializeOffer(updated, business)
 }
 

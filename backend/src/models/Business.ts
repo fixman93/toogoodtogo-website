@@ -15,6 +15,8 @@ export interface IBusiness {
   timezone: string
   currency: string
   collectionInstructions?: string
+  /** Free text, e.g. "Pon–Pet 7–21, Sub 8–15, Ned zatvoreno". */
+  openingHours?: string
   rating: { average: number; count: number }
   isActive: boolean
   /** Set when a location with history (reservations/reviews) is deleted; hidden everywhere. */
@@ -47,6 +49,7 @@ const businessSchema = new Schema<IBusiness>(
     timezone: { type: String, required: true },
     currency: { type: String, required: true, uppercase: true, minlength: 3, maxlength: 3 },
     collectionInstructions: { type: String, maxlength: 1000 },
+    openingHours: { type: String, maxlength: 300 },
     rating: {
       average: { type: Number, default: 0, min: 0, max: 5 },
       count: { type: Number, default: 0, min: 0 },

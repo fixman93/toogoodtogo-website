@@ -7,6 +7,8 @@ export interface IReview {
   reservation: Types.ObjectId
   rating: number
   comment?: string
+  /** Hidden by moderation: not shown and not counted in the rating. */
+  isHidden: boolean
   createdAt: Date
   updatedAt: Date
 }
@@ -18,6 +20,7 @@ const reviewSchema = new Schema<IReview>(
     reservation: { type: Schema.Types.ObjectId, ref: 'Reservation', required: true, unique: true },
     rating: { type: Number, required: true, min: 1, max: 5, validate: Number.isInteger },
     comment: { type: String, trim: true, maxlength: 1000 },
+    isHidden: { type: Boolean, default: false },
   },
   { timestamps: true },
 )

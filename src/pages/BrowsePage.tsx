@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils'
 const PAGE_SIZE = 24
 const DISTANCES = [1, 3, 5, 10, 25]
 const PRICES_MAJOR = [300, 500, 800]
-const SORTS: OfferSort[] = ['distance', 'price', 'popularity', 'pickup']
+const SORTS: OfferSort[] = ['distance', 'price', 'popularity', 'rating', 'pickup']
 const FILTER_KEYS = ['maxDistanceKm', 'maxPriceMinor', 'pickupDay', 'timeOfDay'] as const
 
 function Segmented<T extends string>({

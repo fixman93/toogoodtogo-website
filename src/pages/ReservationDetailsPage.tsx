@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
 import { Link, useLocation as useRouterLocation, useParams } from 'react-router'
-import { ArrowLeft, CalendarClock, CheckCircle2, ExternalLink, Info, Leaf, Loader2, MapPin, ReceiptText } from 'lucide-react'
+import { ArrowLeft, CalendarClock, CheckCircle2, ExternalLink, Info, Leaf, Loader2, MapPin, ReceiptText, Send, Star } from 'lucide-react'
+import type { Reservation } from '@/api/types'
 import { ApiError } from '@/api/client'
 import { RequireAuth } from '@/components/common/RequireAuth'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -11,7 +12,8 @@ import { StatusBadge } from '@/components/reservations/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useBusiness, useCancelReservation, useReservation } from '@/hooks/api'
+import { Textarea } from '@/components/ui/textarea'
+import { useAddReview, useBusiness, useCancelReservation, useReservation, useShareReservation } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney, formatPickupWindow, formatTime } from '@/lib/format'
 import { pickupQrValue } from '@/lib/pickup'
@@ -132,6 +134,9 @@ function Details() {
         </dl>
       </Card>
 
+      {r.status === 'collected' && <ReviewForm reservation={r} />}
+      {active && <ShareWithFriend reservationId={r.id} />}
+
       {business?.collectionInstructions && active && (
         <Card>
           <CardHeader>
@@ -178,6 +183,102 @@ function Details() {
         </p>
       )}
     </div>
+  )
+}
+
+/** 1–5 stars + optional comment, shown once after pickup. */
+function ReviewForm({ reservation }: { reservation: Reservation }) {
+  const [rating, setRating] = useState(0)
+  const [comment, setComment] = useState('')
+  const add = useAddReview(reservation.business.id)
+  // Keep the thank-you visible even after the refetch marks it as reviewed.
+  if (!add.isSuccess && reservation.reviewed) return null
+  if (add.isSuccess) {
+    return (
+      <div role="status" className="flex items-center gap-3 rounded-2xl bg-success/12 p-4 font-semibold text-success">
+        <CheckCircle2 className="size-5" />
+        {t('reservations.rateThanks')}
+      </div>
+    )
+  }
+  return (
+    <Card className="space-y-3 p-5">
+      <div>
+        <p className="font-bold">{t('reservations.rateTitle')}</p>
+        <p className="text-sm text-muted-foreground">{t('reservations.rateText')}</p>
+      </div>
+      <div className="flex gap-1" role="radiogroup" aria-label={t('reservations.rateTitle')}>
+        {[1, 2, 3, 4, 5].map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={rating === value}
+            aria-label={`${value}/5`}
+            onClick={() => setRating(value)}
+            className="flex size-11 items-center justify-center rounded-full hover:bg-muted"
+          >
+            <Star className={value <= rating ? 'size-7 fill-warning text-warning' : 'size-7 text-border'} />
+          </button>
+        ))}
+      </div>
+      <Textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={1000} placeholder={t('reservations.ratePlaceholder')} className="min-h-20" />
+      {add.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          {add.error instanceof ApiError ? add.error.message : t('common.errorText')}
+        </p>
+      )}
+      <Button
+        disabled={!rating || add.isPending}
+        onClick={() => add.mutate({ reservationId: reservation.id, rating, comment: comment.trim() || undefined })}
+      >
+        {add.isPending && <Loader2 className="animate-spin" />}
+        {t('reservations.rateSubmit')}
+      </Button>
+    </Card>
+  )
+}
+
+/** "Send to a friend": a secret link with this pickup's QR code. */
+function ShareWithFriend({ reservationId }: { reservationId: string }) {
+  const share = useShareReservation()
+  const [link, setLink] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const onShare = async () => {
+    const { token } = await share.mutateAsync(reservationId)
+    const url = `${window.location.origin}/pickup/${token}`
+    setLink(url)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: t('pickup.title'), text: t('reservations.shareMessage'), url })
+        return
+      } catch {
+        /* user closed the share sheet — fall back to copying */
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+    } catch {
+      /* clipboard blocked: the link is shown below */
+    }
+  }
+
+  return (
+    <Card className="space-y-3 p-5">
+      <p className="text-sm text-muted-foreground">{t('reservations.shareText')}</p>
+      <Button variant="outline" className="w-full" disabled={share.isPending} onClick={onShare}>
+        {share.isPending ? <Loader2 className="animate-spin" /> : <Send />}
+        {t('reservations.share')}
+      </Button>
+      {link && (
+        <div className="space-y-1">
+          <input readOnly value={link} onFocus={(e) => e.target.select()} className="w-full rounded-lg border bg-muted px-3 py-2 font-mono text-xs" aria-label="Link" />
+          {copied && <p className="text-xs font-semibold text-success">{t('reservations.shareCopied')}</p>}
+        </div>
+      )}
+    </Card>
   )
 }
 

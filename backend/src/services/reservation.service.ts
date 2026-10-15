@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import type { Types } from 'mongoose'
 import { env } from '../config/env.js'
 import { getMarket } from '../config/markets.js'
@@ -6,6 +7,7 @@ import {
   Business,
   Offer,
   Reservation,
+  Review,
   User,
   type IBusiness,
   type IReservation,
@@ -17,6 +19,8 @@ import { pickupCode } from '../utils/text.js'
 import { runAtomically } from '../utils/transaction.js'
 import type { ReservationListQuery } from '../validators/reservation.validators.js'
 import { assertBusinessAccess, isAdmin, type Actor } from './access.service.js'
+import { notify } from './notification.service.js'
+import { notifyIfAvailable } from './waitlist.service.js'
 
 const market = () => getMarket(env.DEFAULT_MARKET)
 type BusinessWithId = IBusiness & { _id: Types.ObjectId }
@@ -32,7 +36,7 @@ function canCancel(r: IReservation, actor: Actor, business: IBusiness) {
   return Date.now() < r.pickupStart.getTime() - market().cancellationCutoffMinutes * 60_000
 }
 
-async function toDto(reservations: ReservationWithId[], actor: Actor) {
+export async function toDto(reservations: ReservationWithId[], actor: Actor) {
   const ids = [...new Set(reservations.map((r) => r.business.toString()))]
   const businesses = new Map((await Business.find({ _id: { $in: ids } })).map((b) => [b.id as string, b as BusinessWithId]))
   const isStaffFor = (business: IBusiness) => isAdmin(actor) || business.owner.toString() === actor.id
@@ -42,11 +46,15 @@ async function toDto(reservations: ReservationWithId[], actor: Actor) {
   const customers = new Map(
     (staffUserIds.length ? await User.find({ _id: { $in: staffUserIds } }).select('name').lean() : []).map((u) => [u._id.toString(), u.name]),
   )
+  const collectedIds = reservations.filter((r) => r.status === 'collected').map((r) => r._id)
+  const reviewed = new Set(
+    (collectedIds.length ? await Review.find({ reservation: { $in: collectedIds } }).select('reservation').lean() : []).map((r) => r.reservation.toString()),
+  )
 
   return reservations.map((r) => {
     const business = businesses.get(r.business.toString())!
     const customerName = isStaffFor(business) ? customers.get(r.user.toString()) : undefined
-    return serializeReservation(r, business, canCancel(r, actor, business), customerName)
+    return { ...serializeReservation(r, business, canCancel(r, actor, business), customerName), reviewed: reviewed.has(r._id.toString()) }
   })
 }
 
@@ -127,6 +135,15 @@ export async function create(input: { offerId: string; quantity: number }, actor
   })
 
   const [dto] = await toDto([reservation.toObject()], actor)
+  const business = await Business.findById(reservation.business).select('owner name').lean()
+  if (business) {
+    void notify([business.owner], {
+      type: 'reservation_new',
+      title: `Nova rezervacija · ${reservation.code}`,
+      body: `${reservation.quantity} × ${reservation.offerTitle} (${business.name})`,
+      link: '/business/orders',
+    })
+  }
   return dto
 }
 
@@ -197,6 +214,23 @@ export async function cancel(id: string, actor: Actor) {
     return updated
   })
 
+  if (cancelled.cancelledBy === 'business') {
+    void notify([cancelled.user], {
+      type: 'reservation_cancelled',
+      title: `${business.name} je otkazao rezervaciju`,
+      body: `${cancelled.quantity} × ${cancelled.offerTitle}. Izvini zbog neprijatnosti.`,
+      link: `/reservations/${cancelled.id}`,
+    })
+  } else {
+    void notify([business.owner], {
+      type: 'reservation_cancelled',
+      title: `Otkazana rezervacija · ${cancelled.code}`,
+      body: `${cancelled.quantity} × ${cancelled.offerTitle} se vraća na stanje.`,
+      link: '/business/orders',
+    })
+  }
+  void notifyIfAvailable(cancelled.offer)
+
   const [dto] = await toDto([cancelled.toObject()], actor)
   return dto
 }
@@ -218,6 +252,12 @@ async function markCollected(reservation: ReservationDoc, actor: Actor) {
     { new: true },
   )
   if (!updated) throw collectError(await Reservation.findById(reservation._id))
+  void notify([updated.user], {
+    type: 'reservation_collected',
+    title: 'Preuzeto – prijatno!',
+    body: `${updated.offerTitle}. Kako ti se dopalo? Ostavi ocenu.`,
+    link: `/reservations/${updated.id}`,
+  })
   const [dto] = await toDto([updated.toObject()], actor)
   return dto
 }
@@ -263,6 +303,64 @@ export async function collectByCode(input: { code: string; reservationId?: strin
   if (collectable.length > 1) throw ApiError.conflict('Više rezervacija ima isti kod. Skenirajte QR kod.', 'AMBIGUOUS_CODE')
   if (collectable.length === 0) throw collectError(matches[0])
   return markCollected(collectable[0], actor)
+}
+
+/** Partner "Narudžbine": all reservations at the partner's locations for one local day. */
+export async function listForPartner(actor: Actor, query: { start: Date; end: Date; status?: string; businessId?: string }) {
+  const businesses = query.businessId
+    ? [await assertBusinessAccess(query.businessId, actor)]
+    : await Business.find({ owner: actor.id, deletedAt: null }).select('_id')
+  const filter: Record<string, unknown> = {
+    business: { $in: businesses.map((b) => b._id) },
+    pickupStart: { $gte: query.start, $lt: query.end },
+  }
+  if (query.status === 'active') filter.status = { $in: ACTIVE_RESERVATION_STATUSES }
+  else if (query.status) filter.status = query.status
+  const items = await Reservation.find(filter).sort({ pickupStart: 1, createdAt: 1 }).limit(500).lean()
+  return toDto(items, actor)
+}
+
+// ---------------------------------------------------------------------------
+// "Send to a friend": a secret link with the pickup pass (QR + code).
+
+/** Create (or return) the share link token for the customer's reservation. */
+export async function share(id: string, actor: Actor) {
+  const reservation = await Reservation.findOne({ _id: id, user: actor.id })
+  if (!reservation) throw ApiError.notFound('Rezervacija nije pronađena.')
+  if (!ACTIVE_RESERVATION_STATUSES.includes(reservation.status)) throw ApiError.conflict('Rezervacija više nije aktivna.', 'NOT_ACTIVE')
+  if (!reservation.shareToken) {
+    reservation.shareToken = randomBytes(18).toString('base64url')
+    await reservation.save()
+  }
+  return { token: reservation.shareToken }
+}
+
+/** Public pickup pass behind the share link — only what's needed at the counter. */
+export async function sharedPass(token: string) {
+  const reservation = await Reservation.findOne({ shareToken: token })
+  if (!reservation) throw ApiError.notFound('Link nije važeći.')
+  const business = await Business.findById(reservation.business)
+  if (!business) throw ApiError.notFound('Link nije važeći.')
+  return {
+    reservationId: reservation.id,
+    code: reservation.code,
+    status: reservation.status,
+    quantity: reservation.quantity,
+    offerTitle: reservation.offerTitle,
+    totalMinor: reservation.totalMinor,
+    currency: reservation.currency,
+    pickupStart: reservation.pickupStart.toISOString(),
+    pickupEnd: reservation.pickupEnd.toISOString(),
+    timezone: reservation.timezone,
+    business: {
+      id: business.id,
+      name: business.name,
+      address: business.address,
+      location: { lat: business.location.coordinates[1], lng: business.location.coordinates[0] },
+      collectionInstructions: business.collectionInstructions,
+      logoUrl: business.logoUrl,
+    },
+  }
 }
 
 /** Housekeeping: mark unclaimed reservations as expired. Run periodically. */

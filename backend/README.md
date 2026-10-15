@@ -144,6 +144,18 @@ Base path: `/api`. Requests and responses are JSON.
 | `GET /favorites` | user | Expanded with business (+ active offer count) or offer |
 | `POST /favorites` | user | `{ targetType: 'business'\|'offer', targetId }`; idempotent |
 | `DELETE /favorites/:id` | owner | |
+| `DELETE /auth/me` | user | `{ password }`. Anonymizes the account; refused with active reservations or own locations |
+| `GET /notifications` · `GET /notifications/unread-count` · `POST /notifications/read-all` | user | In-app notifications (auto-deleted after 90 days) |
+| `GET /waitlist` · `PUT /waitlist/:offerId` · `DELETE /waitlist/:offerId` | user | "Notify me" for sold-out offers |
+| `POST /reservations/:id/share` | owner | Returns a secret token for a friend's pickup link |
+| `GET /pickup/:token` | public | Pickup pass (QR data, code, place and time) behind a share link |
+| `GET /partner/orders` | business, admin | `?date=&status=active\|collected\|cancelled\|expired`, reservations for the day at own locations |
+| `POST /partner-applications` · `GET /partner-applications/me` | user | "Postani partner" (one pending application per user) |
+| `PATCH /admin/users/:id/block` | admin | `{ blocked }` |
+| `GET /admin/reservations` | admin | `?status=&q=` (q matches pickup code or offer title) |
+| `GET /admin/reviews` · `PATCH /admin/reviews/:id` | admin | Moderation `{ hidden }`; rating average kept consistent |
+| `GET /admin/applications` · `PATCH /admin/applications/:id` | admin | `{ status: approved\|rejected, note? }` |
+| `GET /admin/audit` | admin | Audit log of administrative actions |
 | `GET /health` | public | |
 
 ## Structure

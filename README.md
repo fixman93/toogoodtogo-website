@@ -86,6 +86,15 @@ account.
 * **Lokacije:** every partner location with its owner. **Isključi** hides a
   location and pauses its offers.
 
+Additional tabs:
+* **Prijave:** approve or reject "Postani partner" applications. Approval
+  grants the partner role and notifies the applicant.
+* **Rezervacije:** all reservations, searchable by pickup code.
+* **Ocene:** hide or restore reviews. The location's average is recalculated.
+* **Dnevnik:** audit log of role changes, blocks, approvals and moderation.
+* **Korisnici** also has **Blokiraj / Odblokiraj**. A blocked account is
+  rejected immediately, both at sign-in and on every API call.
+
 Safeguards: an admin can't change their own role, and the last admin can't be
 demoted. The very first admin is created from the terminal:
 `cd backend && npm run set-role -- you@example.com admin`.
@@ -183,6 +192,39 @@ works everywhere.
   `src/features/map/OffersMap.tsx` to a provider such as MapTiler (`sr-Latn`
   labels, needs an API key).
 
+## Customer features
+
+* **Discover:** nearby, popular, ending soon and **Novi partneri** (newest
+  locations). **Browse:** search, filters, list or map, and sorting by
+  distance, price, popularity, **rating** or pickup time.
+* **Offer page:**
+  * price, stock and pickup window;
+  * **allergens** (the 14 mandatory ones);
+  * **surprise bag or known contents** (the partner lists exactly what's in
+    the bag);
+  * opening hours, map and collection instructions;
+  * a link to the **partner profile** (`/businesses/:id`), which shows
+    description, hours, map, live offers and reviews.
+* **Waitlist:** "Obavesti me kad bude dostupno" on a sold-out offer. When a
+  bag frees up (a cancellation or the partner adding stock), everyone waiting
+  is notified.
+* **In-app notifications** (bell in the header):
+  * new reservation and customer cancellation (partner);
+  * cancellation by the business, pickup confirmed, new offer from a favorite
+    partner, waitlist (customer);
+  * partner application decisions.
+* **Reservation page:**
+  * QR pickup code;
+  * **send to a friend**, a secret `/pickup/:token` link with the QR, for
+    someone else to collect the bag;
+  * **rating** (1–5 stars + comment) after pickup.
+* **Profile:**
+  * rescued bags, money saved and **CO₂e avoided** (~2.7 kg per bag);
+  * **Postani partner** application;
+  * **delete account**: personal data is anonymized, and sales history stays
+    consistent for partners.
+* Payment happens **in the shop** at pickup; there is no online payment.
+
 ## Partner portal
 
 Visible to `business` and `admin` accounts at `/business`. Account → locations → offers:
@@ -211,6 +253,11 @@ Visible to `business` and `admin` accounts at `/business`. Account → locations
   together with its offers.
 * Past offers are listed separately, and "Ponovi" works on them too.
 * **Skeniraj kod** (`/business/scan`) handles pickups (see above).
+* **Narudžbine** (`/business/orders`) covers every reservation for a day,
+  filtered by status (waiting, collected, cancelled, not collected). Give out
+  bags or cancel one (the customer is notified).
+* Location **opening hours**. Offer **contents** (known-content bags) and
+  **allergens**.
 * **Prodaja i stanje** (`/business/sales`, plus a "Danas" summary at the top
   of the portal) covers any day (yesterday, today, tomorrow or a date) per
   location and per offer:
@@ -226,6 +273,16 @@ owner-only list that includes paused and past offers).
 
 Planned next: recurring offers (e.g. "every weekday 19:30–20:30, 8 bags"),
 image upload, and staff accounts per location.
+
+## Roadmap (deliberately not built yet)
+
+* Online payments, commissions, payouts and refunds. Pickup is paid in the
+  shop.
+* Staff accounts per location (scan-only) and granular admin roles
+  (operations, support, finance).
+* Push and e-mail notifications (in-app only today), and support tickets.
+* Dynamic pricing, donations, loyalty points, referrals and vouchers, AI
+  surplus prediction, POS/ERP integrations, delivery, and the Cyrillic script.
 
 ## Not included yet
 

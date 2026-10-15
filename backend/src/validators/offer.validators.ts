@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ALLERGENS } from '../models/common.js'
 import { category, objectId, pagination } from './common.js'
 
 /** Filters shared by the offer list and the map. */
@@ -16,7 +17,7 @@ export const offerListQuery = z.object({
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
   maxDistanceKm: z.coerce.number().positive().max(500).optional(),
-  sort: z.enum(['distance', 'price', 'popularity', 'pickup']).optional(),
+  sort: z.enum(['distance', 'price', 'popularity', 'pickup', 'rating']).optional(),
   ...pagination,
 })
 
@@ -26,6 +27,9 @@ const offerFields = {
   category: category.optional(),
   imageUrl: z.union([z.url(), z.literal('')]).optional(),
   tags: z.array(z.string().trim().max(30)).max(10).optional(),
+  contentType: z.enum(['surprise', 'known']).optional(),
+  contents: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+  allergens: z.array(z.enum(ALLERGENS)).max(ALLERGENS.length).optional(),
   priceMinor: z.number().int().positive(),
   originalPriceMinor: z.number().int().positive(),
   quantityTotal: z.number().int().min(1).max(500),

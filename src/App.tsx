@@ -3,6 +3,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { AdminPage } from '@/pages/AdminPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { BrowsePage } from '@/pages/BrowsePage'
+import { BusinessPage } from '@/pages/BusinessPage'
 import { BusinessDashboardPage } from '@/pages/BusinessDashboardPage'
 import { BusinessScanPage } from '@/pages/BusinessScanPage'
 import { LocationFormPage } from '@/pages/partner/LocationFormPage'
@@ -12,6 +13,9 @@ import { DiscoverPage } from '@/pages/DiscoverPage'
 import { FavoritesPage } from '@/pages/FavoritesPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { OfferDetailsPage } from '@/pages/OfferDetailsPage'
+import { PartnerApplyPage } from '@/pages/PartnerApplyPage'
+import { PickupPassPage } from '@/pages/PickupPassPage'
+import { OrdersPage } from '@/pages/partner/OrdersPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { ReservationDetailsPage } from '@/pages/ReservationDetailsPage'
 import { ReservationsPage } from '@/pages/ReservationsPage'
@@ -23,6 +27,9 @@ const router = createBrowserRouter([
       { index: true, element: <DiscoverPage /> },
       { path: 'browse', element: <BrowsePage /> },
       { path: 'offers/:id', element: <OfferDetailsPage /> },
+      { path: 'businesses/:id', element: <BusinessPage /> },
+      { path: 'pickup/:token', element: <PickupPassPage /> },
+      { path: 'partner/apply', element: <PartnerApplyPage /> },
       { path: 'reservations', element: <ReservationsPage /> },
       { path: 'reservations/:id', element: <ReservationDetailsPage /> },
       { path: 'favorites', element: <FavoritesPage /> },
@@ -33,6 +40,7 @@ const router = createBrowserRouter([
       { path: 'business', element: <BusinessDashboardPage /> },
       { path: 'business/scan', element: <BusinessScanPage /> },
       { path: 'business/sales', element: <SalesPage /> },
+      { path: 'business/orders', element: <OrdersPage /> },
       { path: 'business/locations/new', element: <LocationFormPage /> },
       { path: 'business/locations/:id/edit', element: <LocationFormPage /> },
       { path: 'business/offers/new', element: <OfferFormPage /> },

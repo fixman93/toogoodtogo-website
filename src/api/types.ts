@@ -7,6 +7,10 @@
 export const CATEGORIES = ['meals', 'bakery', 'groceries', 'sweets'] as const
 export type Category = (typeof CATEGORIES)[number]
 
+/** The 14 allergens that must be declared (EU/Serbia). */
+export const ALLERGENS = ['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk', 'nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'] as const
+export type Allergen = (typeof ALLERGENS)[number]
+
 export type Role = 'customer' | 'business' | 'admin'
 
 export interface ApiSuccess<T> {
@@ -70,6 +74,8 @@ export interface BusinessSummary {
 export interface Business extends BusinessSummary {
   description?: string
   collectionInstructions?: string
+  openingHours?: string
+  createdAt?: string
   phone?: string
   currency: string
   ownerId: string
@@ -87,6 +93,10 @@ export interface Offer {
   category: Category
   imageUrl?: string
   tags: string[]
+  /** 'surprise' = classic surprise bag; 'known' = exact contents listed. */
+  contentType: 'surprise' | 'known'
+  contents: string[]
+  allergens: Allergen[]
   priceMinor: number
   originalPriceMinor: number
   currency: string
@@ -102,7 +112,7 @@ export interface Offer {
   distanceMeters?: number
 }
 
-export type OfferSort = 'distance' | 'price' | 'popularity' | 'pickup'
+export type OfferSort = 'distance' | 'price' | 'popularity' | 'pickup' | 'rating'
 export type PickupDay = 'today' | 'tomorrow'
 export type TimeOfDay = 'morning' | 'afternoon' | 'evening'
 
@@ -140,6 +150,8 @@ export interface Reservation {
   business: BusinessSummary
   payment: { status: PaymentStatus; method: 'pay_at_pickup' | 'online' }
   canCancel: boolean
+  /** Collected and already reviewed by the customer. */
+  reviewed?: boolean
   /** Only included for the business's own staff. */
   customer?: { name: string }
   cancelledAt?: string
@@ -168,6 +180,7 @@ export interface Review {
 
 /** Body for POST/PATCH /businesses. */
 export interface BusinessInput {
+  openingHours?: string
   name: string
   category: Category
   description?: string
@@ -187,6 +200,9 @@ export interface OfferInput {
   description: string
   category?: Category
   tags?: string[]
+  contentType?: 'surprise' | 'known'
+  contents?: string[]
+  allergens?: Allergen[]
   priceMinor: number
   originalPriceMinor: number
   quantityTotal: number
@@ -209,6 +225,7 @@ export interface AdminStats {
 
 export interface AdminUser extends User {
   businessCount: number
+  isBlocked: boolean
 }
 
 export interface AdminBusiness extends Business {
@@ -266,4 +283,83 @@ export interface SalesReport extends SalesCounts {
   timezone: string
   currency: string
   businesses: (SalesCounts & { id: string; name: string; address: Address; offers: SalesOfferRow[] })[]
+}
+
+// ---------------------------------------------------------------------------
+// Notifications, waitlist, sharing, partner applications, moderation
+
+export type NotificationType =
+  | 'reservation_new'
+  | 'reservation_cancelled'
+  | 'reservation_collected'
+  | 'offer_new'
+  | 'waitlist_available'
+  | 'application_new'
+  | 'application_approved'
+  | 'application_rejected'
+
+export interface AppNotification {
+  id: string
+  type: NotificationType
+  title: string
+  body?: string
+  link?: string
+  read: boolean
+  createdAt: string
+}
+
+/** Public "send to a friend" pickup pass. */
+export interface PickupPass {
+  reservationId: string
+  code: string
+  status: ReservationStatus
+  quantity: number
+  offerTitle: string
+  totalMinor: number
+  currency: string
+  pickupStart: string
+  pickupEnd: string
+  timezone: string
+  business: { id: string; name: string; address: Address; location: GeoPoint; collectionInstructions?: string; logoUrl?: string }
+}
+
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected'
+
+export interface PartnerApplicationInput {
+  businessName: string
+  contactName: string
+  phone: string
+  city: string
+  category: Category
+  locationsCount: number
+  message?: string
+}
+
+export interface PartnerApplication extends PartnerApplicationInput {
+  id: string
+  status: ApplicationStatus
+  reviewNote?: string
+  reviewedAt?: string
+  createdAt: string
+  user?: { id: string; name: string; email: string }
+}
+
+export interface AdminReview {
+  id: string
+  rating: number
+  comment?: string
+  isHidden: boolean
+  createdAt: string
+  user: { name: string; email: string } | null
+  business: { id: string; name: string } | null
+}
+
+export interface AuditEntry {
+  id: string
+  action: string
+  targetType: string
+  targetId: string
+  summary: string
+  actor: { id: string; name: string; email: string } | null
+  createdAt: string
 }

@@ -3,6 +3,8 @@ import { category, pagination } from './common.js'
 
 export const businessListQuery = z.object({
   owner: z.literal('me').optional(),
+  /** 'new' = newest partners first (Discover). */
+  sort: z.enum(['name', 'new']).default('name'),
   city: z.string().trim().optional(),
   category: category.optional(),
   ...pagination,
@@ -29,6 +31,7 @@ export const createBusinessBody = z.object({
   timezone: z.string().optional(),
   currency: z.string().length(3).toUpperCase().optional(),
   collectionInstructions: z.string().max(1000).optional(),
+  openingHours: z.string().trim().max(300).optional(),
 })
 
 export const updateBusinessBody = createBusinessBody.partial().extend({ isActive: z.boolean().optional() })

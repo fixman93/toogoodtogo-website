@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { market } from '@/config/markets'
 import { useLocation } from '@/features/location/location-context'
+import { NewPartners } from '@/components/offers/NewPartners'
 import { useOffers } from '@/hooks/api'
 import { t } from '@/i18n'
 
@@ -100,6 +101,8 @@ export function DiscoverPage() {
           <p className="mt-0.5 text-sm text-secondary-foreground/80">{t('discover.impactText')}</p>
         </div>
       </section>
+
+      <NewPartners />
 
       <OfferCarousel
         title={t('discover.popular')}

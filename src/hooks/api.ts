@@ -1,7 +1,7 @@
 /** TanStack Query hooks — the only way screens read or mutate server state. */
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { adminApi, businessesApi, favoritesApi, offersApi, partnerApi, reservationsApi } from '@/api/services'
-import type { BoundingBox, BusinessInput, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
+import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, reservationsApi, waitlistApi } from '@/api/services'
+import type { ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
 import { useAuth } from '@/features/auth/auth-context'
 
 export function useOffers(query: OfferQuery, options: { enabled?: boolean } = {}) {
@@ -251,4 +251,122 @@ export function usePartnerSales(date?: string) {
     queryFn: () => partnerApi.sales({ date }),
     refetchInterval: 30_000,
   })
+}
+
+// ---------------------------------------------------------------------------
+// Notifications, waitlist, sharing, applications, moderation
+
+/** Unread badge: light polling (60 s) + refresh on focus. */
+export function useUnreadCount() {
+  const { user } = useAuth()
+  return useQuery({ queryKey: ['notifications', 'unread'], queryFn: notificationsApi.unreadCount, enabled: !!user, refetchInterval: 60_000 })
+}
+
+export function useNotifications(enabled: boolean) {
+  return useQuery({ queryKey: ['notifications', 'list'], queryFn: notificationsApi.list, enabled })
+}
+
+export function useReadAllNotifications() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: notificationsApi.readAll,
+    onSuccess: () => queryClient.setQueryData(['notifications', 'unread'], { unread: 0 }),
+  })
+}
+
+export function useWaitlist() {
+  const { user } = useAuth()
+  return useQuery({ queryKey: ['waitlist'], queryFn: waitlistApi.mine, enabled: !!user })
+}
+
+export function useToggleWaitlist() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ offerId, join }: { offerId: string; join: boolean }) => (join ? waitlistApi.join(offerId) : waitlistApi.leave(offerId)),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['waitlist'] }),
+  })
+}
+
+export function useShareReservation() {
+  return useMutation({ mutationFn: reservationsApi.share })
+}
+
+export function usePickupPass(token: string | undefined) {
+  return useQuery({ queryKey: ['pickup', token], queryFn: () => reservationsApi.pickupPass(token!), enabled: !!token, refetchInterval: 10_000, retry: false })
+}
+
+export function useAddReview(businessId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { reservationId: string; rating: number; comment?: string }) => businessesApi.addReview(businessId, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reservations'] })
+      queryClient.invalidateQueries({ queryKey: ['businesses'] })
+    },
+  })
+}
+
+export function useNewPartners() {
+  return useQuery({ queryKey: ['businesses', 'new'], queryFn: () => businessesApi.list({ sort: 'new', limit: 10 }), staleTime: 300_000 })
+}
+
+export function useMyApplication() {
+  const { user } = useAuth()
+  return useQuery({ queryKey: ['application', 'mine', user?.id], queryFn: partnerApi.myApplication, enabled: !!user })
+}
+
+export function useApplyAsPartner() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: PartnerApplicationInput) => partnerApi.apply(body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['application'] }),
+  })
+}
+
+export function useDeleteAccount() {
+  return useMutation({ mutationFn: authApi.deleteAccount })
+}
+
+export function usePartnerOrders(date: string | undefined, status?: 'active' | 'collected' | 'cancelled' | 'expired') {
+  return useQuery({ queryKey: ['partner', 'orders', date ?? 'today', status], queryFn: () => partnerApi.orders({ date, status }), refetchInterval: 30_000 })
+}
+
+export function useAdminReservations(params: { status?: ReservationStatus; q?: string; limit?: number }) {
+  return useQuery({ queryKey: ['admin', 'reservations', params], queryFn: () => adminApi.reservations(params), placeholderData: keepPreviousData })
+}
+
+export function useAdminReviews(params: { hidden?: boolean; limit?: number }) {
+  return useQuery({ queryKey: ['admin', 'reviews', params], queryFn: () => adminApi.reviews(params), placeholderData: keepPreviousData })
+}
+
+export function useSetReviewHidden() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, hidden }: { id: string; hidden: boolean }) => adminApi.setReviewHidden(id, hidden),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  })
+}
+
+export function useAdminApplications(status?: ApplicationStatus) {
+  return useQuery({ queryKey: ['admin', 'applications', status], queryFn: () => adminApi.applications({ status, limit: 100 }) })
+}
+
+export function useDecideApplication() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, status, note }: { id: string; status: 'approved' | 'rejected'; note?: string }) => adminApi.decideApplication(id, { status, note }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  })
+}
+
+export function useSetUserBlocked() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, blocked }: { id: string; blocked: boolean }) => adminApi.setBlocked(id, blocked),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  })
+}
+
+export function useAuditLog() {
+  return useQuery({ queryKey: ['admin', 'audit'], queryFn: () => adminApi.audit({ limit: 100 }) })
 }

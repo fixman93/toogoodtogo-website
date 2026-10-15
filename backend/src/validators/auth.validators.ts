@@ -11,3 +11,5 @@ export const loginBody = z.object({
   password: z.string().min(1),
 })
 
+
+export const deleteAccountBody = z.object({ password: z.string().min(1) })

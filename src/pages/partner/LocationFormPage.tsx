@@ -29,6 +29,7 @@ interface FormState {
   city: string
   postalCode: string
   collectionInstructions: string
+  openingHours: string
   logoUrl: string
   coverUrl: string
   isActive: boolean
@@ -47,6 +48,7 @@ function initialState(business?: Business): FormState {
     city: business?.address.city ?? market.cities[0].name,
     postalCode: business?.address.postalCode ?? '',
     collectionInstructions: business?.collectionInstructions ?? 'Pokaži kod za preuzimanje na kasi.',
+    openingHours: business?.openingHours ?? '',
     logoUrl: business?.logoUrl ?? '',
     coverUrl: business?.coverUrl ?? '',
     isActive: business?.isActive ?? true,
@@ -68,7 +70,7 @@ function LocationForm({ business }: { business?: Business }) {
     // A field's error disappears as soon as the user edits it.
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e))
   }
-  const text = (key: 'name' | 'description' | 'phone' | 'street' | 'city' | 'postalCode' | 'collectionInstructions' | 'logoUrl' | 'coverUrl') => ({
+  const text = (key: 'name' | 'description' | 'phone' | 'street' | 'city' | 'postalCode' | 'collectionInstructions' | 'openingHours' | 'logoUrl' | 'coverUrl') => ({
     id: key,
     value: form[key],
     'aria-invalid': !!errors[key] || undefined,
@@ -129,6 +131,7 @@ function LocationForm({ business }: { business?: Business }) {
       address: { street: form.street.trim(), city: form.city.trim(), postalCode: form.postalCode.trim() || undefined, countryCode: market.code },
       location: form.location!,
       collectionInstructions: form.collectionInstructions.trim() || undefined,
+      openingHours: form.openingHours.trim(),
       logoUrl: form.logoUrl.trim(),
       coverUrl: form.coverUrl.trim(),
       ...(business ? { isActive: form.isActive } : {}),
@@ -209,6 +212,9 @@ function LocationForm({ business }: { business?: Business }) {
       </FormSection>
 
       <FormSection title={t('partner.section.pickup')}>
+        <FormField label={t('partner.field.openingHours')} htmlFor="openingHours" hint={t('partner.field.openingHoursHint')}>
+          <Input {...text('openingHours')} maxLength={300} placeholder="Pon–Pet 7–21, Sub 8–15" />
+        </FormField>
         <FormField label={t('partner.field.instructions')} htmlFor="collectionInstructions" hint={t('partner.field.instructionsHint')}>
           <Textarea {...text('collectionInstructions')} maxLength={1000} className="min-h-20" />
         </FormField>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { BarChart3, ChevronDown, ChevronRight, Clock, Copy, MapPin, Pause, Pencil, Play, Plus, ScanLine, Store } from 'lucide-react'
+import { BarChart3, ChevronDown, ClipboardList, ChevronRight, Clock, Copy, MapPin, Pause, Pencil, Play, Plus, ScanLine, Store } from 'lucide-react'
 import type { Business, Offer } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -208,6 +208,12 @@ function Dashboard() {
           <Link to="/business/scan">
             <ScanLine />
             {t('business.scan')}
+          </Link>
+        </Button>
+        <Button asChild size="lg" variant="outline">
+          <Link to="/business/orders">
+            <ClipboardList />
+            {t('orders.title')}
           </Link>
         </Button>
         <Button asChild size="lg" variant="outline">

@@ -1,5 +1,5 @@
 import { Schema, model, type HydratedDocument, type Types } from 'mongoose'
-import { CATEGORIES, moneyMinor, pointSchema, type Category, type GeoPoint } from './common.js'
+import { ALLERGENS, CATEGORIES, moneyMinor, pointSchema, type Allergen, type Category, type GeoPoint } from './common.js'
 
 export const OFFER_STATUSES = ['active', 'paused', 'archived'] as const
 export type OfferStatus = (typeof OFFER_STATUSES)[number]
@@ -11,6 +11,10 @@ export interface IOffer {
   category: Category
   imageUrl?: string
   tags: string[]
+  /** 'surprise' = classic surprise bag; 'known' = the partner lists the exact contents. */
+  contentType: 'surprise' | 'known'
+  contents: string[]
+  allergens: Allergen[]
   /** Prices in minor currency units (para, cents) to avoid float rounding. */
   priceMinor: number
   originalPriceMinor: number
@@ -40,6 +44,9 @@ const offerSchema = new Schema<IOffer>(
     category: { type: String, enum: CATEGORIES, required: true },
     imageUrl: String,
     tags: { type: [String], default: [] },
+    contentType: { type: String, enum: ['surprise', 'known'], default: 'surprise' },
+    contents: { type: [String], default: [] },
+    allergens: { type: [String], enum: ALLERGENS, default: [] },
     priceMinor: moneyMinor,
     originalPriceMinor: moneyMinor,
     currency: { type: String, required: true, uppercase: true, minlength: 3, maxlength: 3 },

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
-import { CalendarCheck, Leaf, Loader2, MapPin, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
+import { Ban, CalendarCheck, ClipboardList, History, Leaf, Loader2, MapPin, MessageSquare, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import type { AdminBusiness, AdminUser, Role } from '@/api/types'
+import type { AdminBusiness, AdminReview, AdminUser, ApplicationStatus, PartnerApplication, ReservationStatus, Role } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
@@ -14,12 +14,28 @@ import { NativeSelect } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/features/auth/auth-context'
 import { RoleGuard } from '@/features/business/PartnerGuard'
-import { useAdminBusinesses, useAdminStats, useAdminUsers, useSetBusinessActive, useSetUserRole } from '@/hooks/api'
+import { Stars } from '@/components/offers/ReviewList'
+import { StatusBadge } from '@/components/reservations/StatusBadge'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  useAdminApplications,
+  useAdminBusinesses,
+  useAdminReservations,
+  useAdminReviews,
+  useAdminStats,
+  useAdminUsers,
+  useAuditLog,
+  useDecideApplication,
+  useSetBusinessActive,
+  useSetReviewHidden,
+  useSetUserBlocked,
+  useSetUserRole,
+} from '@/hooks/api'
 import { t } from '@/i18n'
-import { formatDate } from '@/lib/format'
+import { formatDate, formatDayLabel, formatMoney, formatPickupWindow, formatTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-const TABS = ['overview', 'users', 'businesses'] as const
+const TABS = ['overview', 'applications', 'users', 'businesses', 'reservations', 'reviews', 'audit'] as const
 type Tab = (typeof TABS)[number]
 const ROLES: Role[] = ['customer', 'business', 'admin']
 const PAGE = 50
@@ -120,6 +136,7 @@ function Overview() {
 
 function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
   const setRole = useSetUserRole()
+  const block = useSetUserBlocked()
   const [role, setLocalRole] = useState<Role>(user.role)
   const [saved, setSaved] = useState<string | null>(null)
   const changed = role !== user.role
@@ -137,6 +154,7 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
           <p className="flex items-center gap-2 font-semibold">
             <span className="truncate">{user.name}</span>
             <Badge variant={ROLE_BADGE[user.role]}>{t(`admin.role.${user.role}`)}</Badge>
+            {user.isBlocked && <Badge variant="destructive">{t('admin.blocked')}</Badge>}
           </p>
           <p className="truncate text-sm text-muted-foreground">{user.email}</p>
           <p className="text-xs text-muted-foreground">
@@ -168,6 +186,18 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
               </option>
             ))}
           </NativeSelect>
+          {user.role !== 'admin' && !changed && (
+            <Button
+              size="sm"
+              variant={user.isBlocked ? 'secondary' : 'ghost'}
+              className={user.isBlocked ? '' : 'text-destructive hover:bg-destructive/10'}
+              disabled={block.isPending}
+              onClick={() => block.mutate({ id: user.id, blocked: !user.isBlocked })}
+            >
+              <Ban />
+              {user.isBlocked ? t('admin.unblock') : t('admin.block')}
+            </Button>
+          )}
           {changed && (
             <Button
               size="sm"
@@ -189,6 +219,11 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
       {changed && role === 'business' && <p className="text-xs text-muted-foreground">{t('admin.promoteHint')}</p>}
       {changed && user.role === 'business' && user.businessCount > 0 && <p className="text-xs font-medium text-accent-foreground">{t('admin.demoteWarning')}</p>}
       {saved && <p role="status" className="text-xs font-semibold text-success">{saved}</p>}
+      {block.isError && (
+        <p role="alert" className="text-xs font-semibold text-destructive">
+          {block.error instanceof ApiError ? block.error.message : t('common.errorText')}
+        </p>
+      )}
       {setRole.isError && (
         <p role="alert" className="text-xs font-semibold text-destructive">
           {setRole.error instanceof ApiError ? setRole.error.message : t('common.errorText')}
@@ -342,6 +377,222 @@ function BusinessesTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Partner applications
+
+function ApplicationRow({ a }: { a: PartnerApplication }) {
+  const decide = useDecideApplication()
+  const [rejecting, setRejecting] = useState(false)
+  const [note, setNote] = useState('')
+  return (
+    <li className="space-y-2 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold">{a.businessName}</p>
+          <p className="text-sm text-muted-foreground">
+            {t(`category.${a.category}`)} · {a.city} · {t('admin.locations', { count: a.locationsCount })}
+          </p>
+          <p className="text-sm">
+            {a.contactName} · {a.phone} · <span className="text-muted-foreground">{a.user?.email}</span>
+          </p>
+          {a.message && <p className="mt-1 rounded-lg bg-muted p-2 text-sm">{a.message}</p>}
+          <p className="mt-1 text-xs text-muted-foreground">{formatDate(a.createdAt)}</p>
+        </div>
+        <Badge variant={a.status === 'pending' ? 'accent' : a.status === 'approved' ? 'success' : 'destructive'}>{t(`admin.application.${a.status}`)}</Badge>
+      </div>
+      {a.status === 'pending' &&
+        (rejecting ? (
+          <div className="space-y-2">
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('admin.rejectNote')} className="min-h-16" maxLength={500} />
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setRejecting(false)}>
+                {t('partner.cancel')}
+              </Button>
+              <Button size="sm" variant="destructive" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, status: 'rejected', note: note.trim() || undefined })}>
+                {t('admin.reject')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Button size="sm" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, status: 'approved' })}>
+              {decide.isPending && <Loader2 className="animate-spin" />}
+              {t('admin.approve')}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setRejecting(true)}>
+              {t('admin.reject')}
+            </Button>
+          </div>
+        ))}
+      {a.reviewNote && a.status !== 'pending' && <p className="text-xs text-muted-foreground">{a.reviewNote}</p>}
+    </li>
+  )
+}
+
+function ApplicationsTab() {
+  const [status, setStatus] = useState<ApplicationStatus | undefined>('pending')
+  const { data, isLoading, isError, refetch } = useAdminApplications(status)
+  return (
+    <div className="space-y-4">
+      <Chips<ApplicationStatus>
+        value={status}
+        onChange={setStatus}
+        options={[
+          { value: 'pending', label: t('admin.application.pending') },
+          { value: 'approved', label: t('admin.application.approved') },
+          { value: 'rejected', label: t('admin.application.rejected') },
+          { label: t('admin.all') },
+        ]}
+      />
+      {isLoading ? (
+        <Skeleton className="h-40 rounded-2xl" />
+      ) : isError ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : !data?.data.length ? (
+        <EmptyState icon={Store} title={t('admin.noResults')} />
+      ) : (
+        <Card className="overflow-hidden">
+          <ul className="divide-y">
+            {data.data.map((a) => (
+              <ApplicationRow key={a.id} a={a} />
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// All reservations
+
+const RES_STATUSES: ReservationStatus[] = ['confirmed', 'collected', 'cancelled', 'expired']
+
+function ReservationsTab() {
+  const [q, setQ] = useState('')
+  const [status, setStatus] = useState<ReservationStatus>()
+  const [limit, setLimit] = useState(PAGE)
+  const { data, isLoading, isError, refetch } = useAdminReservations({ q: q || undefined, status, limit })
+  return (
+    <div className="space-y-4">
+      <SearchBox placeholder={t('admin.searchReservations')} onSearch={setQ} />
+      <Chips<ReservationStatus> value={status} onChange={setStatus} options={[{ label: t('admin.all') }, ...RES_STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) }))]} />
+      {isLoading ? (
+        <Skeleton className="h-40 rounded-2xl" />
+      ) : isError ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : !data?.data.length ? (
+        <EmptyState icon={ClipboardList} title={t('admin.noResults')} />
+      ) : (
+        <>
+          <Card className="overflow-hidden">
+            <ul className="divide-y">
+              {data.data.map((r) => (
+                <li key={r.id} className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0 text-sm">
+                    <p className="truncate font-semibold">
+                      <span className="font-mono text-primary">{r.code}</span> · {r.business.name}
+                    </p>
+                    <p className="truncate text-muted-foreground">
+                      {r.quantity} × {r.offer.title} · {formatMoney(r.totalMinor, r.currency)}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {t('admin.customer')}: {r.customer?.name ?? '—'} · {formatPickupWindow(r.pickupStart, r.pickupEnd, r.timezone)}
+                    </p>
+                  </div>
+                  <StatusBadge status={r.status} />
+                </li>
+              ))}
+            </ul>
+          </Card>
+          {data.data.length < data.meta.total && (
+            <Button variant="outline" className="w-full" onClick={() => setLimit((l) => l + PAGE)}>
+              {t('admin.showMore')}
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Review moderation
+
+function ReviewRow({ r }: { r: AdminReview }) {
+  const toggle = useSetReviewHidden()
+  return (
+    <li className={cn('space-y-1.5 p-4', r.isHidden && 'opacity-70')}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Stars value={r.rating} />
+          {r.isHidden && <Badge variant="muted">{t('admin.hidden')}</Badge>}
+        </div>
+        <Button size="sm" variant={r.isHidden ? 'secondary' : 'ghost'} disabled={toggle.isPending} onClick={() => toggle.mutate({ id: r.id, hidden: !r.isHidden })}>
+          {r.isHidden ? t('admin.showReview') : t('admin.hideReview')}
+        </Button>
+      </div>
+      {r.comment && <p className="text-sm">{r.comment}</p>}
+      <p className="text-xs text-muted-foreground">
+        {r.user?.name} ({r.user?.email}) → {r.business?.name} · {formatDate(r.createdAt)}
+      </p>
+    </li>
+  )
+}
+
+function ReviewsTab() {
+  const [hidden, setHidden] = useState<'hidden' | 'visible'>()
+  const { data, isLoading, isError, refetch } = useAdminReviews({ hidden: hidden == null ? undefined : hidden === 'hidden', limit: 100 })
+  return (
+    <div className="space-y-4">
+      <Chips<'hidden' | 'visible'>
+        value={hidden}
+        onChange={setHidden}
+        options={[{ label: t('admin.all') }, { value: 'visible', label: t('admin.showReview') }, { value: 'hidden', label: t('admin.hidden') }]}
+      />
+      {isLoading ? (
+        <Skeleton className="h-40 rounded-2xl" />
+      ) : isError ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : !data?.data.length ? (
+        <EmptyState icon={MessageSquare} title={t('admin.noResults')} />
+      ) : (
+        <Card className="overflow-hidden">
+          <ul className="divide-y">
+            {data.data.map((r) => (
+              <ReviewRow key={r.id} r={r} />
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+
+function AuditTab() {
+  const { data, isLoading, isError, refetch } = useAuditLog()
+  if (isLoading) return <Skeleton className="h-40 rounded-2xl" />
+  if (isError) return <ErrorState onRetry={() => refetch()} />
+  if (!data?.data.length) return <EmptyState icon={History} title={t('admin.noResults')} />
+  return (
+    <Card className="overflow-hidden">
+      <ul className="divide-y">
+        {data.data.map((e) => (
+          <li key={e.id} className="p-4 text-sm">
+            <p className="font-medium">{e.summary}</p>
+            <p className="text-xs text-muted-foreground">
+              {e.actor ? `${e.actor.name} (${e.actor.email})` : '—'} · {formatDayLabel(e.createdAt)} {formatTime(e.createdAt)} · <code>{e.action}</code>
+            </p>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
 
 function AdminPanel() {
   const [params, setParams] = useSearchParams()
@@ -349,7 +600,8 @@ function AdminPanel() {
 
   return (
     <div className="space-y-5">
-      <div role="tablist" className="inline-flex rounded-full bg-muted p-1">
+      <div role="tablist" className="scrollbar-none -mx-4 flex max-w-[calc(100%+2rem)] overflow-x-auto px-4 sm:mx-0 sm:max-w-full sm:px-0">
+        <div className="inline-flex shrink-0 rounded-full bg-muted p-1">
         {TABS.map((id) => (
           <button
             key={id}
@@ -358,17 +610,22 @@ function AdminPanel() {
             aria-selected={tab === id}
             onClick={() => setParams(id === 'overview' ? {} : { tab: id }, { replace: true })}
             className={cn(
-              'h-10 rounded-full px-4 text-sm font-semibold transition-all sm:px-5',
+              'h-10 shrink-0 rounded-full px-4 text-sm font-semibold whitespace-nowrap transition-all sm:px-5',
               tab === id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
             )}
           >
             {t(`admin.tab.${id}`)}
           </button>
         ))}
+        </div>
       </div>
       {tab === 'overview' && <Overview />}
       {tab === 'users' && <UsersTab />}
       {tab === 'businesses' && <BusinessesTab />}
+      {tab === 'applications' && <ApplicationsTab />}
+      {tab === 'reservations' && <ReservationsTab />}
+      {tab === 'reviews' && <ReviewsTab />}
+      {tab === 'audit' && <AuditTab />}
     </div>
   )
 }

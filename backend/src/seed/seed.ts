@@ -15,7 +15,7 @@ import mongoose from 'mongoose'
 import { connectDatabase, disconnectDatabase } from '../config/db.js'
 import { env } from '../config/env.js'
 import { getMarket } from '../config/markets.js'
-import { Business, Favorite, Offer, Reservation, Review, User } from '../models/index.js'
+import { AuditLog, Business, Favorite, Notification, Offer, PartnerApplication, Reservation, Review, User, WaitlistEntry } from '../models/index.js'
 import { slugify } from '../utils/text.js'
 import { zonedTime } from '../utils/time.js'
 import { SEED_DAYS, TEST_CUSTOMER, TEST_EMAILS, TEST_PARTNER, testLocations, testOfferTemplates } from './data.js'
@@ -34,7 +34,9 @@ async function seed() {
   const now = new Date()
 
   await mongoose.connection.dropDatabase()
-  await Promise.all([User, Business, Offer, Reservation, Favorite, Review].map((m) => m.syncIndexes()))
+  await Promise.all(
+    [User, Business, Offer, Reservation, Favorite, Review, Notification, WaitlistEntry, PartnerApplication, AuditLog].map((m) => m.syncIndexes()),
+  )
 
   const password = process.env.SEED_PASSWORD ?? randomBytes(6).toString('base64url')
   const passwordHash = await bcrypt.hash(password, 12)
@@ -57,6 +59,7 @@ async function seed() {
         timezone: tz,
         currency: market.currency,
         collectionInstructions: l.instructions,
+        openingHours: l.openingHours,
       }),
     ),
   )
@@ -75,6 +78,9 @@ async function seed() {
           category: template.category,
           imageUrl: business.coverUrl,
           tags: template.tags ?? [],
+          allergens: template.allergens ?? [],
+          contentType: template.contents?.length ? 'known' : 'surprise',
+          contents: template.contents ?? [],
           priceMinor: template.price * 100,
           originalPriceMinor: template.original * 100,
           currency: market.currency,
