@@ -14,7 +14,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { market } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
-import { useBusiness, useSaveBusiness } from '@/hooks/api'
+import { ConfirmDelete } from '@/components/common/ConfirmDelete'
+import { useBusiness, useDeleteBusiness, useSaveBusiness } from '@/hooks/api'
 import { t } from '@/i18n'
 import { geocodeAddress } from '@/lib/geocode'
 import { osmEmbedUrl } from '@/lib/geo'
@@ -56,6 +57,7 @@ function initialState(business?: Business): FormState {
 function LocationForm({ business }: { business?: Business }) {
   const navigate = useNavigate()
   const save = useSaveBusiness()
+  const remove = useDeleteBusiness()
   const [form, setForm] = useState<FormState>(() => initialState(business))
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [locating, setLocating] = useState<'address' | 'gps' | null>(null)
@@ -247,6 +249,18 @@ function LocationForm({ business }: { business?: Business }) {
           {t('partner.save')}
         </Button>
       </div>
+
+      {business && (
+        <ConfirmDelete
+          size="default"
+          label={t('partner.deleteLocation')}
+          question={t('partner.deleteLocationConfirm', { name: business.name })}
+          hint={t('partner.deleteLocationHint')}
+          onConfirm={() => remove.mutate(business.id, { onSuccess: () => navigate('/business') })}
+          pending={remove.isPending}
+          error={remove.error}
+        />
+      )}
     </form>
   )
 }

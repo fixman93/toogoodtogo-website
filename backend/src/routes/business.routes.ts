@@ -8,6 +8,7 @@ businessRoutes.get('/:id', optionalAuth, c.getBusiness)
 businessRoutes.post('/', authenticate, requireRole('business', 'admin'), c.createBusiness)
 // Ownership is enforced in the service (owner or admin only).
 businessRoutes.patch('/:id', authenticate, requireRole('business', 'admin'), c.updateBusiness)
+businessRoutes.delete('/:id', authenticate, requireRole('business', 'admin'), c.deleteBusiness)
 // Partner view: all of a location's offers incl. paused/past (owner or admin).
 businessRoutes.get('/:id/offers', authenticate, requireRole('business', 'admin'), c.listBusinessOffers)
 businessRoutes.get('/:id/reviews', c.listReviews)

@@ -17,6 +17,8 @@ export interface IBusiness {
   collectionInstructions?: string
   rating: { average: number; count: number }
   isActive: boolean
+  /** Set when a location with history (reservations/reviews) is deleted; hidden everywhere. */
+  deletedAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -50,6 +52,7 @@ const businessSchema = new Schema<IBusiness>(
       count: { type: Number, default: 0, min: 0 },
     },
     isActive: { type: Boolean, default: true },
+    deletedAt: { type: Date, index: true },
   },
   { timestamps: true },
 )

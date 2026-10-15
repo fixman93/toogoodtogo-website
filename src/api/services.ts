@@ -47,6 +47,7 @@ export const businessesApi = {
   get: (id: string) => unwrap<Business>(api.get(`/businesses/${id}`)),
   create: (body: BusinessInput) => unwrap<Business>(api.post('/businesses', body)),
   update: (id: string, body: Partial<BusinessInput>) => unwrap<Business>(api.patch(`/businesses/${id}`, body)),
+  remove: (id: string) => api.delete(`/businesses/${id}`).then(() => undefined),
   /** Partner view: every offer of the location, including paused and past ones. */
   offers: (id: string) => api.get<ApiList<Offer>>(`/businesses/${id}/offers`).then((res) => res.data),
   reviews: (id: string) => api.get<ApiList<Review>>(`/businesses/${id}/reviews`).then((res) => res.data),

@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
-import { useBusinessOffers, useMyBusinesses, useSaveOffer } from '@/hooks/api'
+import { ConfirmDelete } from '@/components/common/ConfirmDelete'
+import { useBusinessOffers, useDeleteBusiness, useDeleteOffer, useMyBusinesses, useSaveOffer } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney, formatPickupWindow } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,7 @@ function OfferStatus({ offer }: { offer: Offer }) {
 
 function OfferRow({ offer }: { offer: Offer }) {
   const save = useSaveOffer()
+  const remove = useDeleteOffer()
   const past = isPast(offer)
   const reserved = offer.quantityTotal - offer.quantityAvailable
   return (
@@ -75,6 +77,14 @@ function OfferRow({ offer }: { offer: Offer }) {
             {t('partner.repeatOffer')}
           </Link>
         </Button>
+        <ConfirmDelete
+          label={t('partner.deleteShort')}
+          question={t('partner.deleteConfirmShort', { title: offer.title })}
+          onConfirm={() => remove.mutate(offer.id)}
+          pending={remove.isPending}
+          error={remove.error}
+          className="basis-full sm:basis-auto"
+        />
       </div>
     </li>
   )
@@ -82,6 +92,7 @@ function OfferRow({ offer }: { offer: Offer }) {
 
 function LocationCard({ business }: { business: Business }) {
   const { data, isLoading } = useBusinessOffers(business.id)
+  const removeLocation = useDeleteBusiness()
   const [showPast, setShowPast] = useState(false)
   const offers = data?.data ?? []
   const current = offers.filter((o) => !isPast(o)).sort((a, b) => a.pickupStart.localeCompare(b.pickupStart))
@@ -103,7 +114,7 @@ function LocationCard({ business }: { business: Business }) {
         </Badge>
       </div>
 
-      <div className="flex gap-2 border-b bg-muted/30 px-4 py-3">
+      <div className="flex flex-wrap gap-2 border-b bg-muted/30 px-4 py-3">
         <Button asChild size="sm" className="flex-1 sm:flex-none">
           <Link to={`/business/offers/new?businessId=${business.id}`}>
             <Plus />
@@ -116,6 +127,15 @@ function LocationCard({ business }: { business: Business }) {
             {t('partner.editLocation')}
           </Link>
         </Button>
+        <ConfirmDelete
+          label={t('partner.deleteLocation')}
+          question={t('partner.deleteLocationConfirm', { name: business.name })}
+          hint={t('partner.deleteLocationHint')}
+          onConfirm={() => removeLocation.mutate(business.id)}
+          pending={removeLocation.isPending}
+          error={removeLocation.error}
+          className="basis-full"
+        />
       </div>
 
       {isLoading ? (

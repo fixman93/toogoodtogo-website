@@ -108,7 +108,7 @@ Base path: `/api`. Requests and responses are JSON.
 * Status codes: `400` validation, `401` not authenticated, `403` not allowed,
   `404` not found, `409` conflict (sold out, duplicates, invalid state), `429`
   rate limited.
-* Auth: `Authorization: Bearer <token>` from login/register.
+* Auth: `Authorization: Bearer <token>` from login/register. The role is read from the database on every request, so role changes apply immediately.
 * Money is in integer minor units; dates are ISO-8601 UTC.
 
 | Method & path | Access | Notes |
@@ -116,11 +116,15 @@ Base path: `/api`. Requests and responses are JSON.
 | `POST /auth/register` | public, rate-limited | Always creates a `customer` |
 | `POST /auth/login` | public, rate-limited | |
 | `GET /auth/me` | user | |
-| `PATCH /admin/users/:id/role` | admin | Grant the `business` / `admin` role |
+| `GET /admin/stats` | admin | Counts: users by role, locations, live offers, reservations |
+| `GET /admin/users` | admin | `?q=&role=&page=&limit=`; includes each user's location count |
+| `PATCH /admin/users/:id/role` | admin | `{ role }`. Can't change your own role or demote the last admin |
+| `GET /admin/businesses` | admin | All locations incl. inactive, with owner and live offer count (`?q=&status=active\|inactive`) |
 | `GET /businesses` | public | `?city=&category=&page=&limit=`; `?owner=me` lists your own |
 | `GET /businesses/:id` | public | Inactive businesses are visible only to the owner or an admin |
 | `POST /businesses` | business, admin | Timezone and currency default from the market |
 | `PATCH /businesses/:id` | owner, admin | Syncs denormalized offer fields; deactivating pauses offers |
+| `DELETE /businesses/:id` | owner, admin | `409` while reservations are active; soft-deletes (hides) a location with history, otherwise removes it and its offers |
 | `GET /businesses/:id/offers` | owner, admin | All of a location's offers incl. paused and past (partner portal) |
 | `GET /businesses/:id/reviews` | public | |
 | `POST /businesses/:id/reviews` | user | Needs one of *your* **collected** reservations at that business; one review per reservation |

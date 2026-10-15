@@ -176,6 +176,18 @@ export function useSaveOffer() {
   })
 }
 
+export function useDeleteBusiness() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: businessesApi.remove,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['businesses'] })
+      queryClient.invalidateQueries({ queryKey: ['offers'] })
+      queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+}
+
 export function useDeleteOffer() {
   const queryClient = useQueryClient()
   return useMutation({

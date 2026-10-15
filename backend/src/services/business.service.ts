@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { env } from '../config/env.js'
 import { MARKETS, getMarket } from '../config/markets.js'
-import { Business, Offer } from '../models/index.js'
+import { ACTIVE_RESERVATION_STATUSES, Business, Favorite, Offer, Reservation, Review } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { serializeBusiness } from '../utils/serializers.js'
 import { escapeRegex, slugify } from '../utils/text.js'
@@ -11,7 +11,8 @@ import { assertBusinessAccess, isAdmin, type Actor } from './access.service.js'
 const toPoint = ({ lat, lng }: { lat: number; lng: number }) => ({ type: 'Point' as const, coordinates: [lng, lat] as [number, number] })
 
 export async function list(query: { owner?: 'me'; city?: string; category?: string; page: number; limit: number }, actor?: Actor) {
-  const filter: Record<string, unknown> = {}
+  // `deletedAt: null` also matches documents without the field.
+  const filter: Record<string, unknown> = { deletedAt: null }
   if (query.owner === 'me') {
     if (!actor) throw ApiError.unauthorized()
     filter.owner = actor.id
@@ -31,7 +32,7 @@ export async function list(query: { owner?: 'me'; city?: string; category?: stri
 export async function get(id: string, actor?: Actor) {
   const business = await Business.findById(id)
   const canSeeInactive = actor && (isAdmin(actor) || business?.owner.toString() === actor.id)
-  if (!business || (!business.isActive && !canSeeInactive)) throw ApiError.notFound('Lokal nije pronađen.')
+  if (!business || business.deletedAt || (!business.isActive && !canSeeInactive)) throw ApiError.notFound('Lokal nije pronađen.')
   return serializeBusiness(business)
 }
 
@@ -64,4 +65,29 @@ export async function update(id: string, input: UpdateBusinessInput, actor: Acto
   if (input.isActive === false) await Offer.updateMany({ business: business._id, status: 'active' }, { $set: { status: 'paused' } })
 
   return serializeBusiness(business)
+}
+
+/**
+ * Delete a location. Refused while customers still have bags to collect.
+ * A location with history (past reservations or reviews) is soft-deleted so
+ * customers keep their reservation history; otherwise it is removed entirely
+ * together with its offers.
+ */
+export async function remove(id: string, actor: Actor) {
+  const business = await assertBusinessAccess(id, actor)
+  if (await Reservation.exists({ business: business._id, status: { $in: ACTIVE_RESERVATION_STATUSES } })) {
+    throw ApiError.conflict('Lokacija ima aktivne rezervacije. Sačekaj da ih kupci preuzmu ili ih otkaži, pa pokušaj ponovo.', 'HAS_ACTIVE_RESERVATIONS')
+  }
+
+  await Favorite.deleteMany({ targetType: 'business', targetId: business._id })
+  const hasHistory = (await Reservation.exists({ business: business._id })) || (await Review.exists({ business: business._id }))
+  if (hasHistory) {
+    await Offer.updateMany({ business: business._id }, { $set: { status: 'archived' } })
+    business.isActive = false
+    business.deletedAt = new Date()
+    await business.save()
+  } else {
+    await Offer.deleteMany({ business: business._id })
+    await business.deleteOne()
+  }
 }

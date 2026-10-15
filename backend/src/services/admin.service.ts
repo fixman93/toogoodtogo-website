@@ -21,8 +21,8 @@ export async function stats() {
 
   const [usersByRole, businesses, activeBusinesses, liveOffers, reservationsByStatus, reservationsToday] = await Promise.all([
     User.aggregate<{ _id: Role; count: number }>([{ $group: { _id: '$role', count: { $sum: 1 } } }]),
-    Business.countDocuments(),
-    Business.countDocuments({ isActive: true }),
+    Business.countDocuments({ deletedAt: null }),
+    Business.countDocuments({ deletedAt: null, isActive: true }),
     Offer.countDocuments({ status: 'active', pickupEnd: { $gt: now } }),
     Reservation.aggregate<{ _id: string; count: number }>([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
     Reservation.countDocuments({ pickupStart: { $gte: todayStart, $lt: tomorrowStart } }),
@@ -55,7 +55,7 @@ export async function listUsers(query: AdminUsersQuery) {
     User.countDocuments(filter),
   ])
   const counts = await Business.aggregate<{ _id: unknown; count: number }>([
-    { $match: { owner: { $in: users.map((u) => u._id) } } },
+    { $match: { owner: { $in: users.map((u) => u._id) }, deletedAt: null } },
     { $group: { _id: '$owner', count: { $sum: 1 } } },
   ])
   const byOwner = new Map(counts.map((c) => [String(c._id), c.count]))
@@ -79,7 +79,7 @@ export async function setRole(userId: string, role: Role, actor: Actor) {
 }
 
 export async function listBusinesses(query: AdminBusinessesQuery) {
-  const filter: Record<string, unknown> = {}
+  const filter: Record<string, unknown> = { deletedAt: null }
   if (query.status) filter.isActive = query.status === 'active'
   if (query.q) {
     const rx = new RegExp(escapeRegex(query.q), 'i')

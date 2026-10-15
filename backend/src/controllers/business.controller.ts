@@ -26,6 +26,11 @@ export async function updateBusiness(req: Request, res: Response) {
   ok(res, await businessService.update(idParams.parse(req.params).id, updateBusinessBody.parse(req.body), currentUser(req)))
 }
 
+export async function deleteBusiness(req: Request, res: Response) {
+  await businessService.remove(idParams.parse(req.params).id, currentUser(req))
+  res.status(204).end()
+}
+
 export async function listReviews(req: Request, res: Response) {
   const { page, limit } = reviewListQuery.parse(req.query)
   const result = await reviewService.list(idParams.parse(req.params).id, page, limit)

@@ -74,8 +74,21 @@ The script prints the password (or set `SEED_PASSWORD`). Re-run it to get
 fresh offers. It refuses to wipe a database that contains any other (real)
 account.
 
-To make your own registered account a partner or admin:
-`cd backend && npm run set-role -- you@example.com business` (or `admin`).
+### Admin panel
+
+`/admin` (admin role only; linked from the Profile page):
+
+* **Pregled:** users, partners, locations, live offers and reservations at a glance.
+* **Korisnici:** search users and change their role (Kupac / Partner /
+  Admin). This is how a business becomes a partner: it registers on the site,
+  then an admin switches it to *Partner*. The change applies immediately; the
+  user doesn't have to sign in again.
+* **Lokacije:** every partner location with its owner. **Isključi** hides a
+  location and pauses its offers.
+
+Safeguards: an admin can't change their own role, and the last admin can't be
+demoted. The very first admin is created from the terminal:
+`cd backend && npm run set-role -- you@example.com admin`.
 
 ## Frontend commands
 
@@ -166,7 +179,14 @@ Visible to `business` and `admin` accounts at `/business`. Account → locations
   * **Pauziraj / Aktiviraj:** pause or reactivate. Paused offers are hidden
     from customers.
   * **Ponovi:** a copy for the next free day.
-  * **Obriši:** delete. Blocked while there are active reservations.
+  * **Obriši:** delete, right from the list (past offers too). Blocked while
+    there are active reservations. Offers with past reservations are archived
+    rather than removed.
+* **Deleting a location** works from its card or its edit page. It is
+  blocked while customers still have bags to collect. A location with history
+  (past reservations or reviews) is hidden everywhere but kept, so customers
+  keep their reservation history. A location without history is removed
+  together with its offers.
 * Past offers are listed separately, and "Ponovi" works on them too.
 * **Skeniraj kod** (`/business/scan`) handles pickups (see above).
 
