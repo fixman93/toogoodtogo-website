@@ -1,0 +1,153 @@
+import { Types, type PipelineStage } from 'mongoose'
+import { env } from '../config/env.js'
+import { MARKETS, getMarket } from '../config/markets.js'
+import { Business, Offer, Reservation, ACTIVE_RESERVATION_STATUSES, type IBusiness, type IOffer } from '../models/index.js'
+import { ApiError } from '../utils/ApiError.js'
+import { serializeOffer } from '../utils/serializers.js'
+import { escapeRegex } from '../utils/text.js'
+import { zonedTime } from '../utils/time.js'
+import type { CreateOfferInput, OfferListQuery, UpdateOfferInput } from '../validators/offer.validators.js'
+import { assertBusinessAccess, type Actor } from './access.service.js'
+
+type OfferWithBusiness = IOffer & { _id: Types.ObjectId; distanceMeters?: number; businessDoc: IBusiness & { _id: Types.ObjectId } }
+
+/** Local-hour ranges (in the offer's own timezone). */
+const TIME_OF_DAY = { morning: [0, 12], afternoon: [12, 17], evening: [17, 24] } as const
+
+export async function list(query: OfferListQuery) {
+  const market = getMarket(env.DEFAULT_MARKET)
+  const now = new Date()
+  const match: Record<string, unknown> = { status: 'active', pickupEnd: { $gt: now } }
+
+  if (query.category) match.category = query.category
+  if (query.businessId) match.business = new Types.ObjectId(query.businessId)
+  if (query.maxPriceMinor) match.priceMinor = { $lte: query.maxPriceMinor }
+  if (query.q) {
+    const rx = new RegExp(escapeRegex(query.q), 'i')
+    match.$or = [{ title: rx }, { businessName: rx }, { city: rx }]
+  }
+  if (query.pickupDay) {
+    const offset = query.pickupDay === 'today' ? 0 : 1
+    match.pickupStart = { $gte: zonedTime(offset, '00:00', market.timezone, now), $lt: zonedTime(offset + 1, '00:00', market.timezone, now) }
+  }
+  if (query.timeOfDay) {
+    const [from, to] = TIME_OF_DAY[query.timeOfDay]
+    const hour = { $hour: { date: '$pickupStart', timezone: '$timezone' } }
+    match.$expr = { $and: [{ $gte: [hour, from] }, { $lt: [hour, to] }] }
+  }
+
+  const hasOrigin = query.lat != null && query.lng != null
+  const pipeline: PipelineStage[] = hasOrigin
+    ? [
+        {
+          $geoNear: {
+            near: { type: 'Point', coordinates: [query.lng!, query.lat!] },
+            distanceField: 'distanceMeters',
+            spherical: true,
+            query: match,
+            ...(query.maxDistanceKm ? { maxDistance: query.maxDistanceKm * 1000 } : {}),
+          },
+        },
+      ]
+    : [{ $match: match }]
+
+  const sort = query.sort ?? (hasOrigin ? 'distance' : 'pickup')
+  const sortStage: Record<string, 1 | -1> = { soldOut: 1 }
+  if (sort === 'distance' && hasOrigin) sortStage.distanceMeters = 1
+  else if (sort === 'price') sortStage.priceMinor = 1
+  else if (sort === 'popularity') sortStage.reservedCount = -1
+  sortStage.pickupStart = 1
+  sortStage._id = 1
+
+  pipeline.push(
+    { $addFields: { soldOut: { $eq: ['$quantityAvailable', 0] } } },
+    { $sort: sortStage },
+    {
+      $facet: {
+        items: [
+          { $skip: (query.page - 1) * query.limit },
+          { $limit: query.limit },
+          { $lookup: { from: 'businesses', localField: 'business', foreignField: '_id', as: 'businessDoc' } },
+          { $unwind: '$businessDoc' },
+        ],
+        total: [{ $count: 'count' }],
+      },
+    },
+  )
+
+  const [result] = await Offer.aggregate<{ items: OfferWithBusiness[]; total: { count: number }[] }>(pipeline)
+  return {
+    items: result.items.map((o) => serializeOffer(o, o.businessDoc)),
+    meta: { page: query.page, limit: query.limit, total: result.total[0]?.count ?? 0 },
+  }
+}
+
+export async function get(id: string) {
+  const offer = await Offer.findById(id)
+  if (!offer || offer.status === 'archived') throw ApiError.notFound('Ponuda nije pronađena.')
+  const business = await Business.findById(offer.business)
+  if (!business) throw ApiError.notFound('Ponuda nije pronađena.')
+  return serializeOffer(offer, business)
+}
+
+export async function create(input: CreateOfferInput, actor: Actor) {
+  const business = await assertBusinessAccess(input.businessId, actor)
+  if (!business.isActive) throw ApiError.conflict('Lokal nije aktivan.', 'BUSINESS_INACTIVE')
+  if (input.pickupEnd <= new Date()) throw ApiError.badRequest('Vreme preuzimanja mora biti u budućnosti.', 'PICKUP_IN_PAST')
+
+  const market = MARKETS[business.address.countryCode] ?? getMarket(env.DEFAULT_MARKET)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { businessId, ...fields } = input
+  const offer = await Offer.create({
+    ...fields,
+    business: business._id,
+    category: input.category ?? business.category,
+    currency: business.currency,
+    timezone: business.timezone,
+    quantityAvailable: input.quantityTotal,
+    maxPerReservation: Math.min(input.maxPerReservation ?? market.maxQuantityPerReservation, input.quantityTotal),
+    location: business.location,
+    businessName: business.name,
+    city: business.address.city,
+  })
+  return serializeOffer(offer, business)
+}
+
+export async function update(id: string, input: UpdateOfferInput, actor: Actor) {
+  const offer = await Offer.findById(id)
+  if (!offer || offer.status === 'archived') throw ApiError.notFound('Ponuda nije pronađena.')
+  const business = await assertBusinessAccess(offer.business, actor)
+
+  const merged = { ...offer.toObject(), ...input }
+  if (merged.priceMinor >= merged.originalPriceMinor) throw ApiError.badRequest('Cena mora biti niža od redovne.', 'INVALID_PRICE')
+  if (merged.pickupEnd <= merged.pickupStart) throw ApiError.badRequest('Kraj preuzimanja mora biti posle početka.', 'INVALID_PICKUP')
+
+  const { quantityTotal, ...fields } = input
+  const filter: Record<string, unknown> = { _id: offer._id }
+  const change: { $set: Record<string, unknown>; $inc?: Record<string, number> } = { $set: fields }
+
+  if (quantityTotal != null && quantityTotal !== offer.quantityTotal) {
+    // Adjust availability by the same delta; refuse to drop below what's already reserved.
+    const delta = quantityTotal - offer.quantityTotal
+    if (delta < 0) filter.quantityAvailable = { $gte: -delta }
+    change.$set.quantityTotal = quantityTotal
+    change.$inc = { quantityAvailable: delta }
+  }
+
+  const updated = await Offer.findOneAndUpdate(filter, change, { new: true, runValidators: true })
+  if (!updated) throw ApiError.conflict('Količina ne može biti manja od već rezervisanih kesa.', 'QUANTITY_BELOW_RESERVED')
+  return serializeOffer(updated, business)
+}
+
+export async function remove(id: string, actor: Actor) {
+  const offer = await Offer.findById(id)
+  if (!offer || offer.status === 'archived') throw ApiError.notFound('Ponuda nije pronađena.')
+  await assertBusinessAccess(offer.business, actor)
+
+  if (await Reservation.exists({ offer: offer._id, status: { $in: ACTIVE_RESERVATION_STATUSES } })) {
+    throw ApiError.conflict('Ponuda ima aktivne rezervacije. Prvo ih otkažite ili pauzirajte ponudu.', 'HAS_ACTIVE_RESERVATIONS')
+  }
+  // Keep offers referenced by past reservations (history, reviews); hard-delete unused ones.
+  if (await Reservation.exists({ offer: offer._id })) await Offer.updateOne({ _id: offer._id }, { status: 'archived' })
+  else await offer.deleteOne()
+}

@@ -1,0 +1,50 @@
+import { useCallback, useMemo, type ReactNode } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { tokenStorage } from '@/api/client'
+import { authApi } from '@/api/services'
+import type { AuthResult, Role } from '@/api/types'
+import { AuthContext, ME_QUERY_KEY, type AuthContextValue } from './auth-context'
+
+/** JWT bearer auth: token in localStorage, user profile cached by TanStack Query. */
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
+
+  const { data: user = null, isLoading } = useQuery({
+    queryKey: ME_QUERY_KEY,
+    queryFn: () => (tokenStorage.get() ? authApi.me() : null),
+    staleTime: Infinity,
+    retry: false,
+  })
+
+  const onAuthenticated = useCallback(
+    ({ token, user }: AuthResult) => {
+      tokenStorage.set(token)
+      // Drop user-specific data cached for the previous session. Never remove the
+      // `me` query itself: this provider observes it, so we update it in place.
+      queryClient.removeQueries({ queryKey: ['reservations'] })
+      queryClient.removeQueries({ queryKey: ['favorites'] })
+      queryClient.setQueryData(ME_QUERY_KEY, user)
+      return user
+    },
+    [queryClient],
+  )
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      isLoading,
+      login: (email, password) => authApi.login({ email, password }).then(onAuthenticated),
+      register: (name, email, password) => authApi.register({ name, email, password }).then(onAuthenticated),
+      logout: () => {
+        tokenStorage.clear()
+        queryClient.setQueryData(ME_QUERY_KEY, null)
+        queryClient.removeQueries({ queryKey: ['reservations'] })
+        queryClient.removeQueries({ queryKey: ['favorites'] })
+      },
+      hasRole: (...roles: Role[]) => !!user && roles.includes(user.role),
+    }),
+    [user, isLoading, onAuthenticated, queryClient],
+  )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+}
