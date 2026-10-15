@@ -6,6 +6,8 @@
 export interface City {
   id: string
   name: string
+  /** Locative for headings: "U Beogradu", "U Novom Sadu". */
+  locative: string
   lat: number
   lng: number
 }
@@ -25,6 +27,8 @@ export interface MarketConfig {
   timezone: string
   defaultCityId: string
   cities: City[]
+  /** Rough bounding box of the country — used to tell if the user is outside the market. */
+  bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }
 }
 
 export const MARKETS: Record<string, MarketConfig> = {
@@ -39,11 +43,12 @@ export const MARKETS: Record<string, MarketConfig> = {
     timezone: 'Europe/Belgrade',
     defaultCityId: 'beograd',
     cities: [
-      { id: 'beograd', name: 'Beograd', lat: 44.8125, lng: 20.4612 },
-      { id: 'novi-sad', name: 'Novi Sad', lat: 45.2671, lng: 19.8335 },
-      { id: 'nis', name: 'Niš', lat: 43.3209, lng: 21.8958 },
-      { id: 'kragujevac', name: 'Kragujevac', lat: 44.0128, lng: 20.9114 },
+      { id: 'beograd', name: 'Beograd', locative: 'Beogradu', lat: 44.8125, lng: 20.4612 },
+      { id: 'novi-sad', name: 'Novi Sad', locative: 'Novom Sadu', lat: 45.2671, lng: 19.8335 },
+      { id: 'nis', name: 'Niš', locative: 'Nišu', lat: 43.3209, lng: 21.8958 },
+      { id: 'kragujevac', name: 'Kragujevac', locative: 'Kragujevcu', lat: 44.0128, lng: 20.9114 },
     ],
+    bounds: { minLat: 42.2, maxLat: 46.2, minLng: 18.8, maxLng: 23.1 },
   },
 }
 

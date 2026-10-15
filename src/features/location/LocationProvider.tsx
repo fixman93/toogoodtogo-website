@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { market } from '@/config/markets'
 import { t } from '@/i18n'
+import { isInMarket } from '@/lib/geo'
 import { LocationContext, type LocationContextValue, type UserLocation } from './location-context'
 
 const STORAGE_KEY = 'zalogaj.location'
@@ -10,18 +11,19 @@ function cityLocation(cityId: string): UserLocation {
   return { lat: city.lat, lng: city.lng, label: city.name, source: city.id }
 }
 
-function initialLocation(): UserLocation {
+function storedLocation(): UserLocation | null {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) return JSON.parse(stored) as UserLocation
   } catch {
     /* ignore */
   }
-  return cityLocation(market.defaultCityId)
+  return null
 }
 
 export function LocationProvider({ children }: { children: ReactNode }) {
-  const [location, setLocation] = useState<UserLocation>(initialLocation)
+  const [hadStoredLocation] = useState(() => storedLocation() != null)
+  const [location, setLocation] = useState<UserLocation>(() => storedLocation() ?? cityLocation(market.defaultCityId))
   const [isLocating, setIsLocating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -63,10 +65,30 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     [persist],
   )
 
-  const value = useMemo<LocationContextValue>(
-    () => ({ location, setCity: (id) => persist(cityLocation(id)), locateDevice, isLocating, error }),
-    [location, persist, locateDevice, isLocating, error],
-  )
+  // First visit: the device location is the primary choice. Ask once; if it's
+  // refused or unavailable, the default city stays selected.
+  const triedFirstVisit = useRef(false)
+  useEffect(() => {
+    if (hadStoredLocation || triedFirstVisit.current || !window.isSecureContext) return
+    triedFirstVisit.current = true
+    const permissions = navigator.permissions?.query({ name: 'geolocation' as PermissionName })
+    void (permissions ?? Promise.resolve({ state: 'prompt' } as PermissionStatus))
+      .then((status) => status.state !== 'denied' && locateDevice())
+      .catch(() => undefined)
+  }, [hadStoredLocation, locateDevice])
+
+  const value = useMemo<LocationContextValue>(() => {
+    const isDeviceLocation = location.source === 'gps'
+    return {
+      location,
+      isDeviceLocation,
+      isOutsideMarket: isDeviceLocation && !isInMarket(location),
+      setCity: (id) => persist(cityLocation(id)),
+      locateDevice,
+      isLocating,
+      error,
+    }
+  }, [location, persist, locateDevice, isLocating, error])
 
   return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>
 }

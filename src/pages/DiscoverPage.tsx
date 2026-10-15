@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Leaf, Map as MapIcon, Search } from 'lucide-react'
+import { Globe2, Leaf, Map as MapIcon, Search } from 'lucide-react'
 import { CategoryChips } from '@/components/offers/CategoryChips'
 import { OfferCarousel } from '@/components/offers/OfferCarousel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { market } from '@/config/markets'
 import { useLocation } from '@/features/location/location-context'
 import { useOffers } from '@/hooks/api'
 import { t } from '@/i18n'
@@ -13,7 +14,9 @@ const NEARBY_RADIUS_KM = 15
 
 export function DiscoverPage() {
   const navigate = useNavigate()
-  const { location } = useLocation()
+  const { location, isDeviceLocation, isOutsideMarket, setCity } = useLocation()
+  const city = market.cities.find((c) => c.id === location.source)
+  const nearbyTitle = isDeviceLocation || !city ? t('discover.nearby') : t('discover.inCity', { city: city.locative })
   const [search, setSearch] = useState('')
   const origin = { lat: location.lat, lng: location.lng }
 
@@ -58,8 +61,29 @@ export function DiscoverPage() {
         </Link>
       </Button>
 
+      {isOutsideMarket && (
+        <section className="space-y-3 rounded-2xl border bg-card p-5 shadow-card">
+          <div className="flex items-start gap-3">
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary">
+              <Globe2 className="size-5 text-primary" />
+            </span>
+            <div>
+              <h2 className="font-bold">{t('location.outsideTitle')}</h2>
+              <p className="text-sm text-muted-foreground">{t('location.outsideText')}</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {market.cities.map((c) => (
+              <Button key={c.id} variant="outline" size="sm" onClick={() => setCity(c.id)}>
+                {c.name}
+              </Button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <OfferCarousel
-        title={t('discover.nearby')}
+        title={nearbyTitle}
         offers={nearby.data?.data}
         isLoading={nearby.isLoading}
         isError={nearby.isError}

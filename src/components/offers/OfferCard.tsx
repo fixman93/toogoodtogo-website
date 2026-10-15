@@ -3,6 +3,7 @@ import { Clock, MapPin, Star } from 'lucide-react'
 import type { Offer } from '@/api/types'
 import { SafeImage } from '@/components/common/SafeImage'
 import { Badge } from '@/components/ui/badge'
+import { useLocation } from '@/features/location/location-context'
 import { t } from '@/i18n'
 import { formatDistance, formatPickupWindow, formatRating } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -11,7 +12,9 @@ import { Price } from './Price'
 
 export function OfferCard({ offer, className }: { offer: Offer; className?: string }) {
   const soldOut = offer.quantityAvailable === 0
-  const distance = formatDistance(offer.distanceMeters)
+  const { isDeviceLocation } = useLocation()
+  const km = formatDistance(offer.distanceMeters)
+  const distance = km && !isDeviceLocation ? t('location.fromCenter', { distance: km }) : km
 
   return (
     <Link

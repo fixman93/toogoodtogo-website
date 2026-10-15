@@ -9,6 +9,10 @@ export interface UserLocation extends GeoPoint {
 
 export interface LocationContextValue {
   location: UserLocation
+  /** True when location is the device position (GPS), false for a chosen city. */
+  isDeviceLocation: boolean
+  /** Device location outside the market's country (e.g. a tourist abroad). */
+  isOutsideMarket: boolean
   setCity: (cityId: string) => void
   /** Asks the device for its real position; resolves true on success. */
   locateDevice: () => Promise<boolean>

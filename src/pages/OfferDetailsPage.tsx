@@ -110,7 +110,7 @@ function DetailsSkeleton() {
 export function OfferDetailsPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { location } = useLocation()
+  const { location, isDeviceLocation } = useLocation()
   const { data: offer, isLoading, isError, error, refetch } = useOffer(id)
 
   if (isLoading) return <DetailsSkeleton />
@@ -133,7 +133,8 @@ export function OfferDetailsPage() {
 
   const { business } = offer
   const CategoryIcon = CATEGORY_ICONS[offer.category]
-  const distance = formatDistance(distanceMeters(location, business.location))
+  const km = formatDistance(distanceMeters(location, business.location))
+  const distance = km && !isDeviceLocation ? t('location.fromCenter', { distance: km }) : km
   const address = `${business.address.street}, ${business.address.city}`
 
   return (
