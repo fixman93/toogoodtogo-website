@@ -1,16 +1,21 @@
 import { z } from 'zod'
 import { category, objectId, pagination } from './common.js'
 
-export const offerListQuery = z.object({
+/** Filters shared by the offer list and the map. */
+const offerFilters = {
   q: z.string().trim().max(100).optional(),
   category: category.optional(),
+  maxPriceMinor: z.coerce.number().int().positive().optional(),
+  pickupDay: z.enum(['today', 'tomorrow']).optional(),
+  timeOfDay: z.enum(['morning', 'afternoon', 'evening']).optional(),
+}
+
+export const offerListQuery = z.object({
+  ...offerFilters,
   businessId: objectId.optional(),
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
   maxDistanceKm: z.coerce.number().positive().max(500).optional(),
-  maxPriceMinor: z.coerce.number().int().positive().optional(),
-  pickupDay: z.enum(['today', 'tomorrow']).optional(),
-  timeOfDay: z.enum(['morning', 'afternoon', 'evening']).optional(),
   sort: z.enum(['distance', 'price', 'popularity', 'pickup']).optional(),
   ...pagination,
 })
@@ -54,3 +59,17 @@ export type CreateOfferInput = z.infer<typeof createOfferBody>
 export type UpdateOfferInput = z.infer<typeof updateOfferBody>
 
 export const manageOffersQuery = z.object({ ...pagination, limit: z.coerce.number().int().min(1).max(200).default(100) })
+
+/** Map: one entry per location inside the visible bounding box (any zoom level). */
+export const offerLocationsQuery = z
+  .object({
+    ...offerFilters,
+    minLat: z.coerce.number().min(-90).max(90),
+    maxLat: z.coerce.number().min(-90).max(90),
+    minLng: z.coerce.number().min(-180).max(180),
+    maxLng: z.coerce.number().min(-180).max(180),
+  })
+  .refine((q) => q.minLat < q.maxLat && q.minLng < q.maxLng, 'Invalid bounding box')
+
+export type OfferFilters = Pick<OfferListQuery, 'q' | 'category' | 'maxPriceMinor' | 'pickupDay' | 'timeOfDay'>
+export type OfferLocationsQuery = z.infer<typeof offerLocationsQuery>

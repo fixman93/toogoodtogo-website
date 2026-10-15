@@ -129,6 +129,7 @@ Base path: `/api`. Requests and responses are JSON.
 | `GET /businesses/:id/reviews` | public | |
 | `POST /businesses/:id/reviews` | user | Needs one of *your* **collected** reservations at that business; one review per reservation |
 | `GET /offers` | public | `q, category, businessId, lat, lng, maxDistanceKm, maxPriceMinor, pickupDay=today\|tomorrow, timeOfDay=morning\|afternoon\|evening, sort=distance\|price\|popularity\|pickup, page, limit` |
+| `GET /offers/locations` | public | Map pins: `minLat, maxLat, minLng, maxLng` (+ list filters). One row per location with live offers: cheapest available price and bags left |
 | `GET /offers/:id` | public | |
 | `POST /offers` | owner of `businessId`, admin | |
 | `PATCH /offers/:id` | owner, admin | Changing `quantityTotal` shifts availability by the same amount; it can't go below what's already reserved |
@@ -139,6 +140,7 @@ Base path: `/api`. Requests and responses are JSON.
 | `PATCH /reservations/:id/cancel` | customer, business owner, admin | Follows the cancellation rules |
 | `PATCH /reservations/:id/collect` | business owner, admin | Marks the pickup as done (from the list) |
 | `POST /reservations/collect` | business, admin | `{ code, reservationId? }` from a QR scan or typed code. Only searches your own businesses. `409 ALREADY_COLLECTED / RESERVATION_CANCELLED / RESERVATION_EXPIRED / AMBIGUOUS_CODE`, `404 CODE_NOT_FOUND` |
+| `GET /partner/sales` | business, admin | `?date=YYYY-MM-DD&businessId=`. Per location/offer for that local day: total, sold, collected, pending, not collected, cancelled, remaining, revenue |
 | `GET /favorites` | user | Expanded with business (+ active offer count) or offer |
 | `POST /favorites` | user | `{ targetType: 'business'\|'offer', targetId }`; idempotent |
 | `DELETE /favorites/:id` | owner | |

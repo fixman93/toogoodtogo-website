@@ -5,6 +5,7 @@ import { authRoutes } from './auth.routes.js'
 import { businessRoutes } from './business.routes.js'
 import { favoriteRoutes } from './favorite.routes.js'
 import { offerRoutes } from './offer.routes.js'
+import { partnerRoutes } from './partner.routes.js'
 import { reservationRoutes } from './reservation.routes.js'
 
 export const apiRouter = Router()
@@ -17,5 +18,6 @@ apiRouter.use('/auth', authRoutes)
 apiRouter.use('/admin', adminRoutes)
 apiRouter.use('/businesses', businessRoutes)
 apiRouter.use('/offers', offerRoutes)
+apiRouter.use('/partner', partnerRoutes)
 apiRouter.use('/reservations', reservationRoutes)
 apiRouter.use('/favorites', favoriteRoutes)

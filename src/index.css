@@ -130,3 +130,8 @@
 .leaflet-container {
   font-family: inherit;
 }
+.zl-cluster {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}

@@ -1,7 +1,7 @@
 /** TanStack Query hooks — the only way screens read or mutate server state. */
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { adminApi, businessesApi, favoritesApi, offersApi, reservationsApi } from '@/api/services'
-import type { BusinessInput, Favorite, FavoriteTarget, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
+import { adminApi, businessesApi, favoritesApi, offersApi, partnerApi, reservationsApi } from '@/api/services'
+import type { BoundingBox, BusinessInput, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
 import { useAuth } from '@/features/auth/auth-context'
 
 export function useOffers(query: OfferQuery, options: { enabled?: boolean } = {}) {
@@ -232,5 +232,23 @@ export function useSetBusinessActive() {
       queryClient.invalidateQueries({ queryKey: ['businesses'] })
       queryClient.invalidateQueries({ queryKey: ['offers'] })
     },
+  })
+}
+
+export function useOfferLocations(params: (OfferFilters & BoundingBox) | null) {
+  return useQuery({
+    queryKey: ['offers', 'locations', params],
+    queryFn: () => offersApi.locations(params!),
+    enabled: !!params,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** Partner sales/stock for one day; refreshes every 30 s while open. */
+export function usePartnerSales(date?: string) {
+  return useQuery({
+    queryKey: ['partner', 'sales', date ?? 'today'],
+    queryFn: () => partnerApi.sales({ date }),
+    refetchInterval: 30_000,
   })
 }

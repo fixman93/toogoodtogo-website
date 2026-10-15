@@ -7,6 +7,7 @@ import { BusinessDashboardPage } from '@/pages/BusinessDashboardPage'
 import { BusinessScanPage } from '@/pages/BusinessScanPage'
 import { LocationFormPage } from '@/pages/partner/LocationFormPage'
 import { OfferFormPage } from '@/pages/partner/OfferFormPage'
+import { SalesPage } from '@/pages/partner/SalesPage'
 import { DiscoverPage } from '@/pages/DiscoverPage'
 import { FavoritesPage } from '@/pages/FavoritesPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
       { path: 'admin', element: <AdminPage /> },
       { path: 'business', element: <BusinessDashboardPage /> },
       { path: 'business/scan', element: <BusinessScanPage /> },
+      { path: 'business/sales', element: <SalesPage /> },
       { path: 'business/locations/new', element: <LocationFormPage /> },
       { path: 'business/locations/:id/edit', element: <LocationFormPage /> },
       { path: 'business/offers/new', element: <OfferFormPage /> },

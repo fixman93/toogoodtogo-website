@@ -215,3 +215,55 @@ export interface AdminBusiness extends Business {
   owner: { id: string; name: string; email: string } | null
   liveOfferCount: number
 }
+
+/** One map pin: a location with live offers (GET /offers/locations). */
+export interface OfferLocation {
+  businessId: string
+  name: string
+  category: Category
+  location: GeoPoint
+  currency: string
+  offerCount: number
+  availableBags: number
+  /** Cheapest offer that still has bags; null when everything is sold out. */
+  minPriceMinor: number | null
+}
+
+export interface BoundingBox {
+  minLat: number
+  maxLat: number
+  minLng: number
+  maxLng: number
+}
+
+export type OfferFilters = Pick<OfferQuery, 'q' | 'category' | 'maxPriceMinor' | 'pickupDay' | 'timeOfDay'>
+
+export interface SalesCounts {
+  bagsTotal: number
+  bagsRemaining: number
+  bagsSold: number
+  bagsCollected: number
+  bagsPending: number
+  bagsNoShow: number
+  bagsCancelled: number
+  revenueMinor: number
+  expectedRevenueMinor: number
+}
+
+export interface SalesOfferRow extends SalesCounts {
+  id: string
+  title: string
+  pickupStart: string
+  pickupEnd: string
+  timezone: string
+  priceMinor: number
+  currency: string
+  status: 'active' | 'paused' | 'expired' | 'archived'
+}
+
+export interface SalesReport extends SalesCounts {
+  date: string
+  timezone: string
+  currency: string
+  businesses: (SalesCounts & { id: string; name: string; address: Address; offers: SalesOfferRow[] })[]
+}

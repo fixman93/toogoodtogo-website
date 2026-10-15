@@ -163,11 +163,16 @@ works everywhere.
 
 ## Map and "nearest"
 
-* **Pretraga → Mapa** (`/browse?view=map`, also linked from Discover) shows
-  every location with live offers as a price pin (Leaflet + OpenStreetMap
-  tiles, no API key). Tapping a pin lists that location's offers. Panning or
-  zooming loads offers for the visible area (and a bit around it), and the
-  category, price and time filters still apply.
+* **Pretraga → Mapa** (`/browse?view=map`, also linked from Discover) opens
+  at the user's **current location**: it asks for GPS on open, unless access
+  was blocked.
+* The map shows every location with live offers in the visible area **at any
+  zoom level**, from street level to the whole country
+  (`GET /api/offers/locations?minLat&maxLat&minLng&maxLng`, one row per
+  location). When zoomed out, nearby pins merge into a numbered bubble;
+  tapping it zooms in.
+* Tapping a pin lists that location's offers. The category, price and time
+  filters apply. Below the map: offers nearest to the user.
 * **Najbliže meni** uses the device's real GPS position: it shows a blue dot,
   re-centers the map and sorts by real distance. Distances on cards are always
   measured from the user, not from the map center. Geolocation only works on
@@ -206,6 +211,14 @@ Visible to `business` and `admin` accounts at `/business`. Account → locations
   together with its offers.
 * Past offers are listed separately, and "Ponovi" works on them too.
 * **Skeniraj kod** (`/business/scan`) handles pickups (see above).
+* **Prodaja i stanje** (`/business/sales`, plus a "Danas" summary at the top
+  of the portal) covers any day (yesterday, today, tomorrow or a date) per
+  location and per offer:
+  * bags sold, collected, waiting for pickup, not collected and cancelled;
+  * what's still in stock;
+  * revenue collected and revenue still expected.
+
+  It refreshes every 30 s (`GET /api/partner/sales?date=YYYY-MM-DD`).
 
 The API enforces ownership on every call: a partner only ever sees and changes
 their own locations and offers (`GET /api/businesses/:id/offers` is the

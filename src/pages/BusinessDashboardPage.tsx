@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ChevronDown, Clock, Copy, MapPin, Pause, Pencil, Play, Plus, ScanLine, Store } from 'lucide-react'
+import { BarChart3, ChevronDown, ChevronRight, Clock, Copy, MapPin, Pause, Pencil, Play, Plus, ScanLine, Store } from 'lucide-react'
 import type { Business, Offer } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -11,7 +11,8 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
-import { useBusinessOffers, useDeleteBusiness, useDeleteOffer, useMyBusinesses, useSaveOffer } from '@/hooks/api'
+import { SalesTiles } from '@/pages/partner/SalesPage'
+import { useBusinessOffers, useDeleteBusiness, useDeleteOffer, useMyBusinesses, usePartnerSales, useSaveOffer } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney, formatPickupWindow } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -177,6 +178,23 @@ function LocationCard({ business }: { business: Business }) {
   )
 }
 
+function TodaySummary() {
+  const { data } = usePartnerSales()
+  if (!data || data.bagsTotal === 0) return null
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="font-bold">{t('sales.todayTitle')}</h2>
+        <Link to="/business/sales" className="flex items-center gap-0.5 rounded-full px-2 py-1 text-sm font-semibold text-primary hover:bg-secondary">
+          {t('sales.link')}
+          <ChevronRight className="size-4" />
+        </Link>
+      </div>
+      <SalesTiles report={data} />
+    </section>
+  )
+}
+
 function Dashboard() {
   const { data, isLoading, isError, refetch } = useMyBusinesses()
   if (isLoading) return <Skeleton className="h-48 rounded-2xl" />
@@ -193,12 +211,20 @@ function Dashboard() {
           </Link>
         </Button>
         <Button asChild size="lg" variant="outline">
+          <Link to="/business/sales">
+            <BarChart3 />
+            {t('sales.link')}
+          </Link>
+        </Button>
+        <Button asChild size="lg" variant="outline">
           <Link to="/business/locations/new">
             <Plus />
             {t('partner.addLocation')}
           </Link>
         </Button>
       </div>
+
+      <TodaySummary />
 
       {businesses.length === 0 ? (
         <EmptyState

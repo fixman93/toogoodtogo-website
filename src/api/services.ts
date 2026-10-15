@@ -11,16 +11,20 @@ import type {
   ApiSuccess,
   AuthResult,
   Business,
+  BoundingBox,
   BusinessInput,
   Favorite,
   FavoriteTarget,
   Offer,
+  OfferFilters,
   OfferInput,
+  OfferLocation,
   OfferPatch,
   OfferQuery,
   Reservation,
   Review,
   Role,
+  SalesReport,
   User,
 } from './types'
 
@@ -36,6 +40,8 @@ export const authApi = {
 export const offersApi = {
   list: (params: OfferQuery = {}) => api.get<ApiList<Offer>>('/offers', { params }).then((res) => res.data),
   get: (id: string) => unwrap<Offer>(api.get(`/offers/${id}`)),
+  /** Map pins for the visible area — one per location, at any zoom level. */
+  locations: (params: OfferFilters & BoundingBox) => unwrap<OfferLocation[]>(api.get('/offers/locations', { params })),
   create: (body: OfferInput) => unwrap<Offer>(api.post('/offers', body)),
   update: (id: string, body: OfferPatch) => unwrap<Offer>(api.patch(`/offers/${id}`, body)),
   remove: (id: string) => api.delete(`/offers/${id}`).then(() => undefined),
@@ -80,4 +86,9 @@ export const adminApi = {
   setRole: (id: string, role: Role) => unwrap<AdminUser>(api.patch(`/admin/users/${id}/role`, { role })),
   businesses: (params: { q?: string; status?: 'active' | 'inactive'; limit?: number }) =>
     api.get<ApiList<AdminBusiness>>('/admin/businesses', { params }).then((res) => res.data),
+}
+
+export const partnerApi = {
+  /** Sales and stock for one local day (YYYY-MM-DD, default today). */
+  sales: (params: { date?: string; businessId?: string }) => unwrap<SalesReport>(api.get('/partner/sales', { params })),
 }

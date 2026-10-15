@@ -4,6 +4,8 @@ import { authenticate, requireRole } from '../middleware/auth.js'
 
 export const offerRoutes = Router()
 offerRoutes.get('/', c.listOffers)
+// Must be declared before '/:id'.
+offerRoutes.get('/locations', c.listOfferLocations)
 offerRoutes.get('/:id', c.getOffer)
 // Ownership of the offer's business is enforced in the service.
 offerRoutes.post('/', authenticate, requireRole('business', 'admin'), c.createOffer)

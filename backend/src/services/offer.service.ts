@@ -6,7 +6,7 @@ import { ApiError } from '../utils/ApiError.js'
 import { serializeOffer } from '../utils/serializers.js'
 import { escapeRegex } from '../utils/text.js'
 import { zonedTime } from '../utils/time.js'
-import type { CreateOfferInput, OfferListQuery, UpdateOfferInput } from '../validators/offer.validators.js'
+import type { CreateOfferInput, OfferFilters, OfferListQuery, OfferLocationsQuery, UpdateOfferInput } from '../validators/offer.validators.js'
 import { assertBusinessAccess, type Actor } from './access.service.js'
 
 type OfferWithBusiness = IOffer & { _id: Types.ObjectId; distanceMeters?: number; businessDoc: IBusiness & { _id: Types.ObjectId } }
@@ -14,13 +14,12 @@ type OfferWithBusiness = IOffer & { _id: Types.ObjectId; distanceMeters?: number
 /** Local-hour ranges (in the offer's own timezone). */
 const TIME_OF_DAY = { morning: [0, 12], afternoon: [12, 17], evening: [17, 24] } as const
 
-export async function list(query: OfferListQuery) {
+/** Live offers matching the customer-facing filters (list and map). */
+function liveOfferMatch(query: OfferFilters, now = new Date()) {
   const market = getMarket(env.DEFAULT_MARKET)
-  const now = new Date()
   const match: Record<string, unknown> = { status: 'active', pickupEnd: { $gt: now } }
 
   if (query.category) match.category = query.category
-  if (query.businessId) match.business = new Types.ObjectId(query.businessId)
   if (query.maxPriceMinor) match.priceMinor = { $lte: query.maxPriceMinor }
   if (query.q) {
     const rx = new RegExp(escapeRegex(query.q), 'i')
@@ -35,6 +34,12 @@ export async function list(query: OfferListQuery) {
     const hour = { $hour: { date: '$pickupStart', timezone: '$timezone' } }
     match.$expr = { $and: [{ $gte: [hour, from] }, { $lt: [hour, to] }] }
   }
+  return match
+}
+
+export async function list(query: OfferListQuery) {
+  const match = liveOfferMatch(query)
+  if (query.businessId) match.business = new Types.ObjectId(query.businessId)
 
   const hasOrigin = query.lat != null && query.lng != null
   const pipeline: PipelineStage[] = hasOrigin
@@ -94,6 +99,64 @@ export async function listForBusiness(businessId: string, actor: Actor, page: nu
     Offer.countDocuments(filter),
   ])
   return { items: items.map((o) => serializeOffer(o, business)), meta: { page, limit, total } }
+}
+
+/**
+ * Map pins: every location with live offers inside the bounding box, one
+ * entry per location (cheap even when zoomed out to a whole country).
+ */
+export async function locations(query: OfferLocationsQuery) {
+  const match = liveOfferMatch(query)
+  // A GeoJSON polygon must stay below a hemisphere; very wide boxes just skip the geo filter.
+  if (query.maxLng - query.minLng < 180) {
+    const { minLat, maxLat, minLng, maxLng } = query
+    match.location = {
+      $geoWithin: {
+        $geometry: {
+          type: 'Polygon',
+          coordinates: [[[minLng, minLat], [maxLng, minLat], [maxLng, maxLat], [minLng, maxLat], [minLng, minLat]]],
+        },
+      },
+    }
+  }
+
+  const rows = await Offer.aggregate<{
+    _id: Types.ObjectId
+    name: string
+    category: string
+    location: { coordinates: [number, number] }
+    currency: string
+    offerCount: number
+    availableBags: number
+    minPriceMinor: number | null
+  }>([
+    { $match: match },
+    {
+      $group: {
+        _id: '$business',
+        name: { $first: '$businessName' },
+        category: { $first: '$category' },
+        location: { $first: '$location' },
+        currency: { $first: '$currency' },
+        offerCount: { $sum: 1 },
+        availableBags: { $sum: '$quantityAvailable' },
+        // $min ignores nulls: cheapest offer that still has bags.
+        minPriceMinor: { $min: { $cond: [{ $gt: ['$quantityAvailable', 0] }, '$priceMinor', null] } },
+      },
+    },
+    { $limit: 2000 },
+  ])
+
+  return rows.map((r) => ({
+    businessId: r._id.toString(),
+    name: r.name,
+    category: r.category,
+    location: { lat: r.location.coordinates[1], lng: r.location.coordinates[0] },
+    currency: r.currency,
+    offerCount: r.offerCount,
+    availableBags: r.availableBags,
+    minPriceMinor: r.minPriceMinor,
+  }))
 }
 
 export async function get(id: string) {
