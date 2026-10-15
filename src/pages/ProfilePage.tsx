@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Bell, ChevronRight, Globe, Leaf, LogOut, Store, Wallet } from 'lucide-react'
+import { Bell, ChevronRight, Globe, Leaf, LogOut, ShieldCheck, Store, Wallet } from 'lucide-react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { RequireAuth } from '@/components/common/RequireAuth'
 import { Button } from '@/components/ui/button'
@@ -76,6 +76,13 @@ function Profile() {
         <Link to="/business" className="flex min-h-14 items-center gap-3 rounded-2xl bg-secondary px-4 font-semibold text-secondary-foreground">
           <Store className="size-5" />
           <span className="flex-1">{t('profile.businessPortal')}</span>
+          <ChevronRight className="size-5" />
+        </Link>
+      )}
+      {hasRole('admin') && (
+        <Link to="/admin" className="flex min-h-14 items-center gap-3 rounded-2xl bg-accent/30 px-4 font-semibold text-accent-foreground">
+          <ShieldCheck className="size-5" />
+          <span className="flex-1">{t('admin.title')}</span>
           <ChevronRight className="size-5" />
         </Link>
       )}

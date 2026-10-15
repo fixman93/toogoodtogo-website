@@ -2,7 +2,7 @@ import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import * as c from '../controllers/auth.controller.js'
 import { env } from '../config/env.js'
-import { authenticate, requireRole } from '../middleware/auth.js'
+import { authenticate } from '../middleware/auth.js'
 
 // Slow down credential stuffing / brute force.
 const authLimiter = rateLimit({
@@ -17,7 +17,3 @@ export const authRoutes = Router()
 authRoutes.post('/register', authLimiter, c.register)
 authRoutes.post('/login', authLimiter, c.login)
 authRoutes.get('/me', authenticate, c.me)
-
-export const adminRoutes = Router()
-// Grant partner/admin roles. Self-registration only ever creates customers.
-adminRoutes.patch('/users/:id/role', authenticate, requireRole('admin'), c.setRole)

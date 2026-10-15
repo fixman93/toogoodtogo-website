@@ -4,6 +4,9 @@
  */
 import { api } from './client'
 import type {
+  AdminBusiness,
+  AdminStats,
+  AdminUser,
   ApiList,
   ApiSuccess,
   AuthResult,
@@ -17,6 +20,7 @@ import type {
   OfferQuery,
   Reservation,
   Review,
+  Role,
   User,
 } from './types'
 
@@ -66,4 +70,13 @@ export const favoritesApi = {
   list: () => api.get<ApiList<Favorite>>('/favorites').then((res) => res.data),
   add: (body: { targetType: FavoriteTarget; targetId: string }) => unwrap<Favorite>(api.post('/favorites', body)),
   remove: (id: string) => api.delete(`/favorites/${id}`).then(() => undefined),
+}
+
+export const adminApi = {
+  stats: () => unwrap<AdminStats>(api.get('/admin/stats')),
+  users: (params: { q?: string; role?: Role; limit?: number }) =>
+    api.get<ApiList<AdminUser>>('/admin/users', { params }).then((res) => res.data),
+  setRole: (id: string, role: Role) => unwrap<AdminUser>(api.patch(`/admin/users/${id}/role`, { role })),
+  businesses: (params: { q?: string; status?: 'active' | 'inactive'; limit?: number }) =>
+    api.get<ApiList<AdminBusiness>>('/admin/businesses', { params }).then((res) => res.data),
 }

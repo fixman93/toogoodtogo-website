@@ -1,7 +1,7 @@
 /** TanStack Query hooks — the only way screens read or mutate server state. */
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { businessesApi, favoritesApi, offersApi, reservationsApi } from '@/api/services'
-import type { BusinessInput, Favorite, FavoriteTarget, OfferInput, OfferPatch, OfferQuery, Reservation } from '@/api/types'
+import { adminApi, businessesApi, favoritesApi, offersApi, reservationsApi } from '@/api/services'
+import type { BusinessInput, Favorite, FavoriteTarget, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
 import { useAuth } from '@/features/auth/auth-context'
 
 export function useOffers(query: OfferQuery, options: { enabled?: boolean } = {}) {
@@ -183,6 +183,42 @@ export function useDeleteOffer() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['offers'] })
       queryClient.invalidateQueries({ queryKey: ['businesses'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Admin panel
+
+export function useAdminStats() {
+  return useQuery({ queryKey: ['admin', 'stats'], queryFn: adminApi.stats })
+}
+
+export function useAdminUsers(params: { q?: string; role?: Role; limit?: number }) {
+  return useQuery({ queryKey: ['admin', 'users', params], queryFn: () => adminApi.users(params), placeholderData: keepPreviousData })
+}
+
+export function useSetUserRole() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: Role }) => adminApi.setRole(id, role),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  })
+}
+
+export function useAdminBusinesses(params: { q?: string; status?: 'active' | 'inactive'; limit?: number }) {
+  return useQuery({ queryKey: ['admin', 'businesses', params], queryFn: () => adminApi.businesses(params), placeholderData: keepPreviousData })
+}
+
+/** Admin moderation: switch a location on/off (deactivating also pauses its offers). */
+export function useSetBusinessActive() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => businessesApi.update(id, { isActive }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin'] })
+      queryClient.invalidateQueries({ queryKey: ['businesses'] })
+      queryClient.invalidateQueries({ queryKey: ['offers'] })
     },
   })
 }

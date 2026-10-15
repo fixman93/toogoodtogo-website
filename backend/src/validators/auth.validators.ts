@@ -11,4 +11,3 @@ export const loginBody = z.object({
   password: z.string().min(1),
 })
 
-export const roleBody = z.object({ role: z.enum(['customer', 'business', 'admin']) })

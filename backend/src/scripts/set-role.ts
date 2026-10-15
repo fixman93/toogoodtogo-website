@@ -17,7 +17,7 @@ async function main() {
   await connectDatabase()
   const user = await User.findOneAndUpdate({ email: email.toLowerCase() }, { role }, { new: true })
   if (!user) throw new Error(`No account with e-mail ${email}. Register it in the app first.`)
-  console.log(`✅ ${user.email} is now "${user.role}". Sign out and back in to see the change.`)
+  console.log(`✅ ${user.email} is now "${user.role}". Reload the app to see the change.`)
 }
 
 main()

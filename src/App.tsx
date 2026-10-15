@@ -1,5 +1,6 @@
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import { AppShell } from '@/components/layout/AppShell'
+import { AdminPage } from '@/pages/AdminPage'
 import { AuthPage } from '@/pages/AuthPage'
 import { BrowsePage } from '@/pages/BrowsePage'
 import { BusinessDashboardPage } from '@/pages/BusinessDashboardPage'
@@ -27,6 +28,7 @@ const router = createBrowserRouter([
       { path: 'profile', element: <ProfilePage /> },
       { path: 'login', element: <AuthPage mode="login" /> },
       { path: 'register', element: <AuthPage mode="register" /> },
+      { path: 'admin', element: <AdminPage /> },
       { path: 'business', element: <BusinessDashboardPage /> },
       { path: 'business/scan', element: <BusinessScanPage /> },
       { path: 'business/locations/new', element: <LocationFormPage /> },

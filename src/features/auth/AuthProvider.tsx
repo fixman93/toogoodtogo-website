@@ -12,7 +12,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: user = null, isLoading } = useQuery({
     queryKey: ME_QUERY_KEY,
     queryFn: () => (tokenStorage.get() ? authApi.me() : null),
-    staleTime: Infinity,
+    // Roles can be changed by an admin at any time; pick that up on focus.
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
     retry: false,
   })
 

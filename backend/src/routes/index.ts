@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import mongoose from 'mongoose'
-import { adminRoutes, authRoutes } from './auth.routes.js'
+import { adminRoutes } from './admin.routes.js'
+import { authRoutes } from './auth.routes.js'
 import { businessRoutes } from './business.routes.js'
 import { favoriteRoutes } from './favorite.routes.js'
 import { offerRoutes } from './offer.routes.js'

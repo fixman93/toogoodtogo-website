@@ -196,3 +196,22 @@ export interface OfferInput {
 }
 
 export type OfferPatch = Partial<Omit<OfferInput, 'businessId'>> & { status?: 'active' | 'paused' }
+
+// ---------------------------------------------------------------------------
+// Admin
+
+export interface AdminStats {
+  users: { total: number; customers: number; partners: number; admins: number }
+  businesses: { total: number; active: number }
+  offers: { live: number }
+  reservations: { total: number; today: number; upcoming: number; collected: number }
+}
+
+export interface AdminUser extends User {
+  businessCount: number
+}
+
+export interface AdminBusiness extends Business {
+  owner: { id: string; name: string; email: string } | null
+  liveOfferCount: number
+}

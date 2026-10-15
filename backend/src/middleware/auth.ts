@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env.js'
-import type { Role } from '../models/User.js'
+import { User, type Role } from '../models/User.js'
 import { ApiError } from '../utils/ApiError.js'
 
 interface TokenPayload {
@@ -25,11 +25,16 @@ function readUser(req: Request, strict: boolean): Request['user'] | null {
   }
 }
 
-/** Requires a valid bearer token. */
-export function authenticate(req: Request, _res: Response, next: NextFunction) {
-  const user = readUser(req, true)
-  if (!user) throw ApiError.unauthorized()
-  req.user = user
+/**
+ * Requires a valid bearer token. The role is read from the database (not the
+ * token), so role changes and deleted accounts take effect immediately.
+ */
+export async function authenticate(req: Request, _res: Response, next: NextFunction) {
+  const token = readUser(req, true)
+  if (!token) throw ApiError.unauthorized()
+  const user = await User.findById(token.id).select('role').lean()
+  if (!user) throw ApiError.unauthorized('Nalog više ne postoji.', 'USER_NOT_FOUND')
+  req.user = { id: token.id, role: user.role }
   next()
 }
 
