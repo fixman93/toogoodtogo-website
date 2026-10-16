@@ -5,6 +5,7 @@ import { ApiError } from '@/api/client'
 import { LogoMark } from '@/components/common/Logo'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/features/auth/auth-context'
@@ -70,7 +71,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
                 </Link>
               )}
             </div>
-            <Input {...field('password')} type="password" autoComplete={isLogin ? 'current-password' : 'new-password'} required />
+            <PasswordInput {...field('password')} autoComplete={isLogin ? 'current-password' : 'new-password'} required />
             {!isLogin && <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>}
           </div>
           {error && (

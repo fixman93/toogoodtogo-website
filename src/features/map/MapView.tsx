@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, MapPinned, X } from 'lucide-react'
 import type { BoundingBox, GeoPoint, OfferFilters } from '@/api/types'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
@@ -8,8 +8,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useLocation } from '@/features/location/location-context'
 import { useOfferLocations, useOffers } from '@/hooks/api'
 import { t } from '@/i18n'
+import { lazyWithReload } from '@/lib/chunks'
 
-const OffersMap = lazy(() => import('./OffersMap'))
+const OffersMap = lazyWithReload(() => import('./OffersMap'))
 
 const NEAREST_LIMIT = 12
 

@@ -25,10 +25,12 @@ import { OrdersPage } from '@/pages/partner/OrdersPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { ReservationDetailsPage } from '@/pages/ReservationDetailsPage'
 import { ReservationsPage } from '@/pages/ReservationsPage'
+import { RouteErrorPage } from '@/pages/RouteErrorPage'
 
 const router = createBrowserRouter([
   {
     element: <AppShell />,
+    errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <DiscoverPage /> },
       { path: 'browse', element: <BrowsePage /> },

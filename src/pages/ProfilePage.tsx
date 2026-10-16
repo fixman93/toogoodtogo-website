@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Bell, Camera, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import { Input } from '@/components/ui/input'
+import { PasswordInput } from '@/components/ui/password-input'
 import { NativeSelect } from '@/components/ui/select'
 import { PageHeader } from '@/components/common/PageHeader'
 import { RequireAuth } from '@/components/common/RequireAuth'
@@ -39,7 +39,7 @@ function DeleteAccount() {
       ) : (
         <Card className="space-y-3 border-destructive/30 p-4">
           <p className="text-sm">{t('profile.deleteAccountText')}</p>
-          <Input type="password" autoComplete="current-password" placeholder={t('profile.deleteConfirmPassword')} value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput autoComplete="current-password" placeholder={t('profile.deleteConfirmPassword')} value={password} onChange={(e) => setPassword(e.target.value)} />
           {remove.isError && (
             <p role="alert" className="text-sm font-medium text-destructive">
               {remove.error instanceof ApiError ? remove.error.message : t('common.errorText')}

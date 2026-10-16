@@ -6,6 +6,7 @@ import { authApi } from '@/api/services'
 import { LogoMark } from '@/components/common/Logo'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { PasswordInput } from '@/components/ui/password-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/features/auth/auth-context'
@@ -108,12 +109,12 @@ export function ResetPasswordPage() {
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="password">{t('auth.newPassword')}</Label>
-          <Input id="password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <PasswordInput id="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="repeat">{t('auth.repeatPassword')}</Label>
-          <Input id="repeat" type="password" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} required />
+          <PasswordInput id="repeat" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} required />
         </div>
         {error && <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         <Button type="submit" size="lg" className="w-full" disabled={!token || pending}>

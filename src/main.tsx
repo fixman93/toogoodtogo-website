@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError } from '@/api/client'
 import { AuthProvider } from '@/features/auth/AuthProvider'
 import { LocationProvider } from '@/features/location/LocationProvider'
+import { handlePreloadErrors } from '@/lib/chunks'
 import { registerServiceWorker } from '@/lib/push'
 import App from './App.tsx'
 import './index.css'
@@ -20,6 +21,7 @@ const queryClient = new QueryClient({
 })
 
 registerServiceWorker()
+handlePreloadErrors()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
