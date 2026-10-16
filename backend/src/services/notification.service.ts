@@ -16,8 +16,11 @@ export interface NotificationInput {
   link?: string
 }
 
-/** `force`: account notices (warnings, pause/block) are e-mailed regardless of preferences or a block. */
-export async function notify(userIds: (string | Types.ObjectId)[], input: NotificationInput, options: { force?: boolean } = {}) {
+/**
+ * `force`: account notices (warnings, pause/block) are e-mailed regardless of preferences or a block.
+ * `email: false`: the caller sends its own, richer e-mail (e.g. the reservation ticket with QR).
+ */
+export async function notify(userIds: (string | Types.ObjectId)[], input: NotificationInput, options: { force?: boolean; email?: boolean } = {}) {
   const unique = [...new Set(userIds.map(String))]
   if (!unique.length) return
   try {
@@ -27,7 +30,7 @@ export async function notify(userIds: (string | Types.ObjectId)[], input: Notifi
       .select('email notificationPrefs')
       .lean()
     const pushTo = users.filter((u) => u.notificationPrefs?.push !== false).map((u) => u._id)
-    const mailTo = users.filter((u) => options.force || u.notificationPrefs?.email !== false)
+    const mailTo = options.email === false ? [] : users.filter((u) => options.force || u.notificationPrefs?.email !== false)
     await Promise.all([
       sendToUsers(pushTo, input),
       ...mailTo.map((u) => sendMail(u.email, input.title, input.body ?? '', input.link)),

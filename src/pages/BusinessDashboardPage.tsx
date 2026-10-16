@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { StaffGuard } from '@/features/business/PartnerGuard'
 import { StaffSection } from '@/features/business/StaffSection'
 import { StandingNotice } from '@/features/business/StandingNotice'
+import { PushPrompt } from '@/features/notifications/PushPrompt'
 import { useAuth } from '@/features/auth/auth-context'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { SalesTiles } from '@/pages/partner/SalesPage'
@@ -202,6 +203,7 @@ function StaffPortal() {
   const { data } = useWorkplaces(true)
   return (
     <div className="space-y-5">
+      <PushPrompt />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile to="/business/scan" icon={ScanLine} label={t('business.scan')} primary />
         <Tile to="/business/orders" icon={ClipboardList} label={t('orders.title')} />
@@ -250,6 +252,7 @@ function Dashboard() {
   return (
     <div className="space-y-5">
       <StandingNotice />
+      <PushPrompt />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile to="/business/scan" icon={ScanLine} label={t('business.scan')} primary />
         <Tile to="/business/orders" icon={ClipboardList} label={t('orders.title')} />

@@ -21,6 +21,7 @@ import { runAtomically } from '../utils/transaction.js'
 import type { ReservationListQuery } from '../validators/reservation.validators.js'
 import { assertWorksAt, hasPermission, isAdmin, workplaceIds, worksAt, type Actor } from './access.service.js'
 import { notify } from './notification.service.js'
+import { sendReservationTicket } from './ticket.service.js'
 import * as promotions from './promotion.service.js'
 import { rewardPickup } from './loyalty.service.js'
 import { dispatchReservationEvent } from './integration.service.js'
@@ -139,6 +140,8 @@ export async function create(input: { offerId: string; quantity: number; promoCo
           pickupStart: offer.pickupStart,
           pickupEnd: offer.pickupEnd,
           timezone: offer.timezone,
+          // Secret link to the pickup pass (used in the confirmation e-mail and "send to a friend").
+          shareToken: randomBytes(18).toString('base64url'),
           // Payments are not integrated yet: confirm immediately, pay at pickup.
           // Online payments will create `pending_payment` + payment.holdExpiresAt instead.
           status: 'confirmed',
@@ -151,16 +154,25 @@ export async function create(input: { offerId: string; quantity: number; promoCo
   })
 
   const [dto] = await toDto([reservation.toObject()], actor)
-  const business = await Business.findById(reservation.business).select('owner name').lean()
+  const business = await Business.findById(reservation.business).select('owner name address collectionInstructions').lean()
   void dispatchReservationEvent('reservation.created', reservation)
-  void notify([actor.id], {
-    type: 'reservation_confirmed',
-    title: `Rezervisano · ${reservation.code}`,
-    body: `${reservation.quantity} × ${reservation.offerTitle}${business ? ` (${business.name})` : ''}. Pokaži QR kod na kasi.`,
-    link: `/reservations/${reservation.id}`,
-  })
+  // In-app + push; the e-mail is the ticket with the QR code (always sent — it's the customer's pass).
+  void notify(
+    [actor.id],
+    {
+      type: 'reservation_confirmed',
+      title: `Rezervisano · ${reservation.code}`,
+      body: `${reservation.quantity} × ${reservation.offerTitle}${business ? ` (${business.name})` : ''}. Pokaži QR kod na kasi.`,
+      link: `/reservations/${reservation.id}`,
+    },
+    { email: false },
+  )
   if (business) {
-    void notify([business.owner], {
+    const customer = await User.findById(actor.id).select('email').lean()
+    if (customer) void sendReservationTicket(customer.email, { ...reservation.toObject(), id: reservation.id }, business)
+    // The owner and everyone working at this location (the phone at the counter).
+    const staff = await User.find({ staffOf: business._id, deletedAt: null }).select('_id').lean()
+    void notify([business.owner, ...staff.map((s) => s._id)], {
       type: 'reservation_new',
       title: `Nova rezervacija · ${reservation.code}`,
       body: `${reservation.quantity} × ${reservation.offerTitle} (${business.name})`,
