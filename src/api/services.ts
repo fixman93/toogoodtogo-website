@@ -57,8 +57,11 @@ export const authApi = {
   register: (body: { name: string; email: string; password: string; referralCode?: string }) =>
     unwrap<AuthResult>(api.post('/auth/register', body)),
   me: () => unwrap<User>(api.get('/auth/me')),
+  forgotPassword: (email: string) => unwrap<{ sent: boolean }>(api.post('/auth/forgot-password', { email })),
+  resetPassword: (body: { token: string; password: string }) => unwrap<AuthResult>(api.post('/auth/reset-password', body)),
   deleteAccount: (password: string) => api.delete('/auth/me', { data: { password } }).then(() => undefined),
   updatePreferences: (prefs: { push?: boolean; email?: boolean }) => unwrap<User>(api.patch('/auth/me/preferences', prefs)),
+  updateProfile: (body: { name?: string; avatarUrl?: string }) => unwrap<User>(api.patch('/auth/me', body)),
 }
 
 export const offersApi = {
@@ -187,4 +190,17 @@ export const waitlistApi = {
   mine: () => unwrap<string[]>(api.get('/waitlist')),
   join: (offerId: string) => api.put(`/waitlist/${offerId}`).then(() => undefined),
   leave: (offerId: string) => api.delete(`/waitlist/${offerId}`).then(() => undefined),
+}
+
+export type ImageKind = 'avatar' | 'business-logo' | 'business-cover' | 'offer'
+
+export const uploadsApi = {
+  /** Sends the image to the API, which resizes it and stores it on R2. */
+  image: (file: File, kind: ImageKind) => {
+    const form = new FormData()
+    form.append('file', file)
+    return unwrap<{ url: string; bytes: number }>(
+      api.post('/uploads', form, { params: { kind }, headers: { 'Content-Type': 'multipart/form-data' }, timeout: 60_000 }),
+    )
+  },
 }

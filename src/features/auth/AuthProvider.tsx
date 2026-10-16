@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       isLoading,
       login: (email, password) => authApi.login({ email, password }).then(onAuthenticated),
+      resetPassword: (token, password) => authApi.resetPassword({ token, password }).then(onAuthenticated),
       register: (name, email, password, referralCode) => authApi.register({ name, email, password, referralCode }).then(onAuthenticated),
       logout: () => {
         tokenStorage.clear()

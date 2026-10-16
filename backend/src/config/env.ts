@@ -25,9 +25,19 @@ const schema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default('mailto:podrska@zalogaj.rs'),
-  /** E-mail (optional), e.g. smtps://user:pass@smtp.example.com:465 */
-  SMTP_URL: z.string().optional(),
-  MAIL_FROM: z.string().default('Zalogaj <no-reply@zalogaj.rs>'),
+  /** E-mail via MailerSend (optional). Without it e-mails are only logged. */
+  MAILERSEND_API_KEY: z.string().optional(),
+  /** Sender — its domain must be verified in MailerSend. */
+  MAIL_FROM: z.string().default('Zalogaj <noreply@fixman-app.online>'),
+  /** Cloudflare R2 (S3-compatible) for uploaded images — optional. */
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
+  /** Public base URL of the bucket (r2.dev or custom domain). */
+  R2_PUBLIC_URL: z.string().url().optional(),
+  /** Folder inside the bucket — keeps this app's files separate in a shared bucket. */
+  R2_PREFIX: z.string().default('toogoodtogo'),
 })
 
 const parsed = schema.safeParse(process.env)

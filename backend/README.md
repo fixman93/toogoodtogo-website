@@ -144,6 +144,7 @@ Base path: `/api`. Requests and responses are JSON.
 | `GET /favorites` | user | Expanded with business (+ active offer count) or offer |
 | `POST /favorites` | user | `{ targetType: 'business'\|'offer', targetId }`; idempotent |
 | `DELETE /favorites/:id` | owner | |
+| `POST /auth/forgot-password` · `POST /auth/reset-password` | public, rate-limited | `{ email }` → always 200 (no account enumeration) · `{ token, password }` → new session; older tokens are rejected |
 | `DELETE /auth/me` | user | `{ password }`. Anonymizes the account; refused with active reservations or own locations |
 | `GET /notifications` · `GET /notifications/unread-count` · `POST /notifications/read-all` | user | In-app notifications (auto-deleted after 90 days) |
 | `GET /waitlist` · `PUT /waitlist/:offerId` · `DELETE /waitlist/:offerId` | user | "Notify me" for sold-out offers |

@@ -9,18 +9,19 @@ import { ApiError } from '../utils/ApiError.js'
 interface TokenPayload {
   sub: string
   role: Role
+  iat?: number
 }
 
 export function signToken(userId: string, role: Role) {
   return jwt.sign({ role }, env.JWT_SECRET, { subject: userId, expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] })
 }
 
-function readUser(req: Request, strict: boolean): Request['user'] | null {
+function readUser(req: Request, strict: boolean): (Request['user'] & { iat?: number }) | null {
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) return null
   try {
     const payload = jwt.verify(header.slice(7), env.JWT_SECRET) as TokenPayload
-    return { id: payload.sub, role: payload.role, staffOf: [] }
+    return { id: payload.sub, role: payload.role, staffOf: [], iat: payload.iat }
   } catch {
     if (!strict) return null
     throw ApiError.unauthorized('Sesija je istekla. Prijavite se ponovo.', 'INVALID_TOKEN')
@@ -43,8 +44,12 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   }
   const token = readUser(req, true)
   if (!token) throw ApiError.unauthorized()
-  const user = await User.findById(token.id).select('role isBlocked deletedAt staffOf').lean()
+  const user = await User.findById(token.id).select('role isBlocked deletedAt staffOf passwordChangedAt').lean()
   if (!user || user.deletedAt) throw ApiError.unauthorized('Nalog više ne postoji.', 'USER_NOT_FOUND')
+  // Tokens issued before a password change are no longer valid (all devices signed out).
+  if (user.passwordChangedAt && token.iat && token.iat * 1000 < user.passwordChangedAt.getTime() - 1000) {
+    throw ApiError.unauthorized('Lozinka je promenjena. Prijavi se ponovo.', 'SESSION_EXPIRED')
+  }
   if (user.isBlocked) throw ApiError.forbidden('Nalog je blokiran. Kontaktiraj podršku.', 'ACCOUNT_BLOCKED')
   req.user = { id: token.id, role: user.role, staffOf: (user.staffOf ?? []).map(String) }
   next()

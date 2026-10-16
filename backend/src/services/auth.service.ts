@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs'
 import { signToken } from '../middleware/auth.js'
 import { ensureReferralCode, findReferrer, levelFor } from './loyalty.service.js'
-import { randomBytes } from 'node:crypto'
+import { deleteIfOwned } from './storage.service.js'
+import { sendMail } from './mail.service.js'
+import { createHash, randomBytes } from 'node:crypto'
 import {
   ACTIVE_RESERVATION_STATUSES,
   Business,
@@ -23,6 +25,13 @@ export async function register(input: { name: string; email: string; password: s
   // Self-registration always creates customers; partner/admin roles are granted by an admin.
   const referrer = await findReferrer(input.referralCode)
   const user = await User.create({ name: input.name, email: input.email, passwordHash, role: 'customer', referredBy: referrer?._id })
+  void sendMail(
+    user.email,
+    `Dobro došao/la, ${user.name.split(' ')[0]}!`,
+    'Hvala što spašavaš hranu sa nama.\nPronađi kesu iznenađenja u blizini, rezerviši je i preuzmi u lokalu po trećini cene.',
+    '/',
+    'Pronađi ponude',
+  )
   return { user: serializeUser(user), token: signToken(user.id, user.role) }
 }
 
@@ -83,4 +92,49 @@ export async function updatePreferences(userId: string, prefs: { push?: boolean;
   const user = await User.findByIdAndUpdate(userId, { $set: set }, { new: true })
   if (!user) throw ApiError.notFound('Nalog nije pronađen.')
   return serializeUser(user)
+}
+
+/** Name and profile photo. A replaced/removed photo is deleted from storage. */
+export async function updateProfile(userId: string, input: { name?: string; avatarUrl?: string }) {
+  const user = await User.findById(userId)
+  if (!user) throw ApiError.notFound('Nalog nije pronađen.')
+  const previous = user.avatarUrl
+  if (input.name != null) user.name = input.name
+  if (input.avatarUrl !== undefined) user.avatarUrl = input.avatarUrl || undefined
+  await user.save()
+  if (input.avatarUrl !== undefined && previous && previous !== user.avatarUrl) void deleteIfOwned(previous)
+  return me(user.id)
+}
+
+const RESET_TTL_MS = 60 * 60_000
+const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
+
+/** Always "ok" — never reveals whether an e-mail has an account. */
+export async function forgotPassword(email: string) {
+  const user = await User.findOne({ email: email.toLowerCase(), deletedAt: null, isBlocked: { $ne: true } })
+  if (!user) return
+  const token = randomBytes(32).toString('base64url')
+  user.passwordResetHash = sha256(token)
+  user.passwordResetExpires = new Date(Date.now() + RESET_TTL_MS)
+  await user.save()
+  void sendMail(
+    user.email,
+    'Promena lozinke',
+    'Neko je zatražio novu lozinku za tvoj Zalogaj nalog.\nLink važi 60 minuta. Ako nisi ti, slobodno ignoriši ovu poruku.',
+    `/reset-password?token=${token}`,
+    'Postavi novu lozinku',
+  )
+}
+
+export async function resetPassword(token: string, password: string) {
+  const user = await User.findOne({ passwordResetHash: sha256(token), passwordResetExpires: { $gt: new Date() }, deletedAt: null })
+  if (!user) throw ApiError.badRequest('Link je istekao ili je već iskorišćen. Zatraži novi.', 'RESET_INVALID')
+  user.passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS)
+  user.passwordChangedAt = new Date()
+  user.passwordResetHash = undefined
+  user.passwordResetExpires = undefined
+  await user.save()
+  void sendMail(user.email, 'Lozinka je promenjena', 'Lozinka tvog Zalogaj naloga je upravo promenjena. Ako to nisi bio/la ti, odmah nam se javi.', '/support', 'Kontaktiraj podršku')
+  // New session for the user who just reset it.
+  return { user: serializeUser(user), token: signToken(user.id, user.role) }
 }

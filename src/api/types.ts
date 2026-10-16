@@ -57,6 +57,7 @@ export interface User {
   role: Role
   locale: string
   countryCode: string
+  avatarUrl?: string
   staffOf: string[]
   permissions: Permission[]
   notificationPrefs: { push: boolean; email: boolean }
@@ -234,6 +235,8 @@ export interface OfferInput {
   contentType?: 'surprise' | 'known'
   contents?: string[]
   allergens?: Allergen[]
+  /** Own photo; '' = use the location cover. */
+  imageUrl?: string
   priceMinor: number
   originalPriceMinor: number
   priceDrop?: { at: string; priceMinor: number } | null

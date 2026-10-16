@@ -291,13 +291,21 @@ panel shows only the tabs the role may use.
 
 ## More features
 
+* **E-mail (MailerSend):**
+  * welcome e-mail on registration;
+  * **forgotten password** (`/forgot-password`): a single-use link valid for
+    60 min. Setting a new password signs out all other devices;
+  * "password changed" notice;
+  * every in-app notification also goes out by e-mail (users can switch this
+    off).
 * **Cyrillic:** Profile → *Pismo*: Latinica / Ћирилица. The UI, dates and API
   messages are transliterated; user content stays as entered.
 * **Notifications:**
   * in-app (bell);
   * **push on the phone**: web push + PWA. Needs `VAPID_*` env vars. On iPhone
     it works only after *Add to Home Screen*;
-  * **e-mail**: needs `SMTP_URL`.
+  * **e-mail via MailerSend**: needs `MAILERSEND_API_KEY`, and `MAIL_FROM` on
+    a verified domain. Without it, e-mails are only logged in development.
 
   Users can switch push and e-mail on or off in Profile.
 * **Dynamic pricing:** a partner can set "from 20:30 the price drops to 199 RSD".
@@ -327,6 +335,20 @@ panel shows only the tabs the role may use.
     pickups;
   * signed webhooks (`reservation.created/cancelled/collected`, header
     `X-Zalogaj-Signature: sha256=HMAC(secret, body)`).
+
+## Images (Cloudflare R2)
+
+Profile photos, location logos and covers, and offer photos are uploaded from
+the phone (gallery or camera) to `POST /api/uploads?kind=avatar|business-logo|business-cover|offer`.
+
+* The API applies EXIF rotation, **strips metadata** (including GPS), resizes
+  (covers and offers ≤ 1600 px, avatars and logos 400×400) and converts to
+  **WebP**. A 9 MB phone photo ends up around 0.6 MB.
+* Files are stored in the shared R2 bucket under **`toogoodtogo/`** only
+  (`R2_PREFIX`). When an image is replaced or removed, the old file is deleted.
+  Files outside that folder are never touched.
+* R2 keys live **only on the backend**. The browser never gets them.
+* Offers without their own photo show the location cover.
 
 ## Roadmap (deliberately not built)
 

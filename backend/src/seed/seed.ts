@@ -75,7 +75,6 @@ async function seed() {
           title: template.title,
           description: template.description,
           category: template.category,
-          imageUrl: business.coverUrl,
           tags: template.tags ?? [],
           allergens: template.allergens ?? [],
           contentType: template.contents?.length ? 'known' : 'surprise',

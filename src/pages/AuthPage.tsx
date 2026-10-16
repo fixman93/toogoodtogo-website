@@ -62,7 +62,14 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             <Input {...field('email')} type="email" autoComplete="email" inputMode="email" required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">{t('auth.password')}</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">{t('auth.password')}</Label>
+              {isLogin && (
+                <Link to="/forgot-password" className="text-xs font-semibold text-primary hover:underline">
+                  {t('auth.forgot')}
+                </Link>
+              )}
+            </div>
             <Input {...field('password')} type="password" autoComplete={isLogin ? 'current-password' : 'new-password'} required />
             {!isLogin && <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>}
           </div>

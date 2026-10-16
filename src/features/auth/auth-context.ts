@@ -6,6 +6,8 @@ export interface AuthContextValue {
   isLoading: boolean
   login: (email: string, password: string) => Promise<User>
   logout: () => void
+  /** Sets a new password from an e-mailed link and signs the user in. */
+  resetPassword: (token: string, password: string) => Promise<User>
   hasRole: (...roles: Role[]) => boolean
   /** Platform permission (admin panel). */
   can: (permission: Permission) => boolean

@@ -5,7 +5,7 @@ import { ApiError } from '@/api/client'
 import { CATEGORIES, type Business, type BusinessInput, type Category, type GeoPoint } from '@/api/types'
 import { FormField, FormSection } from '@/components/common/FormField'
 import { PageHeader } from '@/components/common/PageHeader'
-import { SafeImage } from '@/components/common/SafeImage'
+import { ImageUpload } from '@/components/common/ImageUpload'
 import { ErrorState } from '@/components/common/StateViews'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -70,7 +70,7 @@ function LocationForm({ business }: { business?: Business }) {
     // A field's error disappears as soon as the user edits it.
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e))
   }
-  const text = (key: 'name' | 'description' | 'phone' | 'street' | 'city' | 'postalCode' | 'collectionInstructions' | 'openingHours' | 'logoUrl' | 'coverUrl') => ({
+  const text = (key: 'name' | 'description' | 'phone' | 'street' | 'city' | 'postalCode' | 'collectionInstructions' | 'openingHours') => ({
     id: key,
     value: form[key],
     'aria-invalid': !!errors[key] || undefined,
@@ -222,22 +222,8 @@ function LocationForm({ business }: { business?: Business }) {
 
       <FormSection title={t('partner.section.images')}>
         <p className="text-xs text-muted-foreground">{t('partner.field.imagesHint')}</p>
-        <FormField label={t('partner.field.coverUrl')} htmlFor="coverUrl" error={errors.coverUrl}>
-          <Input {...text('coverUrl')} type="url" inputMode="url" placeholder="https://…" />
-        </FormField>
-        <FormField label={t('partner.field.logoUrl')} htmlFor="logoUrl" error={errors.logoUrl}>
-          <Input {...text('logoUrl')} type="url" inputMode="url" placeholder="https://…" />
-        </FormField>
-        {(form.coverUrl || form.logoUrl) && (
-          <div className="relative h-36 overflow-hidden rounded-xl">
-            <SafeImage src={isUrl(form.coverUrl) ? form.coverUrl : undefined} alt="" className="size-full" />
-            <SafeImage
-              src={isUrl(form.logoUrl) ? form.logoUrl : undefined}
-              alt=""
-              className="absolute bottom-3 left-3 size-14 rounded-full border-2 border-white"
-            />
-          </div>
-        )}
+        <ImageUpload kind="business-cover" label={t('partner.field.coverUrl')} value={form.coverUrl} onChange={(url) => set('coverUrl', url)} />
+        <ImageUpload kind="business-logo" shape="round" label={t('partner.field.logoUrl')} value={form.logoUrl} onChange={(url) => set('logoUrl', url)} />
       </FormSection>
 
       {save.isError && (

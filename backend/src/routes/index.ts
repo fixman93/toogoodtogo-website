@@ -10,6 +10,7 @@ import { applicationRoutes, partnerRoutes } from './partner.routes.js'
 import { promotionRoutes } from './promotion.routes.js'
 import { pushRoutes } from './push.routes.js'
 import { supportRoutes } from './support.routes.js'
+import { uploadRoutes } from './upload.routes.js'
 import { pickupRoutes, reservationRoutes } from './reservation.routes.js'
 
 export const apiRouter = Router()
@@ -30,5 +31,6 @@ apiRouter.use('/pickup', pickupRoutes)
 apiRouter.use('/push', pushRoutes)
 apiRouter.use('/promotions', promotionRoutes)
 apiRouter.use('/support', supportRoutes)
+apiRouter.use('/uploads', uploadRoutes)
 apiRouter.use('/reservations', reservationRoutes)
 apiRouter.use('/favorites', favoriteRoutes)

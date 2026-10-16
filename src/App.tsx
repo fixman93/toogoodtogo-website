@@ -19,6 +19,7 @@ import { FavoritesPage } from '@/pages/FavoritesPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { OfferDetailsPage } from '@/pages/OfferDetailsPage'
 import { PartnerApplyPage } from '@/pages/PartnerApplyPage'
+import { ForgotPasswordPage, ResetPasswordPage } from '@/pages/PasswordResetPage'
 import { PickupPassPage } from '@/pages/PickupPassPage'
 import { OrdersPage } from '@/pages/partner/OrdersPage'
 import { ProfilePage } from '@/pages/ProfilePage'
@@ -41,6 +42,8 @@ const router = createBrowserRouter([
       { path: 'profile', element: <ProfilePage /> },
       { path: 'login', element: <AuthPage mode="login" /> },
       { path: 'register', element: <AuthPage mode="register" /> },
+      { path: 'forgot-password', element: <ForgotPasswordPage /> },
+      { path: 'reset-password', element: <ResetPasswordPage /> },
       { path: 'admin', element: <AdminPage /> },
       { path: 'business', element: <BusinessDashboardPage /> },
       { path: 'business/scan', element: <BusinessScanPage /> },

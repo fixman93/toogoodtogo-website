@@ -10,6 +10,7 @@ import type { CreateOfferInput, OfferFilters, OfferListQuery, OfferLocationsQuer
 import { assertBusinessAccess, type Actor } from './access.service.js'
 import { notify } from './notification.service.js'
 import { notifyIfAvailable } from './waitlist.service.js'
+import { deleteIfOwned } from './storage.service.js'
 
 type OfferWithBusiness = IOffer & { _id: Types.ObjectId; distanceMeters?: number; businessDoc: IBusiness & { _id: Types.ObjectId } }
 
@@ -253,6 +254,7 @@ export async function update(id: string, input: UpdateOfferInput, actor: Actor) 
 
   const updated = await Offer.findOneAndUpdate(filter, change, { new: true, runValidators: true })
   if (!updated) throw ApiError.conflict('Količina ne može biti manja od već rezervisanih kesa.', 'QUANTITY_BELOW_RESERVED')
+  if (input.imageUrl !== undefined && offer.imageUrl && offer.imageUrl !== updated.imageUrl) void deleteIfOwned(offer.imageUrl)
   // More bags or re-activated: let the waitlist know.
   if ((change.$inc?.quantityAvailable ?? 0) > 0 || input.status === 'active') void notifyIfAvailable(updated._id)
   return serializeOffer(updated, business)

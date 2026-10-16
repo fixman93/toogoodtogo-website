@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Bell, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
+import { Bell, Camera, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card'
 import { market } from '@/config/markets'
 import { useAuth } from '@/features/auth/auth-context'
 import { PLATFORM_ROLES } from '@/api/types'
-import { useDeleteAccount, useReservations, useUpdatePreferences } from '@/hooks/api'
+import { useDeleteAccount, useReservations, useUpdatePreferences, useUpdateProfile, useUploadImage } from '@/hooks/api'
 import { currentSubscription, disablePush, enablePush, pushSupported } from '@/lib/push'
 import { activeLocale, localize, setScript, script, t } from '@/i18n'
 import { formatDate, formatMoney } from '@/lib/format'
@@ -233,6 +233,46 @@ function Rewards() {
   )
 }
 
+/** Tap the avatar to upload a new profile photo (stored on R2). */
+function AvatarEditor({ initials, url }: { initials: string; url?: string }) {
+  const input = useRef<HTMLInputElement>(null)
+  const upload = useUploadImage('avatar')
+  const update = useUpdateProfile()
+  const busy = upload.isPending || update.isPending
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        aria-label={t('profile.changePhoto')}
+        disabled={busy}
+        onClick={() => input.current?.click()}
+        className="group relative flex size-16 items-center justify-center overflow-hidden rounded-full bg-primary text-xl font-extrabold text-primary-foreground"
+      >
+        {url ? <img src={url} alt="" className="size-full object-cover" /> : initials}
+        <span className="absolute inset-x-0 bottom-0 flex h-6 items-center justify-center bg-black/45 text-white">
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Camera className="size-3.5" />}
+        </span>
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ''
+          if (file) upload.mutate(file, { onSuccess: ({ url: next }) => update.mutate({ avatarUrl: next }) })
+        }}
+      />
+      {upload.isError && (
+        <p role="alert" className="absolute top-full left-0 mt-1 w-48 text-xs text-destructive">
+          {upload.error instanceof ApiError ? upload.error.message : t('common.errorText')}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function Profile() {
   const { user, logout, hasRole } = useAuth()
   if (!user) return null
@@ -245,9 +285,7 @@ function Profile() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <Card className="flex items-center gap-4 p-5">
-        <span className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary text-xl font-extrabold text-primary-foreground">
-          {initials}
-        </span>
+        <AvatarEditor initials={initials} url={user.avatarUrl} />
         <div className="min-w-0">
           <p className="truncate text-lg font-bold">{user.name}</p>
           <p className="truncate text-sm text-muted-foreground">{user.email}</p>

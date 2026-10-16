@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, Pause, Play, Sparkles, Store, Trash2 } from 'lucide
 import { ApiError } from '@/api/client'
 import { ALLERGENS, CATEGORIES, type Allergen, type Business, type Category, type Offer, type OfferInput } from '@/api/types'
 import { FormField, FormSection } from '@/components/common/FormField'
+import { ImageUpload } from '@/components/common/ImageUpload'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,7 @@ interface FormState {
   from: string
   to: string
   dropOn: boolean
+  imageUrl: string
   dropTime: string
   dropPrice: string
 }
@@ -77,6 +79,8 @@ function initialState(mode: Mode, businesses: Business[], preferredBusinessId: s
       from: start.time,
       to: end.time,
       dropOn: !!source.priceDrop,
+      // Only the offer's own photo (not the location cover it falls back to).
+      imageUrl: source.imageUrl && source.imageUrl !== businesses.find((b) => b.id === source.businessId)?.coverUrl ? source.imageUrl : '',
       dropTime: source.priceDrop ? toZonedInput(source.priceDrop.at, source.timezone).time : '',
       dropPrice: source.priceDrop ? String(source.priceDrop.priceMinor / minorUnits) : '',
     }
@@ -99,6 +103,7 @@ function initialState(mode: Mode, businesses: Business[], preferredBusinessId: s
     from: '19:00',
     to: '20:00',
     dropOn: false,
+    imageUrl: '',
     dropTime: '',
     dropPrice: '',
   }
@@ -121,7 +126,7 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
     // A field's error disappears as soon as the user edits it.
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e))
   }
-  const field = (key: Exclude<keyof FormState, 'tags' | 'category' | 'contentType' | 'allergens' | 'dropOn'>) => ({
+  const field = (key: Exclude<keyof FormState, 'tags' | 'category' | 'contentType' | 'allergens' | 'dropOn' | 'imageUrl'>) => ({
     id: key,
     value: form[key],
     'aria-invalid': !!errors[key] || undefined,
@@ -165,6 +170,7 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
       contentType: form.contentType,
       contents: form.contentType === 'known' ? form.contents.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 20) : [],
       allergens: form.allergens,
+      imageUrl: form.imageUrl,
       priceMinor: Math.round(price * minorUnits),
       originalPriceMinor: Math.round(original * minorUnits),
       quantityTotal: Number(form.quantity),
@@ -246,6 +252,11 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
             </div>
           </FormField>
         </div>
+      </FormSection>
+
+      <FormSection title={t('partner.field.offerImage')}>
+        <ImageUpload kind="offer" value={form.imageUrl} onChange={(url) => set('imageUrl', url)} />
+        <p className="text-xs text-muted-foreground">{t('partner.field.offerImageHint')}</p>
       </FormSection>
 
       <FormSection title={t('partner.field.contentType')}>

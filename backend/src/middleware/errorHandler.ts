@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express'
 import mongoose from 'mongoose'
+import multer from 'multer'
 import { ZodError } from 'zod'
 import { isProduction } from '../config/env.js'
 import { ApiError } from '../utils/ApiError.js'
@@ -15,6 +16,11 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
 
   if (err instanceof ApiError) {
     error = err
+  } else if (err instanceof multer.MulterError) {
+    error =
+      err.code === 'LIMIT_FILE_SIZE'
+        ? new ApiError(413, 'FILE_TOO_LARGE', 'Slika je prevelika (najviše 12 MB).')
+        : ApiError.badRequest('Neispravan fajl.', 'INVALID_UPLOAD')
   } else if (err instanceof ZodError) {
     error = ApiError.badRequest(
       'Neispravni podaci u zahtevu.',

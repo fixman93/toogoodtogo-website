@@ -8,6 +8,7 @@ import { escapeRegex, slugify } from '../utils/text.js'
 import type { CreateBusinessInput, UpdateBusinessInput } from '../validators/business.validators.js'
 import { assertBusinessAccess, hasPermission, isAdmin, type Actor } from './access.service.js'
 import { audit } from './audit.service.js'
+import { deleteIfOwned } from './storage.service.js'
 
 const toPoint = ({ lat, lng }: { lat: number; lng: number }) => ({ type: 'Point' as const, coordinates: [lng, lat] as [number, number] })
 
@@ -59,10 +60,19 @@ export async function update(id: string, input: UpdateBusinessInput, actor: Acto
   const business = moderationOnly ? await Business.findOne({ _id: id, deletedAt: null }) : await assertBusinessAccess(id, actor)
   if (!business) throw ApiError.notFound('Lokal nije pronađen.')
   const { location, address, ...rest } = input
+  const oldImages = { logoUrl: business.logoUrl, coverUrl: business.coverUrl }
   business.set(rest)
   if (address) business.set('address', address)
   if (location) business.location = toPoint(location)
   await business.save()
+  // Offers that stored a copy of the old cover follow the new one (they fall back to the cover).
+  if (input.coverUrl !== undefined && oldImages.coverUrl && oldImages.coverUrl !== business.coverUrl) {
+    await Offer.updateMany({ business: business._id, imageUrl: oldImages.coverUrl }, { $unset: { imageUrl: 1 } })
+    await Reservation.updateMany({ business: business._id, offerImageUrl: oldImages.coverUrl }, { $unset: { offerImageUrl: 1 } })
+  }
+  for (const field of ['logoUrl', 'coverUrl'] as const) {
+    if (input[field] !== undefined && oldImages[field] && oldImages[field] !== business[field]) void deleteIfOwned(oldImages[field])
+  }
 
   // Keep denormalized offer fields in sync; deactivating a business pauses its offers.
   await Offer.updateMany(
@@ -104,5 +114,8 @@ export async function remove(id: string, actor: Actor) {
   } else {
     await Offer.deleteMany({ business: business._id })
     await business.deleteOne()
+    // Nothing references this location anymore: remove its images too.
+    void deleteIfOwned(business.logoUrl)
+    void deleteIfOwned(business.coverUrl)
   }
 }

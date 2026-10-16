@@ -16,6 +16,12 @@ export interface IUser {
   locale: string
   countryCode: string
   phone?: string
+  /** Password reset (hash of the e-mailed token) and session invalidation. */
+  passwordResetHash?: string
+  passwordResetExpires?: Date
+  passwordChangedAt?: Date
+  /** Profile photo (R2 URL). */
+  avatarUrl?: string
   /** Blocked by an admin: cannot sign in or use the API. */
   isBlocked: boolean
   /** Partner locations a `staff` user works at (scan + orders only). */
@@ -42,6 +48,10 @@ const userSchema = new Schema<IUser>(
     locale: { type: String, default: 'sr-Latn-RS' },
     countryCode: { type: String, default: 'RS', uppercase: true, minlength: 2, maxlength: 2 },
     phone: { type: String, trim: true },
+    avatarUrl: String,
+    passwordResetHash: { type: String, select: false, index: true },
+    passwordResetExpires: { type: Date, select: false },
+    passwordChangedAt: Date,
     isBlocked: { type: Boolean, default: false },
     staffOf: { type: [{ type: Schema.Types.ObjectId, ref: 'Business' }], default: [], index: true },
     points: { type: Number, default: 0, min: 0 },

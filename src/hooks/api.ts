@@ -1,5 +1,6 @@
 /** TanStack Query hooks — the only way screens read or mutate server state. */
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { uploadsApi, type ImageKind } from '@/api/services'
 import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, promotionsApi, reservationsApi, supportApi, waitlistApi } from '@/api/services'
 import type { Donation, PromotionInput, TicketCategory, TicketStatus, WebhookEvent, ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
 import { useAuth } from '@/features/auth/auth-context'
@@ -541,4 +542,16 @@ export function useDeleteWebhook() {
 export function useTestWebhook() {
   const queryClient = useQueryClient()
   return useMutation({ mutationFn: partnerApi.testWebhook, onSettled: () => queryClient.invalidateQueries({ queryKey: ['partner', 'webhooks'] }) })
+}
+
+export function useUploadImage(kind: ImageKind) {
+  return useMutation({ mutationFn: (file: File) => uploadsApi.image(file, kind) })
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: authApi.updateProfile,
+    onSuccess: (user) => queryClient.setQueryData(['auth', 'me'], user),
+  })
 }
