@@ -19,6 +19,8 @@ export interface IBusiness {
   openingHours?: string
   rating: { average: number; count: number }
   isActive: boolean
+  /** Commission override for this location (0–0.5); market default when unset. */
+  commissionRate?: number
   /** Set when a location with history (reservations/reviews) is deleted; hidden everywhere. */
   deletedAt?: Date
   createdAt: Date
@@ -55,6 +57,7 @@ const businessSchema = new Schema<IBusiness>(
       count: { type: Number, default: 0, min: 0 },
     },
     isActive: { type: Boolean, default: true },
+    commissionRate: { type: Number, min: 0, max: 0.5 },
     deletedAt: { type: Date, index: true },
   },
   { timestamps: true },

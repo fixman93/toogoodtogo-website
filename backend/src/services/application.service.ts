@@ -42,7 +42,8 @@ export async function create(input: ApplicationInput, actor: Actor) {
     throw ApiError.conflict('Već imaš prijavu koja čeka odobrenje.', 'APPLICATION_PENDING')
   }
   const application = await PartnerApplication.create({ ...input, user: actor.id })
-  const admins = await User.find({ role: 'admin', deletedAt: null }).select('_id').lean()
+  // Everyone who may approve applications (super admin + operations).
+  const admins = await User.find({ role: { $in: ['admin', 'operations'] }, deletedAt: null }).select('_id').lean()
   void notify(
     admins.map((a) => a._id),
     { type: 'application_new', title: `Nova prijava partnera: ${input.businessName}`, body: `${input.city} · ${input.contactName}`, link: '/admin?tab=applications' },

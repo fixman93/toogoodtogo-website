@@ -3,6 +3,9 @@ import { currentUser } from '../middleware/auth.js'
 import * as adminService from '../services/admin.service.js'
 import * as applicationService from '../services/application.service.js'
 import * as auditService from '../services/audit.service.js'
+import * as donationService from '../services/donation.service.js'
+import * as statementService from '../services/statement.service.js'
+import { z } from 'zod'
 import { list, ok } from '../utils/respond.js'
 import {
   adminApplicationsQuery,
@@ -69,4 +72,18 @@ export async function listAudit(req: Request, res: Response) {
   const { page, limit } = auditQuery.parse(req.query)
   const result = await auditService.list(page, limit)
   list(res, result.items, result.meta)
+}
+
+export async function platformStatement(req: Request, res: Response) {
+  const { month } = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM') }).parse(req.query)
+  ok(res, await statementService.platformStatement(month))
+}
+
+export async function setCommission(req: Request, res: Response) {
+  const { rate } = z.object({ rate: z.number().min(0).max(0.5).nullable() }).parse(req.body)
+  ok(res, await statementService.setCommission(idParams.parse(req.params).id, rate))
+}
+
+export async function listDonations(_req: Request, res: Response) {
+  ok(res, await donationService.adminList())
 }

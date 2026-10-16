@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios'
+import { localize } from '@/i18n'
 import type { ApiErrorBody } from './types'
 
 const TOKEN_KEY = 'zalogaj.token'
@@ -46,7 +47,7 @@ api.interceptors.response.use(
     const body = error.response?.data?.error
     if (status === 401) tokenStorage.clear()
     return Promise.reject(
-      new ApiError(status, body?.code ?? (status ? 'HTTP_ERROR' : 'NETWORK_ERROR'), body?.message ?? error.message, body?.details),
+      new ApiError(status, body?.code ?? (status ? 'HTTP_ERROR' : 'NETWORK_ERROR'), localize(body?.message ?? error.message), body?.details),
     )
   },
 )

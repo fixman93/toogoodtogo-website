@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useLocation as useRouterLocation, useNavigate } from 'react-router'
+import { Link, useLocation as useRouterLocation, useNavigate, useSearchParams } from 'react-router'
 import { Loader2 } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { LogoMark } from '@/components/common/Logo'
@@ -12,6 +12,8 @@ import { t } from '@/i18n'
 
 export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const { login, register } = useAuth()
+  const [params] = useSearchParams()
+  const referralCode = params.get('ref') ?? undefined
   const navigate = useNavigate()
   const from = (useRouterLocation().state as { from?: string } | null)?.from ?? '/profile'
   const [form, setForm] = useState({ name: '', email: '', password: '' })
@@ -26,7 +28,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setPending(true)
     try {
       if (isLogin) await login(form.email, form.password)
-      else await register(form.name, form.email, form.password)
+      else await register(form.name, form.email, form.password, referralCode)
       navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.errorText'))

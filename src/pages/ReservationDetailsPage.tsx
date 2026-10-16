@@ -126,6 +126,11 @@ function Details() {
             <dt className="text-muted-foreground">{t(`reservations.payment.${r.payment.status}`)}</dt>
             <dd className="text-right">
               <span className="block text-xs text-muted-foreground line-through">{formatMoney(r.originalUnitPriceMinor * r.quantity, r.currency)}</span>
+              {!!r.discountMinor && (
+                <span className="block text-xs font-semibold text-success">
+                  {t('reservations.discount', { code: r.promoCode ?? '' })}: −{formatMoney(r.discountMinor, r.currency)}
+                </span>
+              )}
               <span className="text-lg font-extrabold">
                 {t('reservations.total')}: {formatMoney(r.totalMinor, r.currency)}
               </span>
@@ -136,6 +141,9 @@ function Details() {
 
       {r.status === 'collected' && <ReviewForm reservation={r} />}
       {active && <ShareWithFriend reservationId={r.id} />}
+      <Link to={`/support?reservation=${r.id}`} className="block text-center text-sm font-semibold text-muted-foreground underline">
+        {t('profile.support')}
+      </Link>
 
       {business?.collectionInstructions && active && (
         <Card>

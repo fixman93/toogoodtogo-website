@@ -9,6 +9,7 @@ import { formatDistance, formatPickupWindow, formatRating } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { FavoriteButton } from './FavoriteButton'
 import { Price } from './Price'
+import { PriceDropBadge } from './PriceDropBadge'
 
 export function OfferCard({ offer, className }: { offer: Offer; className?: string }) {
   const soldOut = offer.quantityAvailable === 0
@@ -37,6 +38,7 @@ export function OfferCard({ offer, className }: { offer: Offer; className?: stri
           ) : (
             <Badge variant="accent">{t('offer.left', { count: offer.quantityAvailable })}</Badge>
           )}
+          {!soldOut && <PriceDropBadge offer={offer} className="ml-1.5" />}
         </div>
         <FavoriteButton targetType="business" targetId={offer.businessId} className="absolute top-2.5 right-2.5" />
         <div className="absolute right-3 bottom-3 left-3 flex items-center gap-2.5">

@@ -15,7 +15,7 @@ import mongoose from 'mongoose'
 import { connectDatabase, disconnectDatabase } from '../config/db.js'
 import { env } from '../config/env.js'
 import { getMarket } from '../config/markets.js'
-import { AuditLog, Business, Favorite, Notification, Offer, PartnerApplication, Reservation, Review, User, WaitlistEntry } from '../models/index.js'
+import { Business, Offer, User } from '../models/index.js'
 import { slugify } from '../utils/text.js'
 import { zonedTime } from '../utils/time.js'
 import { SEED_DAYS, TEST_CUSTOMER, TEST_EMAILS, TEST_PARTNER, testLocations, testOfferTemplates } from './data.js'
@@ -34,9 +34,8 @@ async function seed() {
   const now = new Date()
 
   await mongoose.connection.dropDatabase()
-  await Promise.all(
-    [User, Business, Offer, Reservation, Favorite, Review, Notification, WaitlistEntry, PartnerApplication, AuditLog].map((m) => m.syncIndexes()),
-  )
+  // Build indexes for every registered model (new collections included).
+  await mongoose.connection.syncIndexes()
 
   const password = process.env.SEED_PASSWORD ?? randomBytes(6).toString('base64url')
   const passwordHash = await bcrypt.hash(password, 12)

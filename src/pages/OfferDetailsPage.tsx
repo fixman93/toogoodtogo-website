@@ -14,8 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/features/auth/auth-context'
 import { useLocation } from '@/features/location/location-context'
+import { PriceDropBadge } from '@/components/offers/PriceDropBadge'
 import { ReviewList } from '@/components/offers/ReviewList'
-import { useBusiness, useCreateReservation, useOffer, useToggleWaitlist, useWaitlist } from '@/hooks/api'
+import { Input } from '@/components/ui/input'
+import { useBusiness, useCheckPromotion, useCreateReservation, useOffer, useToggleWaitlist, useWaitlist } from '@/hooks/api'
 import { t } from '@/i18n'
 import { discountPercent, formatDistance, formatMoney, formatPickupWindow, formatRating } from '@/lib/format'
 import { directionsUrl, distanceMeters, osmEmbedUrl } from '@/lib/geo'
@@ -24,6 +26,14 @@ function ReservePanel({ offer }: { offer: Offer }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [quantity, setQuantity] = useState(1)
+  const [promoOpen, setPromoOpen] = useState(false)
+  const [promoInput, setPromoInput] = useState('')
+  const check = useCheckPromotion()
+  const [promo, setPromo] = useState<{ code: string; discountMinor: number; quantity: number } | null>(null)
+  // The preview is for a specific quantity; changing it re-checks the code.
+  const applied = promo && promo.quantity === quantity ? promo : null
+  const applyPromo = (code: string) =>
+    check.mutate({ code, offerId: offer.id, quantity }, { onSuccess: (r) => setPromo({ code: r.code, discountMinor: r.discountMinor, quantity }) })
   const reserve = useCreateReservation()
   const max = Math.min(offer.maxPerReservation, offer.quantityAvailable)
   const soldOut = offer.quantityAvailable === 0
@@ -32,7 +42,7 @@ function ReservePanel({ offer }: { offer: Offer }) {
   const submit = () => {
     if (!user) return navigate('/login', { state: { from: `/offers/${offer.id}` } })
     reserve.mutate(
-      { offerId: offer.id, quantity },
+      { offerId: offer.id, quantity, promoCode: applied?.code },
       { onSuccess: (reservation) => navigate(`/reservations/${reservation.id}`, { state: { justReserved: true } }) },
     )
   }
@@ -61,13 +71,47 @@ function ReservePanel({ offer }: { offer: Offer }) {
         {soldOut
           ? t('offer.soldOut')
           : user
-            ? t('offer.reserveFor', { price: formatMoney(offer.priceMinor * quantity, offer.currency) })
+            ? t('offer.reserveFor', { price: formatMoney(offer.priceMinor * quantity - (applied?.discountMinor ?? 0), offer.currency) })
             : t('offer.loginToReserve')}
       </Button>
       {error && (
         <p role="alert" className="text-center text-sm font-medium text-destructive">
           {error}
         </p>
+      )}
+      {user && !soldOut && (
+        <div className="text-center text-sm">
+          {applied ? (
+            <p className="font-semibold text-success">
+              {t('offer.promoApplied', { code: applied.code, amount: formatMoney(applied.discountMinor, offer.currency) })}{' '}
+              <button type="button" className="text-xs text-muted-foreground underline" onClick={() => setPromo(null)}>
+                {t('offer.promoRemove')}
+              </button>
+            </p>
+          ) : promoOpen ? (
+            <div className="flex gap-2">
+              <Input value={promoInput} onChange={(e) => setPromoInput(e.target.value.toUpperCase())} placeholder={t('offer.promoPlaceholder')} className="h-10 font-mono uppercase" aria-label={t('offer.promoPlaceholder')} />
+              <Button type="button" size="sm" variant="outline" className="h-10" disabled={promoInput.trim().length < 2 || check.isPending} onClick={() => applyPromo(promoInput.trim())}>
+                {check.isPending && <Loader2 className="animate-spin" />}
+                {t('offer.promoApply')}
+              </Button>
+            </div>
+          ) : (
+            <button type="button" className="text-xs font-semibold text-primary underline" onClick={() => setPromoOpen(true)}>
+              {t('offer.promoToggle')}
+            </button>
+          )}
+          {promoOpen && !applied && check.isError && (
+            <p role="alert" className="mt-1 text-xs text-destructive">
+              {check.error instanceof ApiError ? check.error.message : t('common.errorText')}
+            </p>
+          )}
+          {promo && !applied && (
+            <button type="button" className="mt-1 text-xs text-primary underline" onClick={() => applyPromo(promo.code)}>
+              {t('offer.promoApply')} {promo.code}
+            </button>
+          )}
+        </div>
       )}
       <p className="text-center text-xs text-muted-foreground">{t('offer.payAtPickup')}</p>
     </div>
@@ -186,7 +230,10 @@ export function OfferDetailsPage() {
                   {t('offer.save', { amount: formatMoney(offer.originalPriceMinor - offer.priceMinor, offer.currency) })}
                 </Badge>
               </div>
-              <Price priceMinor={offer.priceMinor} originalPriceMinor={offer.originalPriceMinor} currency={offer.currency} size="lg" />
+              <div className="flex flex-col items-end gap-1">
+                <Price priceMinor={offer.priceMinor} originalPriceMinor={offer.originalPriceMinor} currency={offer.currency} size="lg" />
+                <PriceDropBadge offer={offer} />
+              </div>
             </Card>
           </div>
 

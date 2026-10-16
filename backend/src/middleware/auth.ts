@@ -1,7 +1,9 @@
 import type { NextFunction, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env.js'
+import { can, type Permission } from '../config/permissions.js'
 import { User, type Role } from '../models/User.js'
+import { userForApiKey } from '../services/integration.service.js'
 import { ApiError } from '../utils/ApiError.js'
 
 interface TokenPayload {
@@ -18,7 +20,7 @@ function readUser(req: Request, strict: boolean): Request['user'] | null {
   if (!header?.startsWith('Bearer ')) return null
   try {
     const payload = jwt.verify(header.slice(7), env.JWT_SECRET) as TokenPayload
-    return { id: payload.sub, role: payload.role }
+    return { id: payload.sub, role: payload.role, staffOf: [] }
   } catch {
     if (!strict) return null
     throw ApiError.unauthorized('Sesija je istekla. Prijavite se ponovo.', 'INVALID_TOKEN')
@@ -30,12 +32,21 @@ function readUser(req: Request, strict: boolean): Request['user'] | null {
  * token), so role changes and deleted accounts take effect immediately.
  */
 export async function authenticate(req: Request, _res: Response, next: NextFunction) {
+  const apiKey = req.get('x-api-key')
+  if (apiKey) {
+    // Integration keys act as the partner, but never on account/admin endpoints.
+    if (/^\/api\/(auth|admin|push|support|partner\/api-keys|partner\/webhooks)/.test(req.originalUrl)) throw ApiError.forbidden('API ključ ne važi za ovu rutu.', 'API_KEY_NOT_ALLOWED')
+    const user = await userForApiKey(apiKey)
+    if (!user) throw ApiError.unauthorized('Neispravan API ključ.', 'INVALID_API_KEY')
+    req.user = user as Request['user']
+    return next()
+  }
   const token = readUser(req, true)
   if (!token) throw ApiError.unauthorized()
-  const user = await User.findById(token.id).select('role isBlocked deletedAt').lean()
+  const user = await User.findById(token.id).select('role isBlocked deletedAt staffOf').lean()
   if (!user || user.deletedAt) throw ApiError.unauthorized('Nalog više ne postoji.', 'USER_NOT_FOUND')
   if (user.isBlocked) throw ApiError.forbidden('Nalog je blokiran. Kontaktiraj podršku.', 'ACCOUNT_BLOCKED')
-  req.user = { id: token.id, role: user.role }
+  req.user = { id: token.id, role: user.role, staffOf: (user.staffOf ?? []).map(String) }
   next()
 }
 
@@ -43,6 +54,14 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
 export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   req.user = readUser(req, false) ?? undefined
   next()
+}
+
+/** Must run after `authenticate`. Platform permission check (see config/permissions). */
+export function requirePermission(permission: Permission) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user || !can(req.user.role, permission)) throw ApiError.forbidden()
+    next()
+  }
 }
 
 /** Must run after `authenticate`. */

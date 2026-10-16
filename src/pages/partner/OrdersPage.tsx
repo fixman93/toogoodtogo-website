@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { market } from '@/config/markets'
-import { PartnerGuard } from '@/features/business/PartnerGuard'
+import { StaffGuard } from '@/features/business/PartnerGuard'
 import { useCancelReservation, useCollectReservation, usePartnerOrders } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney, formatPickupWindow } from '@/lib/format'
@@ -156,9 +156,9 @@ export function OrdersPage() {
           </Button>
         }
       />
-      <PartnerGuard>
+      <StaffGuard>
         <Orders />
-      </PartnerGuard>
+      </StaffGuard>
     </div>
   )
 }

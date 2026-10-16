@@ -1,5 +1,5 @@
 import { market } from '@/config/markets'
-import { t } from '@/i18n'
+import { activeLocale, t } from '@/i18n'
 
 const moneyFormatters = new Map<string, Intl.NumberFormat>()
 
@@ -7,7 +7,7 @@ const moneyFormatters = new Map<string, Intl.NumberFormat>()
 export function formatMoney(amountMinor: number, currency = market.currency): string {
   let formatter = moneyFormatters.get(currency)
   if (!formatter) {
-    formatter = new Intl.NumberFormat(market.locale, {
+    formatter = new Intl.NumberFormat(activeLocale, {
       style: 'currency',
       currency,
       minimumFractionDigits: market.currencyDisplayDecimals,
@@ -18,7 +18,7 @@ export function formatMoney(amountMinor: number, currency = market.currency): st
   return formatter.format(amountMinor / market.currencyMinorUnits)
 }
 
-const decimal = new Intl.NumberFormat(market.locale, { maximumFractionDigits: 1 })
+const decimal = new Intl.NumberFormat(activeLocale, { maximumFractionDigits: 1 })
 
 export function formatDistance(meters?: number | null): string | null {
   if (meters == null) return null
@@ -37,7 +37,7 @@ function dayKey(date: Date, timeZone: string) {
 
 /** Formats a time in the business/market timezone, never the browser's. */
 export function formatTime(iso: string, timeZone = market.timezone): string {
-  return new Intl.DateTimeFormat(market.locale, { hour: '2-digit', minute: '2-digit', timeZone }).format(new Date(iso))
+  return new Intl.DateTimeFormat(activeLocale, { hour: '2-digit', minute: '2-digit', timeZone }).format(new Date(iso))
 }
 
 export function formatDayLabel(iso: string, timeZone = market.timezone): string {
@@ -47,7 +47,7 @@ export function formatDayLabel(iso: string, timeZone = market.timezone): string 
   const key = dayKey(date, timeZone)
   if (key === today) return t('common.today')
   if (key === tomorrow) return t('common.tomorrow')
-  return new Intl.DateTimeFormat(market.locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone }).format(date)
+  return new Intl.DateTimeFormat(activeLocale, { weekday: 'short', day: 'numeric', month: 'short', timeZone }).format(date)
 }
 
 /** "Danas 19:00–20:00" */
@@ -56,7 +56,7 @@ export function formatPickupWindow(startIso: string, endIso: string, timeZone = 
 }
 
 export function formatDate(iso: string, timeZone = market.timezone): string {
-  return new Intl.DateTimeFormat(market.locale, { day: 'numeric', month: 'long', year: 'numeric', timeZone }).format(new Date(iso))
+  return new Intl.DateTimeFormat(activeLocale, { day: 'numeric', month: 'long', year: 'numeric', timeZone }).format(new Date(iso))
 }
 
 export function discountPercent(original: number, price: number): number {

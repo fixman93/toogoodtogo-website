@@ -26,6 +26,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.removeQueries({ queryKey: ['reservations'] })
       queryClient.removeQueries({ queryKey: ['favorites'] })
       queryClient.setQueryData(ME_QUERY_KEY, user)
+      // Fetch the full profile (points, level, invite code) in the background.
+      void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY })
       return user
     },
     [queryClient],
@@ -36,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       isLoading,
       login: (email, password) => authApi.login({ email, password }).then(onAuthenticated),
-      register: (name, email, password) => authApi.register({ name, email, password }).then(onAuthenticated),
+      register: (name, email, password, referralCode) => authApi.register({ name, email, password, referralCode }).then(onAuthenticated),
       logout: () => {
         tokenStorage.clear()
         queryClient.setQueryData(ME_QUERY_KEY, null)
@@ -44,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         queryClient.removeQueries({ queryKey: ['favorites'] })
       },
       hasRole: (...roles: Role[]) => !!user && roles.includes(user.role),
+      can: (permission) => !!user?.permissions?.includes(permission),
     }),
     [user, isLoading, onAuthenticated, queryClient],
   )

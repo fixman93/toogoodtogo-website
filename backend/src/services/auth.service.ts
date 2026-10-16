@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { signToken } from '../middleware/auth.js'
+import { ensureReferralCode, findReferrer, levelFor } from './loyalty.service.js'
 import { randomBytes } from 'node:crypto'
 import {
   ACTIVE_RESERVATION_STATUSES,
@@ -16,11 +17,12 @@ import { serializeUser } from '../utils/serializers.js'
 
 const BCRYPT_ROUNDS = 12
 
-export async function register(input: { name: string; email: string; password: string }) {
+export async function register(input: { name: string; email: string; password: string; referralCode?: string }) {
   if (await User.exists({ email: input.email })) throw ApiError.conflict('Nalog sa ovom e-poštom već postoji.', 'EMAIL_TAKEN')
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS)
   // Self-registration always creates customers; partner/admin roles are granted by an admin.
-  const user = await User.create({ name: input.name, email: input.email, passwordHash, role: 'customer' })
+  const referrer = await findReferrer(input.referralCode)
+  const user = await User.create({ name: input.name, email: input.email, passwordHash, role: 'customer', referredBy: referrer?._id })
   return { user: serializeUser(user), token: signToken(user.id, user.role) }
 }
 
@@ -35,7 +37,8 @@ export async function login(input: { email: string; password: string }) {
 export async function me(userId: string) {
   const user = await User.findById(userId)
   if (!user) throw ApiError.unauthorized('Nalog više ne postoji.', 'USER_NOT_FOUND')
-  return serializeUser(user)
+  const referralCode = await ensureReferralCode(user._id)
+  return { ...serializeUser(user), points: user.points ?? 0, level: levelFor(user.points ?? 0), referralCode }
 }
 
 /**
@@ -71,4 +74,13 @@ export async function deleteAccount(userId: string, password: string) {
     Notification.deleteMany({ user: user._id }),
     PartnerApplication.deleteMany({ user: user._id, status: 'pending' }),
   ])
+}
+
+export async function updatePreferences(userId: string, prefs: { push?: boolean; email?: boolean }) {
+  const set: Record<string, boolean> = {}
+  if (prefs.push != null) set['notificationPrefs.push'] = prefs.push
+  if (prefs.email != null) set['notificationPrefs.email'] = prefs.email
+  const user = await User.findByIdAndUpdate(userId, { $set: set }, { new: true })
+  if (!user) throw ApiError.notFound('Nalog nije pronađen.')
+  return serializeUser(user)
 }

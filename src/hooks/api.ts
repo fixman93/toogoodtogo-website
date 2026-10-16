@@ -1,7 +1,7 @@
 /** TanStack Query hooks — the only way screens read or mutate server state. */
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, reservationsApi, waitlistApi } from '@/api/services'
-import type { ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
+import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, promotionsApi, reservationsApi, supportApi, waitlistApi } from '@/api/services'
+import type { Donation, PromotionInput, TicketCategory, TicketStatus, WebhookEvent, ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
 import { useAuth } from '@/features/auth/auth-context'
 
 export function useOffers(query: OfferQuery, options: { enabled?: boolean } = {}) {
@@ -77,7 +77,7 @@ export function useCollectReservation() {
 export function useCreateReservation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: reservationsApi.create,
+    mutationFn: (body: { offerId: string; quantity: number; promoCode?: string }) => reservationsApi.create(body),
     onSettled: () => {
       // Availability changed for everyone: refresh offers and my reservations.
       queryClient.invalidateQueries({ queryKey: ['offers'] })
@@ -369,4 +369,176 @@ export function useSetUserBlocked() {
 
 export function useAuditLog() {
   return useQuery({ queryKey: ['admin', 'audit'], queryFn: () => adminApi.audit({ limit: 100 }) })
+}
+
+// ---------------------------------------------------------------------------
+// Staff, preferences, support, promotions, donations, finance, integrations
+
+export function useStaff(businessId: string, enabled = true) {
+  return useQuery({ queryKey: ['businesses', businessId, 'staff'], queryFn: () => businessesApi.staff(businessId), enabled })
+}
+
+export function useAddStaff(businessId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (email: string) => businessesApi.addStaff(businessId, email),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['businesses', businessId, 'staff'] }),
+  })
+}
+
+export function useRemoveStaff(businessId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) => businessesApi.removeStaff(businessId, userId),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['businesses', businessId, 'staff'] }),
+  })
+}
+
+export function useWorkplaces(enabled: boolean) {
+  return useQuery({ queryKey: ['partner', 'workplaces'], queryFn: partnerApi.workplaces, enabled })
+}
+
+export function useUpdatePreferences() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: authApi.updatePreferences,
+    onSuccess: (user) => queryClient.setQueryData(['auth', 'me'], (prev: object | undefined) => ({ ...prev, ...user })),
+  })
+}
+
+export function useMyTickets() {
+  return useQuery({ queryKey: ['support', 'mine'], queryFn: supportApi.mine })
+}
+
+export function useTicket(id: string | undefined) {
+  return useQuery({ queryKey: ['support', 'ticket', id], queryFn: () => supportApi.get(id!), enabled: !!id, refetchInterval: 30_000 })
+}
+
+export function useCreateTicket() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { subject: string; category: TicketCategory; message: string; reservationId?: string }) => supportApi.create(body),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['support'] }),
+  })
+}
+
+export function useReplyTicket(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: string) => supportApi.reply(id, body),
+    onSuccess: (ticket) => queryClient.setQueryData(['support', 'ticket', id], ticket),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['support', 'mine'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'support'] })
+    },
+  })
+}
+
+export function useCloseTicket(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => supportApi.close(id),
+    onSuccess: (ticket) => queryClient.setQueryData(['support', 'ticket', id], ticket),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['support'] }),
+  })
+}
+
+export function useAdminTickets(status?: TicketStatus) {
+  return useQuery({ queryKey: ['admin', 'support', status], queryFn: () => adminApi.support({ status }) })
+}
+
+export function usePromotions(scope: 'mine' | 'platform' | 'all' = 'mine') {
+  return useQuery({ queryKey: ['promotions', scope], queryFn: () => promotionsApi.list(scope) })
+}
+
+export function useCreatePromotion() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: (body: PromotionInput) => promotionsApi.create(body), onSettled: () => queryClient.invalidateQueries({ queryKey: ['promotions'] }) })
+}
+
+export function useTogglePromotion() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => promotionsApi.update(id, { isActive }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['promotions'] }),
+  })
+}
+
+export function useCheckPromotion() {
+  return useMutation({ mutationFn: promotionsApi.check })
+}
+
+export function useDonations(admin = false) {
+  return useQuery({ queryKey: ['donations', admin ? 'admin' : 'mine'], queryFn: admin ? adminApi.donations : partnerApi.donations })
+}
+
+export function useAddDonation() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: (body: Omit<Donation, 'id' | 'businessName'>) => partnerApi.addDonation(body), onSettled: () => queryClient.invalidateQueries({ queryKey: ['donations'] }) })
+}
+
+export function useDeleteDonation() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: partnerApi.deleteDonation, onSettled: () => queryClient.invalidateQueries({ queryKey: ['donations'] }) })
+}
+
+export function useSuggestion(businessId: string | undefined, date: string | undefined) {
+  return useQuery({
+    queryKey: ['partner', 'suggestion', businessId, date],
+    queryFn: () => partnerApi.suggestion(businessId!, date!),
+    enabled: !!businessId && !!date,
+    staleTime: 600_000,
+  })
+}
+
+export function usePartnerStatement(month: string) {
+  return useQuery({ queryKey: ['partner', 'statement', month], queryFn: () => partnerApi.statement(month) })
+}
+
+export function usePlatformStatement(month: string) {
+  return useQuery({ queryKey: ['admin', 'statement', month], queryFn: () => adminApi.statement(month) })
+}
+
+export function useSetCommission() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ businessId, rate }: { businessId: string; rate: number | null }) => adminApi.setCommission(businessId, rate),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin', 'statement'] }),
+  })
+}
+
+export function useApiKeys() {
+  return useQuery({ queryKey: ['partner', 'api-keys'], queryFn: partnerApi.apiKeys })
+}
+
+export function useCreateApiKey() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: partnerApi.createApiKey, onSettled: () => queryClient.invalidateQueries({ queryKey: ['partner', 'api-keys'] }) })
+}
+
+export function useRevokeApiKey() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: partnerApi.revokeApiKey, onSettled: () => queryClient.invalidateQueries({ queryKey: ['partner', 'api-keys'] }) })
+}
+
+export function useWebhooks() {
+  return useQuery({ queryKey: ['partner', 'webhooks'], queryFn: partnerApi.webhooks })
+}
+
+export function useCreateWebhook() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { url: string; events?: WebhookEvent[] }) => partnerApi.createWebhook(body),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['partner', 'webhooks'] }),
+  })
+}
+
+export function useDeleteWebhook() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: partnerApi.deleteWebhook, onSettled: () => queryClient.invalidateQueries({ queryKey: ['partner', 'webhooks'] }) })
+}
+
+export function useTestWebhook() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: partnerApi.testWebhook, onSettled: () => queryClient.invalidateQueries({ queryKey: ['partner', 'webhooks'] }) })
 }

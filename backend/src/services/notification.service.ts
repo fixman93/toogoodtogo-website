@@ -3,9 +3,11 @@
  * not break the action that triggered it (reservation, cancellation, …).
  */
 import type { Types } from 'mongoose'
-import { Notification, type NotificationType } from '../models/index.js'
+import { Notification, User, type NotificationType } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import type { Actor } from './access.service.js'
+import { sendMail } from './mail.service.js'
+import { sendToUsers } from './push.service.js'
 
 export interface NotificationInput {
   type: NotificationType
@@ -19,8 +21,16 @@ export async function notify(userIds: (string | Types.ObjectId)[], input: Notifi
   if (!unique.length) return
   try {
     await Notification.insertMany(unique.map((user) => ({ user, ...input })))
+    // Deliver outside the app as well, respecting each user's preferences.
+    const users = await User.find({ _id: { $in: unique }, deletedAt: null, isBlocked: { $ne: true } }).select('email notificationPrefs').lean()
+    const pushTo = users.filter((u) => u.notificationPrefs?.push !== false).map((u) => u._id)
+    const mailTo = users.filter((u) => u.notificationPrefs?.email !== false)
+    await Promise.all([
+      sendToUsers(pushTo, input),
+      ...mailTo.map((u) => sendMail(u.email, input.title, input.body ?? '', input.link)),
+    ])
   } catch (error) {
-    console.error('Failed to create notifications', error)
+    console.error('Failed to deliver notifications', error)
   }
 }
 

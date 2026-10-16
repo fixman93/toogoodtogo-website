@@ -18,6 +18,8 @@ export interface IOffer {
   /** Prices in minor currency units (para, cents) to avoid float rounding. */
   priceMinor: number
   originalPriceMinor: number
+  /** Dynamic pricing: from `at` on, the offer automatically costs `priceMinor`. */
+  priceDrop?: { at: Date; priceMinor: number }
   currency: string
   quantityTotal: number
   /** Decremented atomically on reservation; never below zero. */
@@ -49,6 +51,10 @@ const offerSchema = new Schema<IOffer>(
     allergens: { type: [String], enum: ALLERGENS, default: [] },
     priceMinor: moneyMinor,
     originalPriceMinor: moneyMinor,
+    priceDrop: {
+      type: new Schema({ at: { type: Date, required: true }, priceMinor: moneyMinor }, { _id: false }),
+      default: undefined,
+    },
     currency: { type: String, required: true, uppercase: true, minlength: 3, maxlength: 3 },
     quantityTotal: { type: Number, required: true, min: 1, validate: Number.isInteger },
     quantityAvailable: { type: Number, required: true, min: 0, validate: Number.isInteger },
@@ -71,8 +77,21 @@ offerSchema.index({ status: 1, pickupEnd: 1, category: 1 })
 offerSchema.pre('validate', function () {
   if (this.pickupEnd <= this.pickupStart) this.invalidate('pickupEnd', 'pickupEnd must be after pickupStart')
   if (this.priceMinor > this.originalPriceMinor) this.invalidate('priceMinor', 'priceMinor cannot exceed originalPriceMinor')
+  if (this.priceDrop && this.priceDrop.priceMinor >= this.priceMinor) this.invalidate('priceDrop', 'priceDrop must be lower than priceMinor')
   if (this.quantityAvailable > this.quantityTotal) this.invalidate('quantityAvailable', 'quantityAvailable cannot exceed quantityTotal')
 })
 
 export type OfferDoc = HydratedDocument<IOffer>
 export const Offer = model<IOffer>('Offer', offerSchema)
+
+/** Price the customer pays right now (dynamic pricing applied). */
+export function effectivePriceMinor(offer: Pick<IOffer, 'priceMinor' | 'priceDrop'>, now = new Date()) {
+  return offer.priceDrop && offer.priceDrop.at <= now ? offer.priceDrop.priceMinor : offer.priceMinor
+}
+
+/** Same rule as an aggregation expression (for price filters/sorting/map pins). */
+export function effectivePriceExpr(now = new Date()) {
+  return {
+    $cond: [{ $and: [{ $ne: [{ $ifNull: ['$priceDrop', null] }, null] }, { $lte: ['$priceDrop.at', now] }] }, '$priceDrop.priceMinor', '$priceMinor'],
+  }
+}

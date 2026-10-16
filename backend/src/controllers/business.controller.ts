@@ -3,9 +3,11 @@ import { currentUser } from '../middleware/auth.js'
 import * as businessService from '../services/business.service.js'
 import * as offerService from '../services/offer.service.js'
 import * as reviewService from '../services/review.service.js'
+import * as staffService from '../services/staff.service.js'
 import { list, ok } from '../utils/respond.js'
 import { businessListQuery, createBusinessBody, updateBusinessBody } from '../validators/business.validators.js'
-import { idParams } from '../validators/common.js'
+import { z } from 'zod'
+import { idParams, objectId } from '../validators/common.js'
 import { manageOffersQuery } from '../validators/offer.validators.js'
 import { createReviewBody, reviewListQuery } from '../validators/review.validators.js'
 
@@ -45,4 +47,19 @@ export async function listBusinessOffers(req: Request, res: Response) {
   const { page, limit } = manageOffersQuery.parse(req.query)
   const result = await offerService.listForBusiness(idParams.parse(req.params).id, currentUser(req), page, limit)
   list(res, result.items, result.meta)
+}
+
+export async function listStaff(req: Request, res: Response) {
+  ok(res, await staffService.list(idParams.parse(req.params).id, currentUser(req)))
+}
+
+export async function addStaff(req: Request, res: Response) {
+  const { email } = z.object({ email: z.email().trim() }).parse(req.body)
+  ok(res, await staffService.add(idParams.parse(req.params).id, email, currentUser(req)), 201)
+}
+
+export async function removeStaff(req: Request, res: Response) {
+  const { id, userId } = z.object({ id: objectId, userId: objectId }).parse(req.params)
+  await staffService.remove(id, userId, currentUser(req))
+  res.status(204).end()
 }

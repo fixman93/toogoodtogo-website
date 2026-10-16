@@ -31,3 +31,12 @@ export function PartnerGuard({ children }: { children: ReactNode }) {
     </RoleGuard>
   )
 }
+
+/** Owners, their staff and admins (scanner + orders). */
+export function StaffGuard({ children }: { children: ReactNode }) {
+  return (
+    <RoleGuard roles={['business', 'staff', 'admin']} deniedText={t('business.noAccess')}>
+      {children}
+    </RoleGuard>
+  )
+}

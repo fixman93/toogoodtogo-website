@@ -274,15 +274,66 @@ owner-only list that includes paused and past offers).
 Planned next: recurring offers (e.g. "every weekday 19:30–20:30, 8 bags"),
 image upload, and staff accounts per location.
 
-## Roadmap (deliberately not built yet)
+## Roles and teams
 
-* Online payments, commissions, payouts and refunds. Pickup is paid in the
-  shop.
-* Staff accounts per location (scan-only) and granular admin roles
-  (operations, support, finance).
-* Push and e-mail notifications (in-app only today), and support tickets.
-* Dynamic pricing, donations, loyalty points, referrals and vouchers, AI
-  surplus prediction, POS/ERP integrations, delivery, and the Cyrillic script.
+| Role | Can |
+| --- | --- |
+| `customer` | Buy (reserve), favorites, reviews, support |
+| `business` (partner) | Everything in the partner portal for **own** locations |
+| `staff` | Scanner + orders for the locations they're assigned to (added by the owner under *Zaposleni*) |
+| `admin` | Super admin: everything, including roles |
+| `operations` | Applications, users (view and block), location moderation, reviews, platform promo codes, donations |
+| `support` | Support tickets, users and reservations (view), reviews |
+| `finance` | Monthly statements, commission rates, donations |
+
+Permissions are defined once in `backend/src/config/permissions.ts`. The admin
+panel shows only the tabs the role may use.
+
+## More features
+
+* **Cyrillic:** Profile → *Pismo*: Latinica / Ћирилица. The UI, dates and API
+  messages are transliterated; user content stays as entered.
+* **Notifications:**
+  * in-app (bell);
+  * **push on the phone**: web push + PWA. Needs `VAPID_*` env vars. On iPhone
+    it works only after *Add to Home Screen*;
+  * **e-mail**: needs `SMTP_URL`.
+
+  Users can switch push and e-mail on or off in Profile.
+* **Dynamic pricing:** a partner can set "from 20:30 the price drops to 199 RSD".
+  The new price applies automatically everywhere: cards, filters, map,
+  reservations.
+* **Promo codes:**
+  * a partner creates codes for their locations;
+  * operations creates platform-wide codes;
+  * the customer enters the code when reserving and pays the discounted price
+    in the shop;
+  * usage limits are enforced atomically, and cancelling a reservation gives
+    the use back.
+* **Loyalty:** +10 points per rescued bag, levels (Početnik → Legenda), and an
+  invite link: +50 for both when the friend collects their first bag.
+* **Support:** tickets from Profile or from a reservation, with replies from
+  the support team in the admin panel. Both sides are notified.
+* **Donations:** partners record unsold food donated to charities (bags, kg,
+  organization).
+* **Smart suggestion:** the offer form suggests a bag count, based on the same
+  weekday over the last 8 weeks.
+* **Monthly statement:**
+  * customers pay in the shop, so the partner owes the platform commission
+    (15% by default; finance can override it per location);
+  * discounts funded by the platform are credited back to the partner.
+* **Integrations** (POS/ERP):
+  * partner API keys (`X-Api-Key`) to publish offers, read orders and confirm
+    pickups;
+  * signed webhooks (`reservation.created/cancelled/collected`, header
+    `X-Zalogaj-Signature: sha256=HMAC(secret, body)`).
+
+## Roadmap (deliberately not built)
+
+* Online payments, payouts and refunds: customers pay in the shop.
+* Delivery, group orders, expiry tracking and labels for big chains, a
+  corporate impact dashboard, and specific POS vendor integrations (the API
+  keys and webhooks above are the foundation).
 
 ## Not included yet
 

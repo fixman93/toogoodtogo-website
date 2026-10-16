@@ -2,11 +2,16 @@ import { Schema, model, type Types } from 'mongoose'
 
 export const NOTIFICATION_TYPES = [
   'reservation_new',
+  'reservation_confirmed',
   'reservation_cancelled',
   'reservation_collected',
   'offer_new',
   'waitlist_available',
   'application_new',
+  'staff_added',
+  'support_new',
+  'support_reply',
+  'reward',
   'application_approved',
   'application_rejected',
 ] as const

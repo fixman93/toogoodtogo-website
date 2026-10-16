@@ -9,6 +9,11 @@ import { BusinessScanPage } from '@/pages/BusinessScanPage'
 import { LocationFormPage } from '@/pages/partner/LocationFormPage'
 import { OfferFormPage } from '@/pages/partner/OfferFormPage'
 import { SalesPage } from '@/pages/partner/SalesPage'
+import { DonationsPage } from '@/pages/partner/DonationsPage'
+import { IntegrationsPage } from '@/pages/partner/IntegrationsPage'
+import { PromotionsPage } from '@/pages/partner/PromotionsPage'
+import { StatementPage } from '@/pages/partner/StatementPage'
+import { SupportPage } from '@/pages/SupportPage'
 import { DiscoverPage } from '@/pages/DiscoverPage'
 import { FavoritesPage } from '@/pages/FavoritesPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
@@ -41,6 +46,12 @@ const router = createBrowserRouter([
       { path: 'business/scan', element: <BusinessScanPage /> },
       { path: 'business/sales', element: <SalesPage /> },
       { path: 'business/orders', element: <OrdersPage /> },
+      { path: 'business/promotions', element: <PromotionsPage /> },
+      { path: 'business/donations', element: <DonationsPage /> },
+      { path: 'business/statements', element: <StatementPage /> },
+      { path: 'business/integrations', element: <IntegrationsPage /> },
+      { path: 'support', element: <SupportPage /> },
+      { path: 'support/:id', element: <SupportPage /> },
       { path: 'business/locations/new', element: <LocationFormPage /> },
       { path: 'business/locations/:id/edit', element: <LocationFormPage /> },
       { path: 'business/offers/new', element: <OfferFormPage /> },

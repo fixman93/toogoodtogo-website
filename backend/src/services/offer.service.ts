@@ -1,7 +1,7 @@
 import { Types, type PipelineStage } from 'mongoose'
 import { env } from '../config/env.js'
 import { MARKETS, getMarket } from '../config/markets.js'
-import { Business, Favorite, Offer, Reservation, ACTIVE_RESERVATION_STATUSES, type IBusiness, type IOffer } from '../models/index.js'
+import { Business, Favorite, Offer, Reservation, ACTIVE_RESERVATION_STATUSES, effectivePriceExpr, type IBusiness, type IOffer } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { serializeOffer } from '../utils/serializers.js'
 import { escapeRegex } from '../utils/text.js'
@@ -22,7 +22,6 @@ function liveOfferMatch(query: OfferFilters, now = new Date()) {
   const match: Record<string, unknown> = { status: 'active', pickupEnd: { $gt: now } }
 
   if (query.category) match.category = query.category
-  if (query.maxPriceMinor) match.priceMinor = { $lte: query.maxPriceMinor }
   if (query.q) {
     const rx = new RegExp(escapeRegex(query.q), 'i')
     match.$or = [{ title: rx }, { businessName: rx }, { city: rx }]
@@ -58,10 +57,14 @@ export async function list(query: OfferListQuery) {
       ]
     : [{ $match: match }]
 
+  // Dynamic pricing: filter and sort on the price that applies right now.
+  pipeline.push({ $addFields: { effectivePrice: effectivePriceExpr() } })
+  if (query.maxPriceMinor) pipeline.push({ $match: { effectivePrice: { $lte: query.maxPriceMinor } } })
+
   const sort = query.sort ?? (hasOrigin ? 'distance' : 'pickup')
   const sortStage: Record<string, 1 | -1> = { soldOut: 1 }
   if (sort === 'distance' && hasOrigin) sortStage.distanceMeters = 1
-  else if (sort === 'price') sortStage.priceMinor = 1
+  else if (sort === 'price') sortStage.effectivePrice = 1
   else if (sort === 'popularity') sortStage.reservedCount = -1
   else if (sort === 'rating') sortStage['rating'] = -1
   sortStage.pickupStart = 1
@@ -148,6 +151,8 @@ export async function locations(query: OfferLocationsQuery) {
     minPriceMinor: number | null
   }>([
     { $match: match },
+    { $addFields: { effectivePrice: effectivePriceExpr() } },
+    ...(query.maxPriceMinor ? [{ $match: { effectivePrice: { $lte: query.maxPriceMinor } } }] : []),
     {
       $group: {
         _id: '$business',
@@ -158,7 +163,7 @@ export async function locations(query: OfferLocationsQuery) {
         offerCount: { $sum: 1 },
         availableBags: { $sum: '$quantityAvailable' },
         // $min ignores nulls: cheapest offer that still has bags.
-        minPriceMinor: { $min: { $cond: [{ $gt: ['$quantityAvailable', 0] }, '$priceMinor', null] } },
+        minPriceMinor: { $min: { $cond: [{ $gt: ['$quantityAvailable', 0] }, '$effectivePrice', null] } },
       },
     },
     { $limit: 2000 },
@@ -188,6 +193,9 @@ export async function create(input: CreateOfferInput, actor: Actor) {
   const business = await assertBusinessAccess(input.businessId, actor)
   if (!business.isActive) throw ApiError.conflict('Lokal nije aktivan.', 'BUSINESS_INACTIVE')
   if (input.pickupEnd <= new Date()) throw ApiError.badRequest('Vreme preuzimanja mora biti u budućnosti.', 'PICKUP_IN_PAST')
+  if (input.priceDrop && input.priceDrop.priceMinor >= input.priceMinor) {
+    throw ApiError.badRequest('Sniženje mora biti niže od osnovne cene.', 'INVALID_PRICE_DROP')
+  }
 
   const market = MARKETS[business.address.countryCode] ?? getMarket(env.DEFAULT_MARKET)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -221,14 +229,19 @@ export async function update(id: string, input: UpdateOfferInput, actor: Actor) 
 
   const merged = { ...offer.toObject(), ...input }
   if (merged.priceMinor >= merged.originalPriceMinor) throw ApiError.badRequest('Cena mora biti niža od redovne.', 'INVALID_PRICE')
+  if (merged.priceDrop && merged.priceDrop.priceMinor >= merged.priceMinor) {
+    throw ApiError.badRequest('Sniženje mora biti niže od osnovne cene.', 'INVALID_PRICE_DROP')
+  }
   if (merged.pickupEnd <= merged.pickupStart) throw ApiError.badRequest('Kraj preuzimanja mora biti posle početka.', 'INVALID_PICKUP')
   if ((input.pickupEnd || input.status === 'active') && merged.pickupEnd <= new Date()) {
     throw ApiError.badRequest('Vreme preuzimanja mora biti u budućnosti.', 'PICKUP_IN_PAST')
   }
 
-  const { quantityTotal, ...fields } = input
+  const { quantityTotal, priceDrop, ...fields } = input
   const filter: Record<string, unknown> = { _id: offer._id }
-  const change: { $set: Record<string, unknown>; $inc?: Record<string, number> } = { $set: fields }
+  const change: { $set: Record<string, unknown>; $inc?: Record<string, number>; $unset?: Record<string, 1> } = { $set: fields }
+  if (priceDrop === null) change.$unset = { priceDrop: 1 }
+  else if (priceDrop) change.$set.priceDrop = priceDrop
 
   if (quantityTotal != null && quantityTotal !== offer.quantityTotal) {
     // Adjust availability by the same delta; refuse to drop below what's already reserved.

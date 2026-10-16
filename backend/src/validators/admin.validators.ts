@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import { ROLES } from '../models/User.js'
 import { pagination } from './common.js'
 
-export const roleBody = z.object({ role: z.enum(['customer', 'business', 'admin']) })
+export const roleBody = z.object({ role: z.enum(ROLES) })
 
 export const adminUsersQuery = z.object({
   q: z.string().trim().max(100).optional(),
-  role: z.enum(['customer', 'business', 'admin']).optional(),
+  role: z.enum(ROLES).optional(),
   ...pagination,
   limit: z.coerce.number().int().min(1).max(100).default(50),
 })

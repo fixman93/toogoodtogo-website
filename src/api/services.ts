@@ -4,6 +4,20 @@
  */
 import { api } from './client'
 import type {
+  ApiKeyInfo,
+  Donation,
+  DonationList,
+  PartnerStatement,
+  PlatformStatement,
+  Promotion,
+  PromotionInput,
+  QuantitySuggestion,
+  StaffMember,
+  SupportTicket,
+  TicketCategory,
+  TicketStatus,
+  WebhookEvent,
+  WebhookInfo,
   AdminBusiness,
   AdminReview,
   AppNotification,
@@ -40,10 +54,11 @@ const unwrap = <T>(promise: Promise<{ data: ApiSuccess<T> }>) => promise.then((r
 
 export const authApi = {
   login: (body: { email: string; password: string }) => unwrap<AuthResult>(api.post('/auth/login', body)),
-  register: (body: { name: string; email: string; password: string }) =>
+  register: (body: { name: string; email: string; password: string; referralCode?: string }) =>
     unwrap<AuthResult>(api.post('/auth/register', body)),
   me: () => unwrap<User>(api.get('/auth/me')),
   deleteAccount: (password: string) => api.delete('/auth/me', { data: { password } }).then(() => undefined),
+  updatePreferences: (prefs: { push?: boolean; email?: boolean }) => unwrap<User>(api.patch('/auth/me/preferences', prefs)),
 }
 
 export const offersApi = {
@@ -65,6 +80,9 @@ export const businessesApi = {
   remove: (id: string) => api.delete(`/businesses/${id}`).then(() => undefined),
   /** Partner view: every offer of the location, including paused and past ones. */
   offers: (id: string) => api.get<ApiList<Offer>>(`/businesses/${id}/offers`).then((res) => res.data),
+  staff: (id: string) => unwrap<StaffMember[]>(api.get(`/businesses/${id}/staff`)),
+  addStaff: (id: string, email: string) => unwrap<StaffMember>(api.post(`/businesses/${id}/staff`, { email })),
+  removeStaff: (id: string, userId: string) => api.delete(`/businesses/${id}/staff/${userId}`).then(() => undefined),
   reviews: (id: string) => api.get<ApiList<Review>>(`/businesses/${id}/reviews`).then((res) => res.data),
   addReview: (id: string, body: { reservationId: string; rating: number; comment?: string }) =>
     unwrap<Review>(api.post(`/businesses/${id}/reviews`, body)),
@@ -74,7 +92,7 @@ export const reservationsApi = {
   list: (params: { scope?: 'upcoming' | 'history'; businessId?: string; limit?: number } = {}) =>
     api.get<ApiList<Reservation>>('/reservations', { params }).then((res) => res.data),
   get: (id: string) => unwrap<Reservation>(api.get(`/reservations/${id}`)),
-  create: (body: { offerId: string; quantity: number }) => unwrap<Reservation>(api.post('/reservations', body)),
+  create: (body: { offerId: string; quantity: number; promoCode?: string }) => unwrap<Reservation>(api.post('/reservations', body)),
   cancel: (id: string) => unwrap<Reservation>(api.patch(`/reservations/${id}/cancel`)),
   /** Secret link a friend can use to pick the bag up. */
   share: (id: string) => unwrap<{ token: string }>(api.post(`/reservations/${id}/share`)),
@@ -108,6 +126,10 @@ export const adminApi = {
   decideApplication: (id: string, body: { status: 'approved' | 'rejected'; note?: string }) =>
     unwrap<PartnerApplication>(api.patch(`/admin/applications/${id}`, body)),
   audit: (params: { limit?: number }) => api.get<ApiList<AuditEntry>>('/admin/audit', { params }).then((res) => res.data),
+  support: (params: { status?: TicketStatus }) => api.get<ApiList<SupportTicket>>('/admin/support', { params }).then((res) => res.data),
+  statement: (month: string) => unwrap<PlatformStatement>(api.get('/admin/statements', { params: { month } })),
+  setCommission: (businessId: string, rate: number | null) => unwrap<{ businessId: string; commissionRate: number | null }>(api.patch(`/admin/businesses/${businessId}/commission`, { rate })),
+  donations: () => unwrap<DonationList>(api.get('/admin/donations')),
 }
 
 export const partnerApi = {
@@ -117,6 +139,42 @@ export const partnerApi = {
     api.get<{ data: Reservation[]; meta: { date: string; total: number } }>('/partner/orders', { params }).then((res) => res.data),
   apply: (body: PartnerApplicationInput) => unwrap<PartnerApplication>(api.post('/partner-applications', body)),
   myApplication: () => unwrap<PartnerApplication | null>(api.get('/partner-applications/me')),
+  workplaces: () => unwrap<{ id: string; name: string; address: { street: string; city: string } }[]>(api.get('/partner/workplaces')),
+  suggestion: (businessId: string, date: string) => unwrap<QuantitySuggestion>(api.get('/partner/suggestion', { params: { businessId, date } })),
+  donations: () => unwrap<DonationList>(api.get('/partner/donations')),
+  addDonation: (body: Omit<Donation, 'id' | 'businessName'>) => unwrap<Donation>(api.post('/partner/donations', body)),
+  deleteDonation: (id: string) => api.delete(`/partner/donations/${id}`).then(() => undefined),
+  statement: (month: string) => unwrap<PartnerStatement>(api.get('/partner/statements', { params: { month } })),
+  apiKeys: () => unwrap<ApiKeyInfo[]>(api.get('/partner/api-keys')),
+  createApiKey: (name: string) => unwrap<ApiKeyInfo>(api.post('/partner/api-keys', { name })),
+  revokeApiKey: (id: string) => api.delete(`/partner/api-keys/${id}`).then(() => undefined),
+  webhooks: () => unwrap<WebhookInfo[]>(api.get('/partner/webhooks')),
+  createWebhook: (body: { url: string; events?: WebhookEvent[] }) => unwrap<WebhookInfo>(api.post('/partner/webhooks', body)),
+  updateWebhook: (id: string, body: { isActive?: boolean }) => unwrap<WebhookInfo>(api.patch(`/partner/webhooks/${id}`, body)),
+  deleteWebhook: (id: string) => api.delete(`/partner/webhooks/${id}`).then(() => undefined),
+  testWebhook: (id: string) => unwrap<{ status: number }>(api.post(`/partner/webhooks/${id}/test`)),
+}
+
+export const supportApi = {
+  mine: () => unwrap<SupportTicket[]>(api.get('/support')),
+  get: (id: string) => unwrap<SupportTicket>(api.get(`/support/${id}`)),
+  create: (body: { subject: string; category: TicketCategory; message: string; reservationId?: string }) => unwrap<SupportTicket>(api.post('/support', body)),
+  reply: (id: string, body: string) => unwrap<SupportTicket>(api.post(`/support/${id}/messages`, { body })),
+  close: (id: string) => unwrap<SupportTicket>(api.patch(`/support/${id}/close`)),
+}
+
+export const promotionsApi = {
+  list: (scope: 'mine' | 'platform' | 'all' = 'mine') => unwrap<Promotion[]>(api.get('/promotions', { params: { scope } })),
+  create: (body: PromotionInput) => unwrap<Promotion>(api.post('/promotions', body)),
+  update: (id: string, body: { isActive?: boolean }) => unwrap<Promotion>(api.patch(`/promotions/${id}`, body)),
+  check: (body: { code: string; offerId: string; quantity: number }) =>
+    unwrap<{ code: string; description?: string; discountMinor: number; totalMinor: number }>(api.post('/promotions/check', body)),
+}
+
+export const pushApi = {
+  key: () => unwrap<{ enabled: boolean; publicKey: string | null }>(api.get('/push/key')),
+  subscribe: (sub: PushSubscriptionJSON) => api.post('/push/subscriptions', sub).then(() => undefined),
+  unsubscribe: (endpoint: string) => api.delete('/push/subscriptions', { data: { endpoint } }).then(() => undefined),
 }
 
 export const notificationsApi = {

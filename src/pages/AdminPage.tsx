@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { Ban, CalendarCheck, ClipboardList, History, Leaf, Loader2, MapPin, MessageSquare, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import type { AdminBusiness, AdminReview, AdminUser, ApplicationStatus, PartnerApplication, ReservationStatus, Role } from '@/api/types'
+import { PLATFORM_ROLES, type AdminBusiness, type AdminReview, type AdminUser, type ApplicationStatus, type PartnerApplication, type Permission, type PlatformStatement, type ReservationStatus, type Role, type TicketStatus } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
@@ -24,7 +24,12 @@ import {
   useAdminReviews,
   useAdminStats,
   useAdminUsers,
+  useAdminTickets,
   useAuditLog,
+  useDonations,
+  usePlatformStatement,
+  useSetCommission,
+  useTicket,
   useDecideApplication,
   useSetBusinessActive,
   useSetReviewHidden,
@@ -33,13 +38,32 @@ import {
 } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatDate, formatDayLabel, formatMoney, formatPickupWindow, formatTime } from '@/lib/format'
+import { currentMonth } from '@/lib/time'
+import { TicketStatusBadge, TicketThread } from '@/features/support/TicketThread'
+import { PromotionsManager } from '@/features/promotions/PromotionsManager'
+import { DonationTable } from '@/pages/partner/DonationsPage'
+import { StatementSummary } from '@/pages/partner/StatementPage'
 import { cn } from '@/lib/utils'
 
-const TABS = ['overview', 'applications', 'users', 'businesses', 'reservations', 'reviews', 'audit'] as const
+const TABS = ['overview', 'applications', 'users', 'businesses', 'reservations', 'reviews', 'support', 'promotions', 'finance', 'donations', 'audit'] as const
 type Tab = (typeof TABS)[number]
-const ROLES: Role[] = ['customer', 'business', 'admin']
+/** Which permission each tab needs (mirrors the API). */
+const TAB_PERMISSION: Record<Tab, Permission> = {
+  overview: 'stats.view',
+  applications: 'applications.manage',
+  users: 'users.view',
+  businesses: 'businesses.moderate',
+  reservations: 'reservations.view',
+  reviews: 'reviews.moderate',
+  support: 'support.manage',
+  promotions: 'promotions.manage',
+  finance: 'finance.view',
+  donations: 'donations.view',
+  audit: 'audit.view',
+}
+const ROLES: Role[] = ['customer', 'business', 'staff', 'admin', 'operations', 'support', 'finance']
 const PAGE = 50
-const ROLE_BADGE = { customer: 'muted', business: 'default', admin: 'accent' } as const
+const ROLE_BADGE = { customer: 'muted', business: 'default', staff: 'secondary', admin: 'accent', operations: 'accent', support: 'accent', finance: 'accent' } as const
 
 /** Text input that reports its value 300 ms after the user stops typing. */
 function SearchBox({ placeholder, onSearch }: { placeholder: string; onSearch: (value: string) => void }) {
@@ -135,6 +159,8 @@ function Overview() {
 // Users
 
 function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
+  const { can } = useAuth()
+  const canRoles = can('users.roles')
   const setRole = useSetUserRole()
   const block = useSetUserBlocked()
   const [role, setLocalRole] = useState<Role>(user.role)
@@ -173,6 +199,8 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
           </label>
           <NativeSelect
             id={`role-${user.id}`}
+            disabled={!canRoles}
+            title={canRoles ? undefined : t('admin.rolesSuperOnly')}
             value={role}
             onChange={(e) => {
               setLocalRole(e.target.value as Role)
@@ -186,7 +214,7 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
               </option>
             ))}
           </NativeSelect>
-          {user.role !== 'admin' && !changed && (
+          {can('users.block') && !PLATFORM_ROLES.includes(user.role) && !changed && (
             <Button
               size="sm"
               variant={user.isBlocked ? 'secondary' : 'ghost'}
@@ -593,22 +621,151 @@ function AuditTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Support tickets
+
+function TicketDetails({ id }: { id: string }) {
+  const { data, isLoading } = useTicket(id)
+  if (isLoading || !data) return <Skeleton className="h-32" />
+  return <TicketThread ticket={data} asTeam />
+}
+
+function SupportTab() {
+  const [status, setStatus] = useState<TicketStatus | undefined>('open')
+  const [openId, setOpenId] = useState<string>()
+  const { data, isLoading, isError, refetch } = useAdminTickets(status)
+  return (
+    <div className="space-y-4">
+      <Chips<TicketStatus>
+        value={status}
+        onChange={setStatus}
+        options={[
+          { value: 'open', label: t('support.status.open') },
+          { value: 'answered', label: t('support.status.answered') },
+          { value: 'closed', label: t('support.status.closed') },
+          { label: t('admin.all') },
+        ]}
+      />
+      {isLoading ? (
+        <Skeleton className="h-40 rounded-2xl" />
+      ) : isError ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : !data?.data.length ? (
+        <EmptyState icon={MessageSquare} title={t('admin.noResults')} />
+      ) : (
+        <Card className="overflow-hidden">
+          <ul className="divide-y">
+            {data.data.map((ticket) => (
+              <li key={ticket.id} className="space-y-3 p-4">
+                <button type="button" className="flex w-full items-start justify-between gap-3 text-left" onClick={() => setOpenId(openId === ticket.id ? undefined : ticket.id)}>
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold">{ticket.subject}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {ticket.user?.name} · {t(`support.category.${ticket.category}`)} · {formatDayLabel(ticket.lastMessageAt)} {formatTime(ticket.lastMessageAt)}
+                    </span>
+                  </span>
+                  <TicketStatusBadge status={ticket.status} />
+                </button>
+                {openId === ticket.id && <TicketDetails id={ticket.id} />}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Finance: monthly platform statement + commission overrides
+
+function CommissionEditor({ businessId, rate }: { businessId: string; rate: number }) {
+  const set = useSetCommission()
+  const [value, setValue] = useState(String(Math.round(rate * 1000) / 10))
+  return (
+    <span className="flex items-center gap-1.5">
+      <Input type="number" min={0} max={50} step={0.5} value={value} onChange={(e) => setValue(e.target.value)} className="h-8 w-20 rounded-lg px-2 text-sm" aria-label={t('admin.commission')} />
+      <span className="text-xs">%</span>
+      <Button size="sm" variant="outline" className="h-8" disabled={set.isPending} onClick={() => set.mutate({ businessId, rate: Number(value) / 100 })}>
+        {t('admin.setCommission')}
+      </Button>
+    </span>
+  )
+}
+
+function FinanceTab() {
+  const [month, setMonth] = useState(currentMonth())
+  const { data, isLoading, isError, refetch } = usePlatformStatement(month)
+  return (
+    <div className="space-y-4">
+      <Input type="month" value={month} max={currentMonth()} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-10 w-auto rounded-full" aria-label={t('statement.month')} />
+      {isLoading ? (
+        <Skeleton className="h-40 rounded-2xl" />
+      ) : isError || !data ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : (
+        <>
+          <Card className="p-5">
+            <StatementSummary s={data} currency={data.currency} />
+          </Card>
+          <Card className="overflow-hidden">
+            <ul className="divide-y">
+              {(data as PlatformStatement).partners.map((p) => (
+                <li key={p.ownerId} className="space-y-2 p-4 text-sm">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="font-semibold">
+                      {p.name} <span className="font-normal text-muted-foreground">{p.email}</span>
+                    </span>
+                    <span className="font-bold tabular-nums">
+                      {formatMoney(p.balanceMinor, data.currency)} <span className="font-normal text-muted-foreground">/ {formatMoney(p.grossMinor, data.currency)}</span>
+                    </span>
+                  </div>
+                  <ul className="space-y-1.5">
+                    {p.businesses.map((b) => (
+                      <li key={b.businessId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                        <span>
+                          {b.name} · {b.orders} · {formatMoney(b.grossMinor, data.currency)}
+                        </span>
+                        <CommissionEditor businessId={b.businessId} rate={b.rate} />
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </>
+      )}
+    </div>
+  )
+}
+
+function DonationsTab() {
+  const { data, isLoading, isError, refetch } = useDonations(true)
+  if (isLoading) return <Skeleton className="h-40 rounded-2xl" />
+  if (isError || !data) return <ErrorState onRetry={() => refetch()} />
+  return <DonationTable list={data} />
+}
+
+// ---------------------------------------------------------------------------
 
 function AdminPanel() {
+  const { can } = useAuth()
   const [params, setParams] = useSearchParams()
-  const tab: Tab = TABS.includes(params.get('tab') as Tab) ? (params.get('tab') as Tab) : 'overview'
+  const visible = TABS.filter((id) => can(TAB_PERMISSION[id]))
+  const requested = params.get('tab') as Tab
+  const tab: Tab = visible.includes(requested) ? requested : visible[0]
 
   return (
     <div className="space-y-5">
       <div role="tablist" className="scrollbar-none -mx-4 flex max-w-[calc(100%+2rem)] overflow-x-auto px-4 sm:mx-0 sm:max-w-full sm:px-0">
         <div className="inline-flex shrink-0 rounded-full bg-muted p-1">
-        {TABS.map((id) => (
+        {visible.map((id) => (
           <button
             key={id}
             role="tab"
             type="button"
             aria-selected={tab === id}
-            onClick={() => setParams(id === 'overview' ? {} : { tab: id }, { replace: true })}
+            onClick={() => setParams(id === visible[0] ? {} : { tab: id }, { replace: true })}
             className={cn(
               'h-10 shrink-0 rounded-full px-4 text-sm font-semibold whitespace-nowrap transition-all sm:px-5',
               tab === id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
@@ -625,6 +782,10 @@ function AdminPanel() {
       {tab === 'applications' && <ApplicationsTab />}
       {tab === 'reservations' && <ReservationsTab />}
       {tab === 'reviews' && <ReviewsTab />}
+      {tab === 'support' && <SupportTab />}
+      {tab === 'promotions' && <PromotionsManager platform />}
+      {tab === 'finance' && <FinanceTab />}
+      {tab === 'donations' && <DonationsTab />}
       {tab === 'audit' && <AuditTab />}
     </div>
   )
@@ -634,7 +795,7 @@ export function AdminPage() {
   return (
     <div>
       <PageHeader title={t('admin.title')} subtitle={t('admin.intro')} />
-      <RoleGuard roles={['admin']} deniedText={t('admin.noAccess')}>
+      <RoleGuard roles={PLATFORM_ROLES} deniedText={t('admin.noAccess')}>
         <AdminPanel />
       </RoleGuard>
     </div>

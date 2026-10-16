@@ -14,6 +14,8 @@ export interface Market {
   maxQuantityPerReservation: number
   /** Unclaimed reservations become "expired" this long after pickup ends. */
   expiryGraceMinutes: number
+  /** Platform commission on collected sales (0.15 = 15%); can be overridden per location. */
+  commissionRate: number
 }
 
 export const MARKETS: Record<string, Market> = {
@@ -26,6 +28,7 @@ export const MARKETS: Record<string, Market> = {
     cancellationCutoffMinutes: 30,
     maxQuantityPerReservation: 4,
     expiryGraceMinutes: 60,
+    commissionRate: 0.15,
   },
 }
 

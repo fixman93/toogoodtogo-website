@@ -30,6 +30,8 @@ const offerFields = {
   contentType: z.enum(['surprise', 'known']).optional(),
   contents: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
   allergens: z.array(z.enum(ALLERGENS)).max(ALLERGENS.length).optional(),
+  /** Dynamic pricing; `null` removes it. */
+  priceDrop: z.object({ at: z.coerce.date(), priceMinor: z.number().int().positive() }).nullable().optional(),
   priceMinor: z.number().int().positive(),
   originalPriceMinor: z.number().int().positive(),
   quantityTotal: z.number().int().min(1).max(500),

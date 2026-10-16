@@ -5,6 +5,14 @@ import { getMarket } from '../config/markets.js'
 import * as applicationService from '../services/application.service.js'
 import * as reservationService from '../services/reservation.service.js'
 import * as salesService from '../services/sales.service.js'
+import * as staffService from '../services/staff.service.js'
+import * as donationService from '../services/donation.service.js'
+import * as integrationService from '../services/integration.service.js'
+import * as statementService from '../services/statement.service.js'
+import * as suggestionService from '../services/suggestion.service.js'
+import { z } from 'zod'
+import { WEBHOOK_EVENTS } from '../models/index.js'
+import { idParams, objectId } from '../validators/common.js'
 import { ok } from '../utils/respond.js'
 import { applicationBody, ordersQuery, salesQuery } from '../validators/partner.validators.js'
 
@@ -25,4 +33,73 @@ export async function applyAsPartner(req: Request, res: Response) {
 
 export async function myApplication(req: Request, res: Response) {
   ok(res, await applicationService.mine(currentUser(req)))
+}
+
+export async function myWorkplaces(req: Request, res: Response) {
+  ok(res, await staffService.myWorkplaces(currentUser(req)))
+}
+
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+const month = z.string().regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM')
+
+export async function suggestion(req: Request, res: Response) {
+  const { businessId, date } = z.object({ businessId: objectId, date: ymd }).parse(req.query)
+  ok(res, await suggestionService.suggestQuantity(businessId, date, currentUser(req)))
+}
+
+const donationBody = z.object({
+  businessId: objectId,
+  date: z.coerce.date(),
+  organization: z.string().trim().min(2).max(120),
+  bags: z.number().int().min(0).max(10000).default(0),
+  weightKg: z.number().min(0).max(100000).optional(),
+  items: z.string().trim().max(500).optional(),
+  pickedUpBy: z.string().trim().max(120).optional(),
+  note: z.string().trim().max(500).optional(),
+})
+export async function listDonations(req: Request, res: Response) {
+  ok(res, await donationService.mine(currentUser(req)))
+}
+export async function createDonation(req: Request, res: Response) {
+  ok(res, await donationService.create(donationBody.parse(req.body), currentUser(req)), 201)
+}
+export async function deleteDonation(req: Request, res: Response) {
+  await donationService.remove(idParams.parse(req.params).id, currentUser(req))
+  res.status(204).end()
+}
+
+export async function statement(req: Request, res: Response) {
+  const { month: m } = z.object({ month }).parse(req.query)
+  ok(res, await statementService.partnerStatement(currentUser(req), m))
+}
+
+export async function listApiKeys(req: Request, res: Response) {
+  ok(res, await integrationService.listKeys(currentUser(req)))
+}
+export async function createApiKey(req: Request, res: Response) {
+  const { name } = z.object({ name: z.string().trim().min(2).max(80) }).parse(req.body)
+  ok(res, await integrationService.createKey(currentUser(req), name), 201)
+}
+export async function revokeApiKey(req: Request, res: Response) {
+  await integrationService.revokeKey(currentUser(req), idParams.parse(req.params).id)
+  res.status(204).end()
+}
+
+const webhookBody = z.object({ url: z.url().max(500), events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).optional() })
+export async function listWebhooks(req: Request, res: Response) {
+  ok(res, await integrationService.listWebhooks(currentUser(req)))
+}
+export async function createWebhook(req: Request, res: Response) {
+  ok(res, await integrationService.createWebhook(currentUser(req), webhookBody.parse(req.body)), 201)
+}
+export async function updateWebhook(req: Request, res: Response) {
+  const body = webhookBody.partial().extend({ isActive: z.boolean().optional() }).parse(req.body)
+  ok(res, await integrationService.updateWebhook(currentUser(req), idParams.parse(req.params).id, body))
+}
+export async function deleteWebhook(req: Request, res: Response) {
+  await integrationService.deleteWebhook(currentUser(req), idParams.parse(req.params).id)
+  res.status(204).end()
+}
+export async function testWebhook(req: Request, res: Response) {
+  ok(res, await integrationService.testWebhook(currentUser(req), idParams.parse(req.params).id))
 }

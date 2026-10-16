@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Bell, ChevronRight, Cloud, Globe, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
+import { Bell, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -9,14 +9,16 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { market } from '@/config/markets'
 import { useAuth } from '@/features/auth/auth-context'
-import { useDeleteAccount, useReservations } from '@/hooks/api'
-import { t } from '@/i18n'
+import { PLATFORM_ROLES } from '@/api/types'
+import { useDeleteAccount, useReservations, useUpdatePreferences } from '@/hooks/api'
+import { currentSubscription, disablePush, enablePush, pushSupported } from '@/lib/push'
+import { activeLocale, localize, setScript, script, t } from '@/i18n'
 import { formatDate, formatMoney } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 /** Rough CO2e avoided per rescued bag (kg) — same estimate as the backend. */
 const CO2E_KG_PER_BAG = 2.7
-const co2Formatter = new Intl.NumberFormat(market.locale, { maximumFractionDigits: 1 })
+const co2Formatter = new Intl.NumberFormat(activeLocale, { maximumFractionDigits: 1 })
 
 function DeleteAccount() {
   const { logout } = useAuth()
@@ -107,9 +109,132 @@ function SettingRow({ icon: Icon, label, value, children }: { icon: typeof Globe
   )
 }
 
+function Switch({ on, onToggle, label, disabled }: { on: boolean; onToggle: () => void; label: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onToggle}
+      className={cn('relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50', on ? 'bg-primary' : 'bg-input')}
+    >
+      <span className={cn('absolute top-1 size-5 rounded-full bg-white shadow transition-all', on ? 'left-6' : 'left-1')} />
+    </button>
+  )
+}
+
+/** Push on this device + e-mail preference. */
+function NotificationSettings() {
+  const { user } = useAuth()
+  const prefs = useUpdatePreferences()
+  const [pushOn, setPushOn] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<string | null>(pushSupported() ? null : t('profile.pushUnsupported'))
+  useEffect(() => {
+    void currentSubscription().then((sub) => setPushOn(!!sub))
+  }, [])
+
+  const togglePush = async () => {
+    setBusy(true)
+    setMessage(null)
+    try {
+      if (pushOn) {
+        await disablePush()
+        setPushOn(false)
+      } else {
+        const result = await enablePush()
+        if (result === 'enabled') setPushOn(true)
+        else setMessage(t(result === 'denied' ? 'profile.pushDenied' : result === 'server-disabled' ? 'profile.pushDisabled' : 'profile.pushUnsupported'))
+      }
+    } catch {
+      // e.g. the browser has no push service (some privacy modes) — explain instead of failing.
+      setMessage(t('profile.pushUnsupported'))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const emailOn = user?.notificationPrefs?.email !== false
+  return (
+    <>
+      <SettingRow icon={Bell} label={t('profile.pushNotifications')}>
+        <Switch on={pushOn} onToggle={togglePush} label={t('profile.pushNotifications')} disabled={busy || !pushSupported()} />
+      </SettingRow>
+      {message && <p className="px-4 py-2 text-xs text-muted-foreground">{message}</p>}
+      <SettingRow icon={Mail} label={t('profile.emailNotifications')}>
+        <Switch on={emailOn} onToggle={() => prefs.mutate({ email: !emailOn })} label={t('profile.emailNotifications')} disabled={prefs.isPending} />
+      </SettingRow>
+    </>
+  )
+}
+
+/** Loyalty points, level progress and the personal invite link. */
+function Rewards() {
+  const { user } = useAuth()
+  const [copied, setCopied] = useState(false)
+  if (!user?.level) return null
+  const points = user.points ?? 0
+  const level = user.level
+  const progress = level.nextAt ? Math.min(100, Math.round((points / level.nextAt) * 100)) : 100
+  const inviteUrl = user.referralCode ? `${window.location.origin}/register?ref=${user.referralCode}` : null
+
+  const share = async () => {
+    if (!inviteUrl) return
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Zalogaj', text: t('profile.inviteMessage'), url: inviteUrl })
+        return
+      } catch {
+        /* closed */
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopied(true)
+    } catch {
+      /* blocked */
+    }
+  }
+
+  return (
+    <Card className="space-y-3 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm text-muted-foreground">{t('profile.level')}</p>
+          <p className="flex items-center gap-2 text-lg font-extrabold">
+            <Trophy className="size-5 text-accent-foreground" />
+            {localize(level.name)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-extrabold tabular-nums">{points}</p>
+          <p className="text-sm text-muted-foreground">{t('profile.points')}</p>
+        </div>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+        <div className="h-full rounded-full bg-accent" style={{ width: `${progress}%` }} />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {level.nextAt ? t('profile.nextLevel', { points: level.nextAt - points, level: localize(level.nextName ?? '') }) : t('profile.maxLevel')} · {t('profile.pointsHint')}
+      </p>
+      {inviteUrl && (
+        <div className="space-y-2 border-t pt-3">
+          <p className="font-semibold">{t('profile.invite')}</p>
+          <p className="text-sm text-muted-foreground">{t('profile.inviteText')}</p>
+          <Button variant="outline" size="sm" onClick={share}>
+            <Gift />
+            {t('profile.inviteShare')}
+          </Button>
+          {copied && <p className="text-xs font-semibold text-success">{t('profile.inviteCopied')}</p>}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function Profile() {
   const { user, logout, hasRole } = useAuth()
-  const [notifications, setNotifications] = useState(() => localStorage.getItem('zalogaj.notifications') !== 'off')
   if (!user) return null
   const initials = user.name
     .split(' ')
@@ -135,6 +260,8 @@ function Profile() {
         <Impact />
       </section>
 
+      <Rewards />
+
       {hasRole('customer') && (
         <Link to="/partner/apply" className="flex min-h-14 items-center gap-3 rounded-2xl border border-dashed border-primary/40 px-4 py-3">
           <Store className="size-5 text-primary" />
@@ -146,42 +273,49 @@ function Profile() {
         </Link>
       )}
 
-      {hasRole('business', 'admin') && (
+      {hasRole('business', 'admin', 'staff') && (
         <Link to="/business" className="flex min-h-14 items-center gap-3 rounded-2xl bg-secondary px-4 font-semibold text-secondary-foreground">
           <Store className="size-5" />
-          <span className="flex-1">{t('profile.businessPortal')}</span>
+          <span className="flex-1">{hasRole('staff') ? t('profile.staffPortal') : t('profile.businessPortal')}</span>
           <ChevronRight className="size-5" />
         </Link>
       )}
-      {hasRole('admin') && (
+      {hasRole(...PLATFORM_ROLES) && (
         <Link to="/admin" className="flex min-h-14 items-center gap-3 rounded-2xl bg-accent/30 px-4 font-semibold text-accent-foreground">
           <ShieldCheck className="size-5" />
-          <span className="flex-1">{t('admin.title')}</span>
+          <span className="flex-1">{hasRole('admin') ? t('admin.title') : t('admin.teamPanel')}</span>
           <ChevronRight className="size-5" />
         </Link>
       )}
+      <Link to="/support" className="flex min-h-14 items-center gap-3 rounded-2xl border px-4 font-semibold">
+        <LifeBuoy className="size-5 text-primary" />
+        <span className="flex-1">{t('profile.support')}</span>
+        <ChevronRight className="size-5" />
+      </Link>
 
       <section className="space-y-3">
         <h2 className="font-bold">{t('profile.settings')}</h2>
         <Card className="divide-y">
-          <SettingRow icon={Globe} label={t('profile.language')} value="Srpski (latinica)" />
-          <SettingRow icon={Globe} label={t('profile.country')} value={market.name} />
-          <SettingRow icon={Wallet} label={t('profile.currency')} value={market.currency} />
-          <SettingRow icon={Bell} label={t('profile.notifications')}>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={notifications}
-              aria-label={t('profile.notifications')}
-              onClick={() => {
-                localStorage.setItem('zalogaj.notifications', notifications ? 'off' : 'on')
-                setNotifications(!notifications)
-              }}
-              className={cn('relative h-7 w-12 rounded-full transition-colors', notifications ? 'bg-primary' : 'bg-input')}
-            >
-              <span className={cn('absolute top-1 size-5 rounded-full bg-white shadow transition-all', notifications ? 'left-6' : 'left-1')} />
-            </button>
+          <SettingRow icon={Globe} label={t('profile.language')} value={script === 'cyrl' ? 'Српски' : 'Srpski'} />
+          <SettingRow icon={Languages} label={t('profile.script')}>
+            <div className="inline-flex rounded-full bg-muted p-1" role="radiogroup" aria-label={t('profile.script')}>
+              {(['latn', 'cyrl'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  role="radio"
+                  aria-checked={script === s}
+                  onClick={() => script !== s && setScript(s)}
+                  className={cn('h-8 rounded-full px-3 text-sm font-semibold', script === s ? 'bg-card shadow-sm' : 'text-muted-foreground')}
+                >
+                  {s === 'latn' ? 'Latinica' : 'Ћирилица'}
+                </button>
+              ))}
+            </div>
           </SettingRow>
+          <SettingRow icon={Globe} label={t('profile.country')} value={localize(market.name)} />
+          <SettingRow icon={Wallet} label={t('profile.currency')} value={market.currency} />
+          <NotificationSettings />
         </Card>
       </section>
 

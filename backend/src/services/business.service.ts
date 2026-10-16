@@ -6,7 +6,7 @@ import { ApiError } from '../utils/ApiError.js'
 import { serializeBusiness } from '../utils/serializers.js'
 import { escapeRegex, slugify } from '../utils/text.js'
 import type { CreateBusinessInput, UpdateBusinessInput } from '../validators/business.validators.js'
-import { assertBusinessAccess, isAdmin, type Actor } from './access.service.js'
+import { assertBusinessAccess, hasPermission, isAdmin, type Actor } from './access.service.js'
 import { audit } from './audit.service.js'
 
 const toPoint = ({ lat, lng }: { lat: number; lng: number }) => ({ type: 'Point' as const, coordinates: [lng, lat] as [number, number] })
@@ -35,7 +35,7 @@ export async function list(
 
 export async function get(id: string, actor?: Actor) {
   const business = await Business.findById(id)
-  const canSeeInactive = actor && (isAdmin(actor) || business?.owner.toString() === actor.id)
+  const canSeeInactive = actor && (isAdmin(actor) || hasPermission(actor, 'businesses.moderate') || business?.owner.toString() === actor.id)
   if (!business || business.deletedAt || (!business.isActive && !canSeeInactive)) throw ApiError.notFound('Lokal nije pronađen.')
   return serializeBusiness(business)
 }
@@ -54,7 +54,10 @@ export async function create(input: CreateBusinessInput, actor: Actor) {
 }
 
 export async function update(id: string, input: UpdateBusinessInput, actor: Actor) {
-  const business = await assertBusinessAccess(id, actor)
+  // Moderators (operations) may only switch a location on/off; everything else is owner-only.
+  const moderationOnly = Object.keys(input).every((k) => k === 'isActive') && hasPermission(actor, 'businesses.moderate')
+  const business = moderationOnly ? await Business.findOne({ _id: id, deletedAt: null }) : await assertBusinessAccess(id, actor)
+  if (!business) throw ApiError.notFound('Lokal nije pronađen.')
   const { location, address, ...rest } = input
   business.set(rest)
   if (address) business.set('address', address)
@@ -67,7 +70,7 @@ export async function update(id: string, input: UpdateBusinessInput, actor: Acto
     { $set: { businessName: business.name, city: business.address.city, location: business.location, timezone: business.timezone } },
   )
   if (input.isActive === false) await Offer.updateMany({ business: business._id, status: 'active' }, { $set: { status: 'paused' } })
-  if (isAdmin(actor) && business.owner.toString() !== actor.id && input.isActive != null) {
+  if (business.owner.toString() !== actor.id && input.isActive != null) {
     void audit(actor, {
       action: input.isActive ? 'business.activate' : 'business.deactivate',
       targetType: 'business',

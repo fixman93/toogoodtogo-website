@@ -11,7 +11,25 @@ export type Category = (typeof CATEGORIES)[number]
 export const ALLERGENS = ['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk', 'nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'] as const
 export type Allergen = (typeof ALLERGENS)[number]
 
-export type Role = 'customer' | 'business' | 'admin'
+export type Role = 'customer' | 'business' | 'staff' | 'admin' | 'operations' | 'support' | 'finance'
+
+/** Platform team roles (admin panel). */
+export const PLATFORM_ROLES: Role[] = ['admin', 'operations', 'support', 'finance']
+
+export type Permission =
+  | 'stats.view'
+  | 'users.view'
+  | 'users.roles'
+  | 'users.block'
+  | 'applications.manage'
+  | 'businesses.moderate'
+  | 'reservations.view'
+  | 'reviews.moderate'
+  | 'support.manage'
+  | 'promotions.manage'
+  | 'finance.view'
+  | 'donations.view'
+  | 'audit.view'
 
 export interface ApiSuccess<T> {
   data: T
@@ -39,6 +57,13 @@ export interface User {
   role: Role
   locale: string
   countryCode: string
+  staffOf: string[]
+  permissions: Permission[]
+  notificationPrefs: { push: boolean; email: boolean }
+  /** Only on GET /auth/me */
+  points?: number
+  level?: { key: string; name: string; nextAt: number | null; nextName: string | null }
+  referralCode?: string | null
   createdAt: string
 }
 
@@ -97,7 +122,11 @@ export interface Offer {
   contentType: 'surprise' | 'known'
   contents: string[]
   allergens: Allergen[]
+  /** Price right now (dynamic pricing applied). */
   priceMinor: number
+  basePriceMinor?: number
+  /** Scheduled automatic price drop. */
+  priceDrop?: { at: string; priceMinor: number }
   originalPriceMinor: number
   currency: string
   quantityTotal: number
@@ -142,6 +171,8 @@ export interface Reservation {
   unitPriceMinor: number
   originalUnitPriceMinor: number
   totalMinor: number
+  discountMinor?: number
+  promoCode?: string
   currency: string
   pickupStart: string
   pickupEnd: string
@@ -205,6 +236,7 @@ export interface OfferInput {
   allergens?: Allergen[]
   priceMinor: number
   originalPriceMinor: number
+  priceDrop?: { at: string; priceMinor: number } | null
   quantityTotal: number
   maxPerReservation?: number
   pickupStart: string
@@ -294,7 +326,12 @@ export type NotificationType =
   | 'reservation_collected'
   | 'offer_new'
   | 'waitlist_available'
+  | 'reservation_confirmed'
   | 'application_new'
+  | 'staff_added'
+  | 'support_new'
+  | 'support_reply'
+  | 'reward'
   | 'application_approved'
   | 'application_rejected'
 
@@ -362,4 +399,137 @@ export interface AuditEntry {
   summary: string
   actor: { id: string; name: string; email: string } | null
   createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// Staff, support, promotions, donations, finance, integrations
+
+export interface StaffMember {
+  id: string
+  name: string
+  email: string
+}
+
+export type TicketCategory = 'order' | 'partner' | 'account' | 'other'
+export type TicketStatus = 'open' | 'answered' | 'closed'
+
+export interface SupportTicket {
+  id: string
+  subject: string
+  category: TicketCategory
+  status: TicketStatus
+  reservationId?: string
+  user: { id: string; name: string; email: string } | null
+  lastMessageAt: string
+  createdAt: string
+  messageCount: number
+  messages?: { body: string; fromTeam: boolean; author: string; createdAt: string }[]
+}
+
+export interface Promotion {
+  id: string
+  code: string
+  description?: string
+  discountType: 'percent' | 'fixed'
+  value: number
+  scope: 'platform' | 'partner'
+  businessId?: string
+  validFrom?: string
+  validTo?: string
+  maxUses: number | null
+  usesCount: number
+  perUserLimit: number
+  isActive: boolean
+  createdAt: string
+}
+
+export interface PromotionInput {
+  code: string
+  description?: string
+  discountType: 'percent' | 'fixed'
+  value: number
+  businessId?: string
+  validTo?: string
+  maxUses?: number | null
+  perUserLimit?: number
+  platform?: boolean
+}
+
+export interface Donation {
+  id: string
+  businessId: string
+  businessName?: string
+  date: string
+  organization: string
+  bags: number
+  weightKg?: number
+  items?: string
+  pickedUpBy?: string
+  note?: string
+}
+
+export interface DonationList {
+  totals: { count: number; bags: number; weightKg: number }
+  items: Donation[]
+}
+
+export interface QuantitySuggestion {
+  suggestedQuantity: number | null
+  basedOnWeeks: number
+  avgSold?: number
+  avgTotal?: number
+  sellThrough?: number
+}
+
+export interface StatementTotals {
+  bags: number
+  orders: number
+  revenueMinor: number
+  platformDiscountMinor: number
+  grossMinor: number
+  commissionMinor: number
+  balanceMinor: number
+}
+
+export interface StatementLine extends StatementTotals {
+  businessId: string
+  name: string
+  rate: number
+}
+
+export interface PartnerStatement extends StatementTotals {
+  month: string
+  currency: string
+  businesses: StatementLine[]
+}
+
+export interface PlatformStatement extends StatementTotals {
+  month: string
+  currency: string
+  partners: (StatementTotals & { ownerId: string; name: string; email: string; businesses: StatementLine[] })[]
+}
+
+export interface ApiKeyInfo {
+  id: string
+  name: string
+  prefix: string
+  lastUsedAt?: string
+  createdAt: string
+  /** Only once, right after creation. */
+  key?: string
+}
+
+export type WebhookEvent = 'reservation.created' | 'reservation.cancelled' | 'reservation.collected'
+
+export interface WebhookInfo {
+  id: string
+  url: string
+  events: WebhookEvent[]
+  isActive: boolean
+  lastStatus?: number
+  lastError?: string
+  lastDeliveredAt?: string
+  createdAt: string
+  /** Only once, right after creation. */
+  secret?: string
 }

@@ -4,7 +4,7 @@ import { Schema, model, type Types } from 'mongoose'
 export interface IAuditLog {
   actor: Types.ObjectId
   action: string
-  targetType: 'user' | 'business' | 'offer' | 'review' | 'application'
+  targetType: 'user' | 'business' | 'offer' | 'review' | 'application' | 'promotion'
   targetId: Types.ObjectId
   summary: string
   details?: Record<string, unknown>

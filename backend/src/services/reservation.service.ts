@@ -9,6 +9,7 @@ import {
   Reservation,
   Review,
   User,
+  effectivePriceMinor,
   type IBusiness,
   type IReservation,
   type ReservationDoc,
@@ -18,8 +19,11 @@ import { serializeReservation } from '../utils/serializers.js'
 import { pickupCode } from '../utils/text.js'
 import { runAtomically } from '../utils/transaction.js'
 import type { ReservationListQuery } from '../validators/reservation.validators.js'
-import { assertBusinessAccess, isAdmin, type Actor } from './access.service.js'
+import { assertWorksAt, hasPermission, isAdmin, workplaceIds, worksAt, type Actor } from './access.service.js'
 import { notify } from './notification.service.js'
+import * as promotions from './promotion.service.js'
+import { rewardPickup } from './loyalty.service.js'
+import { dispatchReservationEvent } from './integration.service.js'
 import { notifyIfAvailable } from './waitlist.service.js'
 
 const market = () => getMarket(env.DEFAULT_MARKET)
@@ -29,9 +33,9 @@ type ReservationWithId = IReservation & { _id: Types.ObjectId }
 const isActive = (r: IReservation) => ACTIVE_RESERVATION_STATUSES.includes(r.status)
 
 /** Customers can cancel until the market's cutoff before pickup; the business any time while active. */
-function canCancel(r: IReservation, actor: Actor, business: IBusiness) {
+function canCancel(r: IReservation, actor: Actor, business: BusinessWithId) {
   if (!isActive(r)) return false
-  const isStaff = isAdmin(actor) || business.owner.toString() === actor.id
+  const isStaff = worksAt(business, actor)
   if (isStaff) return true
   return Date.now() < r.pickupStart.getTime() - market().cancellationCutoffMinutes * 60_000
 }
@@ -39,7 +43,7 @@ function canCancel(r: IReservation, actor: Actor, business: IBusiness) {
 export async function toDto(reservations: ReservationWithId[], actor: Actor) {
   const ids = [...new Set(reservations.map((r) => r.business.toString()))]
   const businesses = new Map((await Business.find({ _id: { $in: ids } })).map((b) => [b.id as string, b as BusinessWithId]))
-  const isStaffFor = (business: IBusiness) => isAdmin(actor) || business.owner.toString() === actor.id
+  const isStaffFor = (business: BusinessWithId) => worksAt(business, actor) || hasPermission(actor, 'reservations.view')
 
   // Staff need the customer's name at the counter; customers never see other users.
   const staffUserIds = reservations.filter((r) => isStaffFor(businesses.get(r.business.toString())!)).map((r) => r.user)
@@ -88,7 +92,7 @@ async function unavailableReason(offerId: string, quantity: number) {
  * reservation insert commits together with the decrement; without them, a
  * failed insert triggers a compensating increment.
  */
-export async function create(input: { offerId: string; quantity: number }, actor: Actor) {
+export async function create(input: { offerId: string; quantity: number; promoCode?: string }, actor: Actor) {
   const { offerId, quantity } = input
 
   const reservation = await runAtomically(async (session, onRollback) => {
@@ -106,6 +110,16 @@ export async function create(input: { offerId: string; quantity: number }, actor
     if (!offer) throw await unavailableReason(offerId, quantity)
     onRollback(() => Offer.updateOne({ _id: offer._id }, { $inc: { quantityAvailable: quantity, reservedCount: -quantity } }))
 
+    const unitPrice = effectivePriceMinor(offer)
+    const subtotal = unitPrice * quantity
+    // Optional promo code: validated, then counted atomically (respects maxUses).
+    const promo = input.promoCode ? await promotions.resolve(input.promoCode, { businessId: offer.business, userId: actor.id }) : null
+    if (promo) {
+      await promotions.consume(promo, session)
+      onRollback(() => promotions.release(promo._id))
+    }
+    const discountMinor = promo ? promotions.discountFor(promo, subtotal) : 0
+
     const [created] = await Reservation.create(
       [
         {
@@ -114,9 +128,11 @@ export async function create(input: { offerId: string; quantity: number }, actor
           business: offer.business,
           code: await uniquePickupCode(offer.business),
           quantity,
-          unitPriceMinor: offer.priceMinor,
+          unitPriceMinor: unitPrice,
           originalUnitPriceMinor: offer.originalPriceMinor,
-          totalMinor: offer.priceMinor * quantity,
+          totalMinor: subtotal - discountMinor,
+          discountMinor,
+          ...(promo ? { promotion: promo._id, promoCode: promo.code, discountFundedBy: promo.owner ? 'partner' : 'platform' } : {}),
           currency: offer.currency,
           offerTitle: offer.title,
           offerImageUrl: offer.imageUrl,
@@ -136,6 +152,13 @@ export async function create(input: { offerId: string; quantity: number }, actor
 
   const [dto] = await toDto([reservation.toObject()], actor)
   const business = await Business.findById(reservation.business).select('owner name').lean()
+  void dispatchReservationEvent('reservation.created', reservation)
+  void notify([actor.id], {
+    type: 'reservation_confirmed',
+    title: `Rezervisano · ${reservation.code}`,
+    body: `${reservation.quantity} × ${reservation.offerTitle}${business ? ` (${business.name})` : ''}. Pokaži QR kod na kasi.`,
+    link: `/reservations/${reservation.id}`,
+  })
   if (business) {
     void notify([business.owner], {
       type: 'reservation_new',
@@ -150,7 +173,7 @@ export async function create(input: { offerId: string; quantity: number }, actor
 export async function list(query: ReservationListQuery, actor: Actor) {
   const filter: Record<string, unknown> = {}
   if (query.businessId) {
-    await assertBusinessAccess(query.businessId, actor)
+    await assertWorksAt(query.businessId, actor)
     filter.business = query.businessId
   } else {
     filter.user = actor.id
@@ -177,7 +200,7 @@ async function loadAuthorized(id: string, actor: Actor): Promise<{ reservation: 
   if (!reservation) throw ApiError.notFound('Rezervacija nije pronađena.')
   if (reservation.user.toString() === actor.id) return { reservation, isStaff: isAdmin(actor) }
   const business = await Business.findById(reservation.business)
-  const isStaff = isAdmin(actor) || business?.owner.toString() === actor.id
+  const isStaff = !!business && worksAt(business, actor)
   if (!isStaff) throw ApiError.notFound('Rezervacija nije pronađena.')
   return { reservation, isStaff }
 }
@@ -210,6 +233,8 @@ export async function cancel(id: string, actor: Actor) {
       { $inc: { quantityAvailable: reservation.quantity, reservedCount: -reservation.quantity } },
       { session },
     )
+    // A cancelled reservation gives the promo code use back.
+    if (updated.promotion) await promotions.release(updated.promotion, session)
     // Future: if payment.status === 'paid', trigger a refund here.
     return updated
   })
@@ -230,6 +255,7 @@ export async function cancel(id: string, actor: Actor) {
     })
   }
   void notifyIfAvailable(cancelled.offer)
+  void dispatchReservationEvent('reservation.cancelled', cancelled)
 
   const [dto] = await toDto([cancelled.toObject()], actor)
   return dto
@@ -252,6 +278,8 @@ async function markCollected(reservation: ReservationDoc, actor: Actor) {
     { new: true },
   )
   if (!updated) throw collectError(await Reservation.findById(reservation._id))
+  void rewardPickup(updated.user, updated.quantity)
+  void dispatchReservationEvent('reservation.collected', updated)
   void notify([updated.user], {
     type: 'reservation_collected',
     title: 'Preuzeto – prijatno!',
@@ -292,10 +320,7 @@ export async function collect(id: string, actor: Actor) {
 export async function collectByCode(input: { code: string; reservationId?: string }, actor: Actor) {
   const filter: Record<string, unknown> = { code: input.code }
   if (input.reservationId) filter._id = input.reservationId
-  if (!isAdmin(actor)) {
-    const own = await Business.find({ owner: actor.id }).select('_id').lean()
-    filter.business = { $in: own.map((b) => b._id) }
-  }
+  if (!isAdmin(actor)) filter.business = { $in: await workplaceIds(actor) }
 
   const matches = await Reservation.find(filter).sort({ pickupStart: -1 }).limit(10)
   if (matches.length === 0) throw ApiError.notFound('Kod nije pronađen u vašim lokalima.', 'CODE_NOT_FOUND')
@@ -307,11 +332,9 @@ export async function collectByCode(input: { code: string; reservationId?: strin
 
 /** Partner "Narudžbine": all reservations at the partner's locations for one local day. */
 export async function listForPartner(actor: Actor, query: { start: Date; end: Date; status?: string; businessId?: string }) {
-  const businesses = query.businessId
-    ? [await assertBusinessAccess(query.businessId, actor)]
-    : await Business.find({ owner: actor.id, deletedAt: null }).select('_id')
+  const businessIds = query.businessId ? [(await assertWorksAt(query.businessId, actor))._id.toString()] : await workplaceIds(actor)
   const filter: Record<string, unknown> = {
-    business: { $in: businesses.map((b) => b._id) },
+    business: { $in: businessIds },
     pickupStart: { $gte: query.start, $lt: query.end },
   }
   if (query.status === 'active') filter.status = { $in: ACTIVE_RESERVATION_STATUSES }

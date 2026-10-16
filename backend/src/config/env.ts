@@ -19,6 +19,15 @@ const schema = z.object({
   DEFAULT_MARKET: z.string().default('RS'),
   /** Max login/register attempts per IP per 15 minutes. */
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  /** Public web app URL — used for links in e-mails and push notifications. */
+  APP_URL: z.string().url().default('http://localhost:5173'),
+  /** Web push (optional). Generate with: npx web-push generate-vapid-keys */
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:podrska@zalogaj.rs'),
+  /** E-mail (optional), e.g. smtps://user:pass@smtp.example.com:465 */
+  SMTP_URL: z.string().optional(),
+  MAIL_FROM: z.string().default('Zalogaj <no-reply@zalogaj.rs>'),
 })
 
 const parsed = schema.safeParse(process.env)

@@ -4,7 +4,7 @@ declare global {
   namespace Express {
     interface Request {
       /** Set by the `authenticate` / `optionalAuth` middleware. */
-      user?: { id: string; role: Role }
+      user?: { id: string; role: Role; staffOf: string[] }
     }
   }
 }

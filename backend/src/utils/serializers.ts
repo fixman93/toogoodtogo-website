@@ -4,7 +4,8 @@
  * GeoJSON ordering) out of responses.
  */
 import type { Types } from 'mongoose'
-import type { IBusiness, IFavorite, IOffer, IReservation, IReview, IUser } from '../models/index.js'
+import { permissionsFor } from '../config/permissions.js'
+import { effectivePriceMinor, type IBusiness, type IFavorite, type IOffer, type IReservation, type IReview, type IUser } from '../models/index.js'
 
 type WithId<T> = T & { _id: Types.ObjectId }
 
@@ -16,6 +17,11 @@ export function serializeUser(u: WithId<IUser>) {
     role: u.role,
     locale: u.locale,
     countryCode: u.countryCode,
+    /** Partner locations a staff member works at. */
+    staffOf: (u.staffOf ?? []).map(String),
+    /** Platform permissions (admin panel), see config/permissions. */
+    permissions: permissionsFor(u.role),
+    notificationPrefs: { push: u.notificationPrefs?.push ?? true, email: u.notificationPrefs?.email ?? true },
     createdAt: u.createdAt.toISOString(),
   }
 }
@@ -62,7 +68,10 @@ export function serializeOffer(o: WithId<IOffer> & { distanceMeters?: number }, 
     contentType: o.contentType ?? 'surprise',
     contents: o.contents ?? [],
     allergens: o.allergens ?? [],
-    priceMinor: o.priceMinor,
+    // Price that applies right now; basePriceMinor/priceDrop describe dynamic pricing.
+    priceMinor: effectivePriceMinor(o),
+    basePriceMinor: o.priceMinor,
+    ...(o.priceDrop ? { priceDrop: { at: o.priceDrop.at.toISOString(), priceMinor: o.priceDrop.priceMinor } } : {}),
     originalPriceMinor: o.originalPriceMinor,
     currency: o.currency,
     quantityTotal: o.quantityTotal,
@@ -86,6 +95,8 @@ export function serializeReservation(r: WithId<IReservation>, business: WithId<I
     unitPriceMinor: r.unitPriceMinor,
     originalUnitPriceMinor: r.originalUnitPriceMinor,
     totalMinor: r.totalMinor,
+    discountMinor: r.discountMinor ?? 0,
+    ...(r.promoCode ? { promoCode: r.promoCode } : {}),
     currency: r.currency,
     pickupStart: r.pickupStart.toISOString(),
     pickupEnd: r.pickupEnd.toISOString(),

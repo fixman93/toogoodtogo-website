@@ -25,6 +25,12 @@ export interface IReservation {
   unitPriceMinor: number
   originalUnitPriceMinor: number
   totalMinor: number
+  /** Promo code applied at reservation time (total is already discounted). */
+  promotion?: Types.ObjectId
+  promoCode?: string
+  discountMinor: number
+  /** Who pays for the discount — platform discounts are credited in the monthly statement. */
+  discountFundedBy?: 'platform' | 'partner'
   currency: string
   offerTitle: string
   offerImageUrl?: string
@@ -59,6 +65,10 @@ const reservationSchema = new Schema<IReservation>(
     unitPriceMinor: moneyMinor,
     originalUnitPriceMinor: moneyMinor,
     totalMinor: moneyMinor,
+    promotion: { type: Schema.Types.ObjectId, ref: 'Promotion' },
+    promoCode: String,
+    discountMinor: { type: Number, default: 0, min: 0 },
+    discountFundedBy: { type: String, enum: ['platform', 'partner'] },
     currency: { type: String, required: true },
     offerTitle: { type: String, required: true },
     offerImageUrl: String,

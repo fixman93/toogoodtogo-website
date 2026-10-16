@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { BarChart3, ChevronDown, ClipboardList, ChevronRight, Clock, Copy, MapPin, Pause, Pencil, Play, Plus, ScanLine, Store } from 'lucide-react'
+import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Clock, Copy, HandHeart, MapPin, Pause, Pencil, Play, Plug, Plus, ReceiptText, ScanLine, Store, TicketPercent, type LucideIcon } from 'lucide-react'
 import type { Business, Offer } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -9,10 +9,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { PartnerGuard } from '@/features/business/PartnerGuard'
+import { StaffGuard } from '@/features/business/PartnerGuard'
+import { StaffSection } from '@/features/business/StaffSection'
+import { useAuth } from '@/features/auth/auth-context'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { SalesTiles } from '@/pages/partner/SalesPage'
-import { useBusinessOffers, useDeleteBusiness, useDeleteOffer, useMyBusinesses, usePartnerSales, useSaveOffer } from '@/hooks/api'
+import { useBusinessOffers, useDeleteBusiness, useDeleteOffer, useMyBusinesses, usePartnerSales, useSaveOffer, useWorkplaces } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney, formatPickupWindow } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -174,7 +176,50 @@ function LocationCard({ business }: { business: Business }) {
           )}
         </>
       )}
+      <StaffSection businessId={business.id} />
     </Card>
+  )
+}
+
+function Tile({ to, icon: Icon, label, primary }: { to: string; icon: LucideIcon; label: string; primary?: boolean }) {
+  return (
+    <Link
+      to={to}
+      className={cn(
+        'flex min-h-20 flex-col items-start justify-between gap-2 rounded-2xl border p-3.5 text-sm font-semibold transition-colors',
+        primary ? 'border-primary bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-card hover:bg-muted',
+      )}
+    >
+      <Icon className="size-5" />
+      {label}
+    </Link>
+  )
+}
+
+/** Staff members only see the locations they work at, the scanner and orders. */
+function StaffPortal() {
+  const { data } = useWorkplaces(true)
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Tile to="/business/scan" icon={ScanLine} label={t('business.scan')} primary />
+        <Tile to="/business/orders" icon={ClipboardList} label={t('orders.title')} />
+      </div>
+      <section className="space-y-2">
+        <h2 className="font-bold">{t('staff.workplaces')}</h2>
+        {data?.map((b) => (
+          <Card key={b.id} className="flex items-center gap-3 p-4">
+            <Store className="size-5 text-primary" />
+            <span>
+              <span className="block font-semibold">{b.name}</span>
+              <span className="text-sm text-muted-foreground">
+                {b.address.street}, {b.address.city}
+              </span>
+            </span>
+          </Card>
+        ))}
+      </section>
+    </div>
   )
 }
 
@@ -203,31 +248,15 @@ function Dashboard() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button asChild size="lg">
-          <Link to="/business/scan">
-            <ScanLine />
-            {t('business.scan')}
-          </Link>
-        </Button>
-        <Button asChild size="lg" variant="outline">
-          <Link to="/business/orders">
-            <ClipboardList />
-            {t('orders.title')}
-          </Link>
-        </Button>
-        <Button asChild size="lg" variant="outline">
-          <Link to="/business/sales">
-            <BarChart3 />
-            {t('sales.link')}
-          </Link>
-        </Button>
-        <Button asChild size="lg" variant="outline">
-          <Link to="/business/locations/new">
-            <Plus />
-            {t('partner.addLocation')}
-          </Link>
-        </Button>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Tile to="/business/scan" icon={ScanLine} label={t('business.scan')} primary />
+        <Tile to="/business/orders" icon={ClipboardList} label={t('orders.title')} />
+        <Tile to="/business/sales" icon={BarChart3} label={t('sales.link')} />
+        <Tile to="/business/locations/new" icon={Plus} label={t('partner.addLocation')} />
+        <Tile to="/business/promotions" icon={TicketPercent} label={t('promo.title')} />
+        <Tile to="/business/donations" icon={HandHeart} label={t('donations.title')} />
+        <Tile to="/business/statements" icon={ReceiptText} label={t('statement.title')} />
+        <Tile to="/business/integrations" icon={Plug} label={t('integrations.title')} />
       </div>
 
       <TodaySummary />
@@ -256,13 +285,20 @@ function Dashboard() {
   )
 }
 
+function Portal() {
+  const { hasRole } = useAuth()
+  return hasRole('staff') ? <StaffPortal /> : <Dashboard />
+}
+
 export function BusinessDashboardPage() {
+  const { hasRole } = useAuth()
+  const staff = hasRole('staff')
   return (
     <div>
-      <PageHeader title={t('business.title')} subtitle={t('business.intro')} />
-      <PartnerGuard>
-        <Dashboard />
-      </PartnerGuard>
+      <PageHeader title={staff ? t('staff.portalTitle') : t('business.title')} subtitle={staff ? t('staff.portalIntro') : t('business.intro')} />
+      <StaffGuard>
+        <Portal />
+      </StaffGuard>
     </div>
   )
 }

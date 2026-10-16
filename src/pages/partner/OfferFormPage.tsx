@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { ArrowLeft, Loader2, Pause, Play, Store, Trash2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Pause, Play, Sparkles, Store, Trash2 } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { ALLERGENS, CATEGORIES, type Allergen, type Business, type Category, type Offer, type OfferInput } from '@/api/types'
 import { FormField, FormSection } from '@/components/common/FormField'
@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { market } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
-import { useDeleteOffer, useMyBusinesses, useOffer, useSaveOffer } from '@/hooks/api'
+import { useDeleteOffer, useMyBusinesses, useOffer, useSaveOffer, useSuggestion } from '@/hooks/api'
 import { t } from '@/i18n'
 import { discountPercent, formatMoney } from '@/lib/format'
 import { addDays, toZonedInput, zonedDateTimeToUtc } from '@/lib/time'
@@ -39,6 +39,9 @@ interface FormState {
   date: string
   from: string
   to: string
+  dropOn: boolean
+  dropTime: string
+  dropPrice: string
 }
 
 type Mode = { kind: 'new' } | { kind: 'copy'; source: Offer } | { kind: 'edit'; offer: Offer }
@@ -67,12 +70,15 @@ function initialState(mode: Mode, businesses: Business[], preferredBusinessId: s
       contents: (source.contents ?? []).join('\n'),
       allergens: source.allergens ?? [],
       originalPrice: String(source.originalPriceMinor / minorUnits),
-      price: String(source.priceMinor / minorUnits),
+      price: String((source.basePriceMinor ?? source.priceMinor) / minorUnits),
       quantity: String(source.quantityTotal),
       maxPer: String(source.maxPerReservation),
       date: mode.kind === 'copy' ? nextOpenDate(addDays(start.date, 1), end.time, source.timezone) : start.date,
       from: start.time,
       to: end.time,
+      dropOn: !!source.priceDrop,
+      dropTime: source.priceDrop ? toZonedInput(source.priceDrop.at, source.timezone).time : '',
+      dropPrice: source.priceDrop ? String(source.priceDrop.priceMinor / minorUnits) : '',
     }
   }
   const business = businesses.find((b) => b.id === preferredBusinessId) ?? businesses[0]
@@ -92,6 +98,9 @@ function initialState(mode: Mode, businesses: Business[], preferredBusinessId: s
     date: nextOpenDate(today(), '20:00', business.timezone),
     from: '19:00',
     to: '20:00',
+    dropOn: false,
+    dropTime: '',
+    dropPrice: '',
   }
 }
 
@@ -112,7 +121,7 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
     // A field's error disappears as soon as the user edits it.
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e))
   }
-  const field = (key: Exclude<keyof FormState, 'tags' | 'category' | 'contentType' | 'allergens'>) => ({
+  const field = (key: Exclude<keyof FormState, 'tags' | 'category' | 'contentType' | 'allergens' | 'dropOn'>) => ({
     id: key,
     value: form[key],
     'aria-invalid': !!errors[key] || undefined,
@@ -122,6 +131,8 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
   const original = Number(form.originalPrice)
   const price = Number(form.price)
   const showPreview = original > 0 && price > 0 && price < original
+  const suggestion = useSuggestion(editing ? undefined : form.businessId, form.date)
+  const dropPrice = Number(form.dropPrice)
 
   const validate = () => {
     const next: typeof errors = {}
@@ -138,6 +149,7 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
     if (!form.date) next.date = t('partner.error.required')
     if (form.to <= form.from) next.to = t('partner.error.timeOrder')
     else if (form.date && zonedDateTimeToUtc(form.date, form.to, timezone) <= new Date()) next.to = t('partner.error.past')
+    if (form.dropOn && (!(dropPrice > 0) || dropPrice >= price || !form.dropTime || form.dropTime >= form.to)) next.dropPrice = t('partner.error.priceDrop')
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -159,6 +171,12 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
       maxPerReservation: Number(form.maxPer),
       pickupStart: zonedDateTimeToUtc(form.date, form.from, timezone).toISOString(),
       pickupEnd: zonedDateTimeToUtc(form.date, form.to, timezone).toISOString(),
+      // Dynamic pricing; null removes an existing drop when editing.
+      priceDrop: form.dropOn
+        ? { at: zonedDateTimeToUtc(form.date, form.dropTime, timezone).toISOString(), priceMinor: Math.round(dropPrice * minorUnits) }
+        : editing?.priceDrop
+          ? null
+          : undefined,
     }
     const done = { onSuccess: () => navigate('/business') }
     if (editing) save.mutate({ id: editing.id, body }, done)
@@ -293,6 +311,24 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
             <Input {...field('maxPer')} type="number" inputMode="numeric" min={1} max={20} />
           </FormField>
         </div>
+        {suggestion.data?.suggestedQuantity != null && (
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/60 p-3 text-sm">
+            <p>
+              <span className="flex items-center gap-1.5 font-semibold text-secondary-foreground">
+                <Sparkles className="size-4" />
+                {t('suggest.title')}
+              </span>
+              {t('suggest.text', {
+                count: suggestion.data.suggestedQuantity,
+                weeks: suggestion.data.basedOnWeeks,
+                rate: suggestion.data.sellThrough ?? 0,
+              })}
+            </p>
+            <Button type="button" size="sm" variant="outline" onClick={() => set('quantity', String(suggestion.data!.suggestedQuantity))}>
+              {t('suggest.use')}
+            </Button>
+          </div>
+        )}
         {showPreview && (
           <p className="rounded-xl bg-success/10 p-3 text-sm font-semibold text-success">
             {t('partner.pricePreview', {
@@ -332,6 +368,23 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
             <Input {...field('to')} type="time" step={900} />
           </FormField>
         </div>
+        <label className="flex min-h-11 items-center gap-3 text-sm font-semibold">
+          <input type="checkbox" checked={form.dropOn} onChange={(e) => set('dropOn', e.target.checked)} className="size-5 accent-[var(--primary)]" />
+          {t('partner.field.priceDrop')}
+        </label>
+        {form.dropOn && (
+          <div className="space-y-2 rounded-xl bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground">{t('partner.field.priceDropHint')}</p>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label={t('partner.field.priceDropAt')} htmlFor="dropTime">
+                <Input {...field('dropTime')} type="time" step={900} />
+              </FormField>
+              <FormField label={t('partner.field.priceDropPrice')} htmlFor="dropPrice" error={errors.dropPrice}>
+                <Input {...field('dropPrice')} type="number" inputMode="numeric" min={1} placeholder={price ? String(Math.round(price * 0.7)) : ''} />
+              </FormField>
+            </div>
+          </div>
+        )}
       </FormSection>
 
       {error && (

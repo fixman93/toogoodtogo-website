@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Bell, BellRing, CalendarCheck, CheckCircle2, Store, XCircle, type LucideIcon } from 'lucide-react'
+import { Bell, BellRing, CalendarCheck, CheckCircle2, Gift, LifeBuoy, Store, UserPlus, XCircle, type LucideIcon } from 'lucide-react'
 import type { NotificationType } from '@/api/types'
 import { Sheet } from '@/components/common/Sheet'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -12,6 +12,11 @@ import { cn } from '@/lib/utils'
 
 const ICONS: Record<NotificationType, LucideIcon> = {
   reservation_new: CalendarCheck,
+  reservation_confirmed: CalendarCheck,
+  staff_added: UserPlus,
+  support_new: LifeBuoy,
+  support_reply: LifeBuoy,
+  reward: Gift,
   reservation_cancelled: XCircle,
   reservation_collected: CheckCircle2,
   offer_new: Store,

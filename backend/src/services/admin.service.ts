@@ -5,7 +5,7 @@
  */
 import { env } from '../config/env.js'
 import { getMarket } from '../config/markets.js'
-import { Business, Offer, Reservation, Review, User, type Role } from '../models/index.js'
+import { Business, Offer, PLATFORM_ROLES, Reservation, Review, User, type Role } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { serializeBusiness, serializeUser } from '../utils/serializers.js'
 import { escapeRegex } from '../utils/text.js'
@@ -76,6 +76,8 @@ export async function setRole(userId: string, role: Role, actor: Actor) {
   }
   const previous = user.role
   user.role = role
+  // Staff assignments only make sense for the staff role.
+  if (role !== 'staff') user.staffOf = []
   await user.save()
   void audit(actor, { action: 'user.role', targetType: 'user', targetId: user._id, summary: `${user.email}: ${previous} → ${role}` })
   const businessCount = await Business.countDocuments({ owner: user._id })
@@ -119,7 +121,7 @@ export async function setBlocked(userId: string, blocked: boolean, actor: Actor)
   if (userId === actor.id) throw ApiError.conflict('Ne možeš blokirati sopstveni nalog.', 'CANNOT_BLOCK_SELF')
   const user = await User.findById(userId)
   if (!user || user.deletedAt) throw ApiError.notFound('Korisnik nije pronađen.')
-  if (blocked && user.role === 'admin') throw ApiError.conflict('Admin nalog se ne može blokirati. Prvo mu promeni ulogu.', 'CANNOT_BLOCK_ADMIN')
+  if (blocked && PLATFORM_ROLES.includes(user.role)) throw ApiError.conflict('Nalog tima se ne može blokirati. Prvo mu promeni ulogu.', 'CANNOT_BLOCK_ADMIN')
   user.isBlocked = blocked
   await user.save()
   void audit(actor, { action: blocked ? 'user.block' : 'user.unblock', targetType: 'user', targetId: user._id, summary: `${blocked ? 'Blokiran' : 'Odblokiran'}: ${user.email}` })

@@ -4,6 +4,7 @@ import { objectId, pagination } from './common.js'
 export const createReservationBody = z.object({
   offerId: objectId,
   quantity: z.number().int().min(1).max(20).default(1),
+  promoCode: z.string().trim().min(2).max(30).optional(),
 })
 
 export const reservationListQuery = z.object({

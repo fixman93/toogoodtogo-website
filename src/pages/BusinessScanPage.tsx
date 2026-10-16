@@ -10,8 +10,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CameraScanner } from '@/features/business/CameraScanner'
-import { PartnerGuard } from '@/features/business/PartnerGuard'
-import { useBusinessReservations, useCollectReservation, useMyBusinesses } from '@/hooks/api'
+import { StaffGuard } from '@/features/business/PartnerGuard'
+import { useAuth } from '@/features/auth/auth-context'
+import { useBusinessReservations, useCollectReservation, useMyBusinesses, useWorkplaces } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney, formatPickupWindow } from '@/lib/format'
 import { parsePickupQr } from '@/lib/pickup'
@@ -87,7 +88,12 @@ function ExpectedPickups({ business, onGiveOut, pendingId }: { business: Busines
 }
 
 function Scanner() {
-  const businesses = useMyBusinesses()
+  const { hasRole } = useAuth()
+  const isStaff = hasRole('staff')
+  const owned = useMyBusinesses()
+  const workplaces = useWorkplaces(isStaff)
+  // Staff see the locations they work at; owners their own.
+  const businesses = isStaff ? { isLoading: workplaces.isLoading, data: { data: (workplaces.data ?? []) as unknown as Business[] } } : owned
   const collect = useCollectReservation()
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [code, setCode] = useState('')
@@ -190,9 +196,9 @@ export function BusinessScanPage() {
         </Link>
       </Button>
       <PageHeader title={t('business.scanTitle')} subtitle={t('business.scanIntro')} />
-      <PartnerGuard>
+      <StaffGuard>
         <Scanner />
-      </PartnerGuard>
+      </StaffGuard>
     </div>
   )
 }
