@@ -1,6 +1,6 @@
-# Zalogaj API
+# Foodnesi API
 
-This is the REST API for the Zalogaj marketplace. It uses Node.js, Express 5,
+This is the REST API for the Foodnesi marketplace. It uses Node.js, Express 5,
 TypeScript, MongoDB (Mongoose 8), Zod validation and JWT bearer auth.
 
 ## Setup

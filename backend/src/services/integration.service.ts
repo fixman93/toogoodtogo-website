@@ -2,7 +2,7 @@
  * Integrations for partners' POS/ERP systems:
  * - API keys (header `X-Api-Key`) act as the partner on partner endpoints
  *   (offers, orders, pickups) — never on account or admin endpoints.
- * - Webhooks receive signed JSON (`X-Zalogaj-Signature: sha256=<hmac>`).
+ * - Webhooks receive signed JSON (`X-Foodnesi-Signature: sha256=<hmac>`; the old X-Zalogaj-* headers are still sent).
  */
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import type { Types } from 'mongoose'
@@ -107,7 +107,15 @@ async function deliver(hookId: Types.ObjectId, event: string, data: unknown) {
   try {
     const res = await fetch(hook.url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Zalogaj-Webhooks/1', 'X-Zalogaj-Event': event, 'X-Zalogaj-Signature': `sha256=${signature}` },
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Foodnesi-Webhooks/1',
+        'X-Foodnesi-Event': event,
+        'X-Foodnesi-Signature': `sha256=${signature}`,
+        // Integrations built before the rename.
+        'X-Zalogaj-Event': event,
+        'X-Zalogaj-Signature': `sha256=${signature}`,
+      },
       body,
       signal: AbortSignal.timeout(5000),
       redirect: 'manual',
@@ -123,7 +131,7 @@ async function deliver(hookId: Types.ObjectId, event: string, data: unknown) {
 export async function testWebhook(actor: Actor, id: string) {
   const hook = await Webhook.findOne({ _id: id, owner: actor.id })
   if (!hook) throw ApiError.notFound('Webhook nije pronađen.')
-  const status = await deliver(hook._id, 'ping', { message: 'Zalogaj webhook test' })
+  const status = await deliver(hook._id, 'ping', { message: 'Foodnesi webhook test' })
   return { status }
 }
 

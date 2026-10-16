@@ -31,7 +31,7 @@ const schema = z.object({
   /** E-mail via MailerSend (optional). Without it e-mails are only logged. */
   MAILERSEND_API_KEY: z.string().optional(),
   /** Sender — its domain must be verified in MailerSend. */
-  MAIL_FROM: z.string().default('Zalogaj <noreply@fixman-app.online>'),
+  MAIL_FROM: z.string().default('Foodnesi <noreply@fixman-app.online>'),
   /** Cloudflare R2 (S3-compatible) for uploaded images — optional. */
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),

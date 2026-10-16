@@ -14,7 +14,7 @@ const DIGRAPHS: [RegExp, string][] = [
   [/DŽ/g, 'Џ'], [/Dž/g, 'Џ'], [/dž/g, 'џ'],
 ]
 /** Placeholders, URLs, e-mails and abbreviations that stay in Latin. */
-const PROTECTED = /(\{\w+\}|https?:\/\/\S+|[\w.+-]+@[\w.-]+|\bQR\b|CO₂e|\b(?:RSD|BAM|EUR|MKD)\b|\bGPS\b|\bSMTP\b|\bAPI\b|\bPOS\b|\bZL-[A-Z0-9]+)/g
+const PROTECTED = /(\{\w+\}|https?:\/\/\S+|[\w.+-]+@[\w.-]+|\bQR\b|CO₂e|\b(?:RSD|BAM|EUR|MKD)\b|\bGPS\b|\bSMTP\b|\bAPI\b|\bPOS\b|\b(?:FN|ZL)-[A-Z0-9]+|\bFoodnesi\b)/g
 
 function convert(chunk: string) {
   let out = chunk

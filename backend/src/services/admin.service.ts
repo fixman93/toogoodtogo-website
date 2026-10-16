@@ -126,7 +126,7 @@ export async function setBlocked(userId: string, blocked: boolean, actor: Actor)
   // Partners: blocking also hides their locations and offers (see partner-moderation).
   const partnerSuspended = (user.partnerStatus ?? 'active') !== 'active'
   if ((blocked || partnerSuspended) && (await Business.exists({ owner: user._id, deletedAt: null }))) {
-    await moderation.setStatus(userId, blocked ? 'blocked' : 'active', blocked ? 'Nalog je blokirao tim Zalogaj.' : undefined, actor)
+    await moderation.setStatus(userId, blocked ? 'blocked' : 'active', blocked ? 'Nalog je blokirao tim Foodnesi.' : undefined, actor)
     const fresh = await User.findById(userId)
     return { ...serializeUser(fresh!), isBlocked: fresh!.isBlocked, partnerStatus: fresh!.partnerStatus ?? 'active', businessCount: await Business.countDocuments({ owner: user._id, deletedAt: null }) }
   }

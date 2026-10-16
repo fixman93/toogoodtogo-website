@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "REST API for the Zalogaj food-saving marketplace",
+  "description": "REST API for the Foodnesi food-saving marketplace",
   "engines": {
     "node": "22.x"
   },

@@ -1,6 +1,6 @@
-# Zalogaj – food-saving marketplace (MERN)
+# Foodnesi – food-saving marketplace (MERN)
 
-Zalogaj lets bakeries, restaurants, supermarkets and other food businesses sell
+Foodnesi lets bakeries, restaurants, supermarkets and other food businesses sell
 their end-of-day surplus as discounted "surprise bags". Customers reserve a
 bag and collect it in a set pickup window. The first market is **Serbia**
 (Serbian Latin script, ekavica, RSD). The architecture is ready for more
@@ -38,7 +38,7 @@ commands. The same REST API is meant to serve future native iOS/Android apps.
 | --- | --- | --- |
 | Web app | Vercel (`toogoodtogo-website.vercel.app`) | Builds use `.env.production` → API on Heroku |
 | API | Heroku app `toogoodtogo-web` | Monorepo buildpack + `APP_BASE=backend`; config in Heroku Config Vars |
-| Database | MongoDB Atlas, database `zalogaj` | Network Access must allow Heroku (`0.0.0.0/0`) |
+| Database | MongoDB Atlas, database `zalogaj` (name kept from before the rename) | Network Access must allow Heroku (`0.0.0.0/0`) |
 
 ## Quick start (local development)
 
@@ -147,7 +147,8 @@ page → hooks/api.ts (TanStack Query) → api/services.ts → api/client.ts (Ax
 ## Pickup: QR scan at the counter
 
 1. After reserving, the customer's reservation screen shows a **QR code** and
-   the short code (e.g. `ZL-4F7K`). The QR contains `ZALOGAJ:R:<reservationId>:<code>`.
+   the short code (e.g. `FN-4F7K`). The QR contains `FOODNESI:R:<reservationId>:<code>`.
+   Codes and QR codes issued before the rename (`ZL-…`, `ZALOGAJ:R:…`) still work.
 2. Staff open **Portal za partnere → Skeniraj kod** (`/business/scan`), turn on
    the camera and point it at the customer's phone. If the camera isn't
    available, they can type the code instead (`4F7K`, `zl4f7k` and `ZL-4F7K`
@@ -334,7 +335,7 @@ panel shows only the tabs the role may use.
   * partner API keys (`X-Api-Key`) to publish offers, read orders and confirm
     pickups;
   * signed webhooks (`reservation.created/cancelled/collected`, header
-    `X-Zalogaj-Signature: sha256=HMAC(secret, body)`).
+    `X-Foodnesi-Signature: sha256=HMAC(secret, body)`; the old `X-Zalogaj-*` headers are still sent).
 
 ## Images (Cloudflare R2)
 

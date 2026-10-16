@@ -150,7 +150,7 @@ function Scanner() {
               id="pickup-code"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="ZL-4F7K"
+              placeholder="FN-4F7K"
               autoCapitalize="characters"
               autoComplete="off"
               spellCheck={false}

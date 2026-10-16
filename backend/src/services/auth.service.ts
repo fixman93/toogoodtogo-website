@@ -121,7 +121,7 @@ export async function forgotPassword(email: string) {
   void sendMail(
     user.email,
     'Promena lozinke',
-    'Neko je zatražio novu lozinku za tvoj Zalogaj nalog.\nLink važi 60 minuta. Ako nisi ti, slobodno ignoriši ovu poruku.',
+    'Neko je zatražio novu lozinku za tvoj Foodnesi nalog.\nLink važi 60 minuta. Ako nisi ti, slobodno ignoriši ovu poruku.',
     `/reset-password?token=${token}`,
     'Postavi novu lozinku',
   )
@@ -135,7 +135,7 @@ export async function resetPassword(token: string, password: string) {
   user.passwordResetHash = undefined
   user.passwordResetExpires = undefined
   await user.save()
-  void sendMail(user.email, 'Lozinka je promenjena', 'Lozinka tvog Zalogaj naloga je upravo promenjena. Ako to nisi bio/la ti, odmah nam se javi.', '/support', 'Kontaktiraj podršku')
+  void sendMail(user.email, 'Lozinka je promenjena', 'Lozinka tvog Foodnesi naloga je upravo promenjena. Ako to nisi bio/la ti, odmah nam se javi.', '/support', 'Kontaktiraj podršku')
   // New session for the user who just reset it.
   return { user: serializeUser(user), token: signToken(user.id, user.role) }
 }

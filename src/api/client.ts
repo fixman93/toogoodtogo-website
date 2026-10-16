@@ -2,6 +2,7 @@ import axios, { AxiosError } from 'axios'
 import { localize } from '@/i18n'
 import type { ApiErrorBody } from './types'
 
+// Storage keys keep the pre-rename "zalogaj." prefix so nobody is signed out by the rename to Foodnesi.
 const TOKEN_KEY = 'zalogaj.token'
 
 export const tokenStorage = {

@@ -15,7 +15,14 @@ export function slugify(value: string) {
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
-/** Short, unambiguous pickup code shown to staff, e.g. "ZL-4F7K". */
+/** Prefix of new pickup codes. Codes issued before the rename to Foodnesi start with "ZL-". */
+export const PICKUP_PREFIX = 'FN-'
+const LEGACY_PREFIXES = ['ZL-']
+
+/** Short, unambiguous pickup code shown to staff, e.g. "FN-4F7K". */
 export function pickupCode() {
-  return 'ZL-' + Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('')
+  return PICKUP_PREFIX + Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('')
 }
+
+/** Every stored form of a 4-character code ("4F7K" → FN-4F7K, ZL-4F7K). */
+export const pickupCodeVariants = (core: string) => [PICKUP_PREFIX, ...LEGACY_PREFIXES].map((p) => p + core)

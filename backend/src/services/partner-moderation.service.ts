@@ -79,7 +79,7 @@ export async function setStatus(id: string, status: PartnerStatus, reason: strin
 export async function warn(id: string, message: string, actor: Actor) {
   const user = await loadPartner(id)
   const note = await PartnerNote.create({ owner: user._id, kind: 'warning', message, createdBy: actor.id })
-  void notify([user._id], { type: 'partner_warning', title: 'Upozorenje od tima Zalogaj', body: message, link: '/business' }, { force: true })
+  void notify([user._id], { type: 'partner_warning', title: 'Upozorenje od tima Foodnesi', body: message, link: '/business' }, { force: true })
   void audit(actor, { action: 'partner.warning', targetType: 'user', targetId: user._id, summary: `Upozorenje za ${user.email}: ${message.slice(0, 200)}` })
   return serializeNote(note)
 }
@@ -139,6 +139,6 @@ export async function myStanding(ownerId: string) {
 /** Partners can't put anything back online while the platform has them paused. */
 export async function assertNotSuspended(business: { suspended?: boolean }) {
   if (business.suspended) {
-    throw ApiError.forbidden('Tvoj partnerski nalog je pauziran. Ponude se ne mogu objaviti dok tim Zalogaj ne ukloni pauzu.', 'PARTNER_SUSPENDED')
+    throw ApiError.forbidden('Tvoj partnerski nalog je pauziran. Ponude se ne mogu objaviti dok tim Foodnesi ne ukloni pauzu.', 'PARTNER_SUSPENDED')
   }
 }

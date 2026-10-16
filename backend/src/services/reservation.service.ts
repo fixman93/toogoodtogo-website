@@ -16,7 +16,7 @@ import {
 } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { serializeReservation } from '../utils/serializers.js'
-import { pickupCode } from '../utils/text.js'
+import { pickupCode, pickupCodeVariants } from '../utils/text.js'
 import { runAtomically } from '../utils/transaction.js'
 import type { ReservationListQuery } from '../validators/reservation.validators.js'
 import { assertWorksAt, hasPermission, isAdmin, workplaceIds, worksAt, type Actor } from './access.service.js'
@@ -67,7 +67,9 @@ export async function toDto(reservations: ReservationWithId[], actor: Actor) {
 async function uniquePickupCode(businessId: Types.ObjectId) {
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = pickupCode()
-    if (!(await Reservation.exists({ business: businessId, code, status: { $in: ACTIVE_RESERVATION_STATUSES } }))) return code
+    // Typed codes match regardless of prefix, so the 4 characters must be unique among active ones.
+    const taken = await Reservation.exists({ business: businessId, code: { $in: pickupCodeVariants(code.slice(-4)) }, status: { $in: ACTIVE_RESERVATION_STATUSES } })
+    if (!taken) return code
   }
   throw new ApiError(503, 'CODE_GENERATION_FAILED', 'Pokušajte ponovo.')
 }
@@ -172,12 +174,17 @@ export async function create(input: { offerId: string; quantity: number; promoCo
     if (customer) void sendReservationTicket(customer.email, { ...reservation.toObject(), id: reservation.id }, business)
     // The owner and everyone working at this location (the phone at the counter).
     const staff = await User.find({ staffOf: business._id, deletedAt: null }).select('_id').lean()
-    void notify([business.owner, ...staff.map((s) => s._id)], {
-      type: 'reservation_new',
-      title: `Nova rezervacija · ${reservation.code}`,
-      body: `${reservation.quantity} × ${reservation.offerTitle} (${business.name})`,
-      link: '/business/orders',
-    })
+    // E-mail only to those without working push on a phone (saves the daily mail quota).
+    void notify(
+      [business.owner, ...staff.map((s) => s._id)],
+      {
+        type: 'reservation_new',
+        title: `Nova rezervacija · ${reservation.code}`,
+        body: `${reservation.quantity} × ${reservation.offerTitle} (${business.name})`,
+        link: '/business/orders',
+      },
+      { email: 'fallback' },
+    )
   }
   return dto
 }
@@ -259,12 +266,16 @@ export async function cancel(id: string, actor: Actor) {
       link: `/reservations/${cancelled.id}`,
     })
   } else {
-    void notify([business.owner], {
-      type: 'reservation_cancelled',
-      title: `Otkazana rezervacija · ${cancelled.code}`,
-      body: `${cancelled.quantity} × ${cancelled.offerTitle} se vraća na stanje.`,
-      link: '/business/orders',
-    })
+    void notify(
+      [business.owner],
+      {
+        type: 'reservation_cancelled',
+        title: `Otkazana rezervacija · ${cancelled.code}`,
+        body: `${cancelled.quantity} × ${cancelled.offerTitle} se vraća na stanje.`,
+        link: '/business/orders',
+      },
+      { email: 'fallback' },
+    )
   }
   void notifyIfAvailable(cancelled.offer)
   void dispatchReservationEvent('reservation.cancelled', cancelled)
@@ -334,7 +345,7 @@ export async function collect(id: string, actor: Actor) {
  * caller's own businesses, so a code from another shop is simply "not found".
  */
 export async function collectByCode(input: { code: string; reservationId?: string }, actor: Actor) {
-  const filter: Record<string, unknown> = { code: input.code }
+  const filter: Record<string, unknown> = { code: { $in: pickupCodeVariants(input.code) } }
   if (input.reservationId) filter._id = input.reservationId
   if (!isAdmin(actor)) filter.business = { $in: await workplaceIds(actor) }
 

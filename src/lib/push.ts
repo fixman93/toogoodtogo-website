@@ -1,7 +1,7 @@
 /**
  * Web push on this device: register the service worker, ask permission,
  * subscribe with the server's VAPID key and send the subscription to the API.
- * iPhone/iPad: works only when Zalogaj is added to the home screen (iOS 16.4+).
+ * iPhone/iPad: works only when Foodnesi is added to the home screen (iOS 16.4+).
  */
 import { pushApi } from '@/api/services'
 

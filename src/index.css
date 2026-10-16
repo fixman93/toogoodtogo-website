@@ -3,7 +3,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design tokens (shadcn/ui convention). Brand: "Zalogaj" — deep basil green
+ * Design tokens (shadcn/ui convention). Brand: "Foodnesi" — deep basil green
  * paired with a warm apricot accent on a soft cream canvas.
  */
 :root {

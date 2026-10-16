@@ -1,4 +1,4 @@
-/* Zalogaj service worker — web push notifications only (no offline caching). */
+/* Foodnesi service worker — web push notifications only (no offline caching). */
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
 
@@ -7,10 +7,10 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {}
   } catch {
-    data = { title: 'Zalogaj', body: event.data ? event.data.text() : '' }
+    data = { title: 'Foodnesi', body: event.data ? event.data.text() : '' }
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Zalogaj', {
+    self.registration.showNotification(data.title || 'Foodnesi', {
       body: data.body || '',
       icon: '/icon-192.png',
       badge: '/icon-192.png',

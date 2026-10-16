@@ -16,13 +16,15 @@ export const reservationListQuery = z.object({
 
 export type ReservationListQuery = z.infer<typeof reservationListQuery>
 
-/** Accepts "ZL-4F7K", "zl4f7k" or "4F7K" and normalizes to "ZL-4F7K". */
+/** Accepts "FN-4F7K", "fn4f7k", "4F7K" (and old "ZL-4F7K") and normalizes to the 4-character code "4F7K". */
 export const collectByCodeBody = z.object({
   code: z
     .string()
     .trim()
-    .transform((v) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^ZL/, ''))
-    .pipe(z.string().length(4, 'Kod ima 4 znaka (npr. ZL-4F7K).'))
-    .transform((v) => `ZL-${v}`),
+    .transform((v) => {
+      const plain = v.toUpperCase().replace(/[^A-Z0-9]/g, '')
+      return plain.length === 6 && /^(FN|ZL)/.test(plain) ? plain.slice(2) : plain
+    })
+    .pipe(z.string().length(4, 'Kod ima 4 znaka (npr. FN-4F7K).')),
   reservationId: objectId.optional(),
 })

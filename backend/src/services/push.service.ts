@@ -31,17 +31,25 @@ export async function unsubscribe(actor: Actor, endpoint: string) {
   await PushSubscription.deleteOne({ endpoint, user: actor.id })
 }
 
-/** Fire-and-forget; dead subscriptions (404/410) are removed. */
+/**
+ * Send to every device of these users; dead subscriptions (404/410) are removed.
+ * Returns the ids of users reached on at least one device.
+ */
 export async function sendToUsers(userIds: (string | Types.ObjectId)[], payload: { title: string; body?: string; link?: string }) {
-  if (!configured || !userIds.length) return
+  const reached = new Set<string>()
+  if (!configured || !userIds.length) return reached
   const subs = await PushSubscription.find({ user: { $in: userIds } }).lean()
   const data = JSON.stringify({ ...payload, url: payload.link ? new URL(payload.link, env.APP_URL).toString() : env.APP_URL })
   await Promise.all(
     subs.map((s) =>
-      webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, data, { TTL: 3600 }).catch(async (error: { statusCode?: number }) => {
-        if (error.statusCode === 404 || error.statusCode === 410) await PushSubscription.deleteOne({ _id: s._id })
-        else console.error('Push failed', error.statusCode ?? error)
-      }),
+      webpush
+        .sendNotification({ endpoint: s.endpoint, keys: s.keys }, data, { TTL: 3600 })
+        .then(() => reached.add(s.user.toString()))
+        .catch(async (error: { statusCode?: number }) => {
+          if (error.statusCode === 404 || error.statusCode === 410) await PushSubscription.deleteOne({ _id: s._id })
+          else console.error('Push failed', error.statusCode ?? error)
+        }),
     ),
   )
+  return reached
 }

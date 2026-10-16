@@ -214,7 +214,7 @@ function Rewards() {
     if (!inviteUrl) return
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Zalogaj', text: t('profile.inviteMessage'), url: inviteUrl })
+        await navigator.share({ title: t('brand.name'), text: t('profile.inviteMessage'), url: inviteUrl })
         return
       } catch {
         /* closed */

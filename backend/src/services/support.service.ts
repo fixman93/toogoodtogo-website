@@ -28,7 +28,7 @@ async function serialize(ticket: TicketDoc, withMessages = true) {
           messages: ticket.messages.map((m) => ({
             body: m.body,
             fromTeam: m.fromTeam,
-            author: m.fromTeam ? 'Zalogaj podrška' : (users.get(m.author.toString())?.name ?? 'Korisnik'),
+            author: m.fromTeam ? 'Foodnesi podrška' : (users.get(m.author.toString())?.name ?? 'Korisnik'),
             createdAt: m.createdAt.toISOString(),
           })),
         }

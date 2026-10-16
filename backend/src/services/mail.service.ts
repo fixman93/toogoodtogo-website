@@ -9,7 +9,7 @@ const API_URL = 'https://api.mailersend.com/v1/email'
 
 function parseFrom(value: string) {
   const match = /^(.*)<(.+)>$/.exec(value.trim())
-  return match ? { name: match[1].trim() || 'Zalogaj', email: match[2].trim() } : { name: 'Zalogaj', email: value.trim() }
+  return match ? { name: match[1].trim() || 'Foodnesi', email: match[2].trim() } : { name: 'Foodnesi', email: value.trim() }
 }
 
 export const mailEnabled = () => Boolean(env.MAILERSEND_API_KEY)
@@ -23,7 +23,7 @@ export interface MailExtras {
   image?: { png: Buffer; alt: string; caption?: string }
 }
 
-const IMAGE_CID = 'zalogaj-image'
+const IMAGE_CID = 'foodnesi-image'
 
 function html(subject: string, body: string, url: string, button: string, extras: MailExtras = {}) {
   const image = extras.image
@@ -43,7 +43,7 @@ function html(subject: string, body: string, url: string, button: string, extras
     .join('')
   return `<!doctype html><html lang="sr"><body style="margin:0;font-family:Arial,Helvetica,sans-serif;background:#f7f5ef;padding:24px">
   <div style="max-width:520px;margin:auto;background:#ffffff;border-radius:16px;padding:28px">
-    <p style="font-size:22px;font-weight:bold;color:#0f4c3a;margin:0 0 16px">Zalogaj</p>
+    <p style="font-size:22px;font-weight:bold;color:#0f4c3a;margin:0 0 16px">Foodnesi</p>
     <p style="font-size:17px;font-weight:bold;color:#1d2b25;margin:0 0 12px">${escape(subject)}</p>
     ${paragraphs}
     ${image}
@@ -57,7 +57,7 @@ function html(subject: string, body: string, url: string, button: string, extras
  * Send one e-mail. `link` is an in-app path ("/reservations/123") or a full URL.
  * Never throws — a failed e-mail must not break the action that triggered it.
  */
-export async function sendMail(to: string, subject: string, body: string, link?: string, button = 'Otvori Zalogaj', extras: MailExtras = {}) {
+export async function sendMail(to: string, subject: string, body: string, link?: string, button = 'Otvori Foodnesi', extras: MailExtras = {}) {
   const url = link ? new URL(link, env.APP_URL).toString() : env.APP_URL
   if (!isProduction) console.log(`[mail] → ${to} | ${subject} | ${url}${extras.image ? ' | +QR' : ''}`)
   if (!env.MAILERSEND_API_KEY) return
