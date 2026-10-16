@@ -18,6 +18,8 @@
 
   --primary: oklch(0.38 0.08 165);
   --primary-foreground: oklch(0.98 0.01 85);
+  /* Light green of "nesi" in the Foodnesi logo. */
+  --brand-leaf: #69b05e;
   --secondary: oklch(0.95 0.025 160);
   --secondary-foreground: oklch(0.32 0.07 165);
   --muted: oklch(0.955 0.01 85);
@@ -50,6 +52,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-brand-leaf: var(--brand-leaf);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);

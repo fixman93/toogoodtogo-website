@@ -32,6 +32,17 @@ commands. The same REST API is meant to serve future native iOS/Android apps.
 └── vercel.json             # SPA routing for Vercel
 ```
 
+
+## Images and branding
+
+| What | Where | Notes |
+|---|---|---|
+| Favicon, app icons (home screen, PWA) | `public/` — `favicon.ico`, `favicon-32.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `icon-maskable-512.png` | Fixed names, referenced by `index.html` and `manifest.webmanifest`. |
+| Logo files used by URL (e-mails, header) | `public/brand/` — `foodnesi-mark.png` (symbol), `foodnesi-logo.png` (full logo) | Served as `/brand/…`. |
+| Images used inside components (illustrations, banners) | `src/assets/` and `import img from '@/assets/…'` | Bundled with a hashed name, so browsers cache them safely. |
+| Product / location / profile photos | Uploaded in the app → Cloudflare R2 | Never committed to the repo. |
+| Source artwork | `design/brand-source/` | Not deployed. Regenerate icons: `python3 design/make_icons.py design/brand-source/Foodnesi_Logo.png public/brand` |
+
 ## Deployment
 
 | Part | Where | Notes |
