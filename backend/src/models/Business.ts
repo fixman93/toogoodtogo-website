@@ -19,6 +19,8 @@ export interface IBusiness {
   openingHours?: string
   rating: { average: number; count: number }
   isActive: boolean
+  /** Hidden by the platform because the partner is paused/blocked (independent of isActive). */
+  suspended?: boolean
   /** Commission override for this location (0–0.5); market default when unset. */
   commissionRate?: number
   /** Set when a location with history (reservations/reviews) is deleted; hidden everywhere. */
@@ -58,6 +60,7 @@ const businessSchema = new Schema<IBusiness>(
     },
     isActive: { type: Boolean, default: true },
     commissionRate: { type: Number, min: 0, max: 0.5 },
+    suspended: { type: Boolean, default: false },
     deletedAt: { type: Date, index: true },
   },
   { timestamps: true },

@@ -50,3 +50,23 @@ export const applicationDecisionBody = z.object({
 })
 
 export const auditQuery = z.object({ ...pagination, limit: z.coerce.number().int().min(1).max(100).default(50) })
+
+export const monthQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM') })
+
+export const paymentBody = z.object({
+  ownerId: z.string().regex(/^[a-f\d]{24}$/i),
+  month: z.string().regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM'),
+  amountMinor: z.number().int().min(1).max(1_000_000_000),
+  direction: z.enum(['to_platform', 'to_partner']).default('to_platform'),
+  method: z.enum(['bank', 'cash', 'other']).default('bank'),
+  paidAt: z.coerce.date().max(new Date(Date.now() + 86_400_000), 'Datum ne može biti u budućnosti.').optional(),
+  note: z.string().trim().max(300).optional(),
+})
+
+export const partnerStatusBody = z.object({
+  status: z.enum(['active', 'paused', 'blocked']),
+  reason: z.string().trim().max(1000).optional(),
+})
+
+export const warningBody = z.object({ message: z.string().trim().min(5, 'Napiši bar par reči.').max(1000) })
+export const deletePartnerBody = z.object({ reason: z.string().trim().min(3, 'Navedi razlog.').max(1000) })

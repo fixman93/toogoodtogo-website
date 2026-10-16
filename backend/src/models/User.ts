@@ -24,6 +24,14 @@ export interface IUser {
   avatarUrl?: string
   /** Blocked by an admin: cannot sign in or use the API. */
   isBlocked: boolean
+  /**
+   * Partner standing set by the platform team. `paused` hides all of the
+   * partner's locations and offers (they can still sign in); `blocked` also
+   * blocks sign-in; `deleted` is a removed partner.
+   */
+  partnerStatus?: 'active' | 'paused' | 'blocked' | 'deleted'
+  partnerStatusReason?: string
+  partnerStatusAt?: Date
   /** Partner locations a `staff` user works at (scan + orders only). */
   staffOf: Types.ObjectId[]
   notificationPrefs: { push: boolean; email: boolean }
@@ -53,6 +61,9 @@ const userSchema = new Schema<IUser>(
     passwordResetExpires: { type: Date, select: false },
     passwordChangedAt: Date,
     isBlocked: { type: Boolean, default: false },
+    partnerStatus: { type: String, enum: ['active', 'paused', 'blocked', 'deleted'] },
+    partnerStatusReason: { type: String, maxlength: 1000 },
+    partnerStatusAt: Date,
     staffOf: { type: [{ type: Schema.Types.ObjectId, ref: 'Business' }], default: [], index: true },
     points: { type: Number, default: 0, min: 0 },
     referralCode: { type: String, unique: true, sparse: true, uppercase: true },

@@ -266,12 +266,16 @@ export async function cancel(id: string, actor: Actor) {
  * can't collect twice. "Pay at pickup" reservations are recorded as paid.
  */
 async function markCollected(reservation: ReservationDoc, actor: Actor) {
+  // Same default as the monthly statement (statement.service).
+  const business = await Business.findById(reservation.business).select('commissionRate').lean()
+  const commissionRate = business?.commissionRate ?? getMarket(env.DEFAULT_MARKET).commissionRate
   const updated = await Reservation.findOneAndUpdate(
     { _id: reservation._id, status: 'confirmed' },
     {
       $set: {
         status: 'collected',
         collectedAt: new Date(),
+        commissionRate,
         ...(reservation.payment.method === 'pay_at_pickup' ? { 'payment.status': 'paid' } : {}),
       },
     },

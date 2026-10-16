@@ -16,15 +16,18 @@ export interface NotificationInput {
   link?: string
 }
 
-export async function notify(userIds: (string | Types.ObjectId)[], input: NotificationInput) {
+/** `force`: account notices (warnings, pause/block) are e-mailed regardless of preferences or a block. */
+export async function notify(userIds: (string | Types.ObjectId)[], input: NotificationInput, options: { force?: boolean } = {}) {
   const unique = [...new Set(userIds.map(String))]
   if (!unique.length) return
   try {
     await Notification.insertMany(unique.map((user) => ({ user, ...input })))
     // Deliver outside the app as well, respecting each user's preferences.
-    const users = await User.find({ _id: { $in: unique }, deletedAt: null, isBlocked: { $ne: true } }).select('email notificationPrefs').lean()
+    const users = await User.find({ _id: { $in: unique }, deletedAt: null, ...(options.force ? {} : { isBlocked: { $ne: true } }) })
+      .select('email notificationPrefs')
+      .lean()
     const pushTo = users.filter((u) => u.notificationPrefs?.push !== false).map((u) => u._id)
-    const mailTo = users.filter((u) => u.notificationPrefs?.email !== false)
+    const mailTo = users.filter((u) => options.force || u.notificationPrefs?.email !== false)
     await Promise.all([
       sendToUsers(pushTo, input),
       ...mailTo.map((u) => sendMail(u.email, input.title, input.body ?? '', input.link)),

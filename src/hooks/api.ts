@@ -1,5 +1,5 @@
 /** TanStack Query hooks — the only way screens read or mutate server state. */
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { uploadsApi, type ImageKind } from '@/api/services'
 import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, promotionsApi, reservationsApi, supportApi, waitlistApi } from '@/api/services'
 import type { Donation, PromotionInput, TicketCategory, TicketStatus, WebhookEvent, ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
@@ -29,6 +29,41 @@ export function useBusinessReviews(businessId: string | undefined) {
 export function useMyBusinesses() {
   const { user } = useAuth()
   return useQuery({ queryKey: ['businesses', 'mine', user?.id], queryFn: () => businessesApi.list({ owner: 'me' }), enabled: !!user })
+}
+
+// ---------------------------------------------------------------------------
+// Cache refresh after changes. A reservation or offer change is visible in many
+// screens at once (customer lists, the partner's orders, sales, stock and
+// statement, offers, admin panel), so every mutation refreshes all of them.
+
+const RESERVATION_VIEWS = [
+  ['reservations'],
+  ['offers'],
+  ['businesses'],
+  ['partner', 'orders'],
+  ['partner', 'sales'],
+  ['partner', 'statement'],
+  ['partner', 'outstanding'],
+  ['admin', 'stats'],
+  ['admin', 'reservations'],
+  ['admin', 'statement'],
+  ['admin', 'outstanding'],
+]
+const CATALOG_VIEWS = [['offers'], ['businesses'], ['partner', 'orders'], ['partner', 'sales'], ['partner', 'suggestion'], ['admin', 'businesses'], ['admin', 'stats']]
+
+const refresh = (queryClient: QueryClient, keys: string[][]) => Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })))
+
+/** Show the new status in every cached list right away, before the refetch lands. */
+function patchReservation(queryClient: QueryClient, reservation: Reservation) {
+  queryClient.setQueryData(['reservations', 'detail', reservation.id], reservation)
+  const replace = (old: unknown) => {
+    const list = old as { data?: Reservation[] } | undefined
+    if (!list || !Array.isArray(list.data)) return old
+    return { ...list, data: list.data.map((r) => (r.id === reservation.id ? { ...r, ...reservation } : r)) }
+  }
+  queryClient.setQueriesData({ queryKey: ['partner', 'orders'] }, replace)
+  queryClient.setQueriesData({ queryKey: ['reservations'] }, replace)
+  queryClient.setQueriesData({ queryKey: ['admin', 'reservations'] }, replace)
 }
 
 export function useReservations(scope: 'upcoming' | 'history') {
@@ -70,8 +105,8 @@ export function useCollectReservation() {
   return useMutation({
     mutationFn: (input: { id: string } | { code: string; reservationId?: string }) =>
       'id' in input ? reservationsApi.collect(input.id) : reservationsApi.collectByCode(input),
-    onSuccess: (reservation) => queryClient.setQueryData(['reservations', 'detail', reservation.id], reservation),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['reservations'] }),
+    onSuccess: (reservation) => patchReservation(queryClient, reservation),
+    onSettled: () => refresh(queryClient, RESERVATION_VIEWS),
   })
 }
 
@@ -79,11 +114,8 @@ export function useCreateReservation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body: { offerId: string; quantity: number; promoCode?: string }) => reservationsApi.create(body),
-    onSettled: () => {
-      // Availability changed for everyone: refresh offers and my reservations.
-      queryClient.invalidateQueries({ queryKey: ['offers'] })
-      queryClient.invalidateQueries({ queryKey: ['reservations'] })
-    },
+    // Availability changed for everyone: refresh offers, reservations and stock.
+    onSettled: () => refresh(queryClient, RESERVATION_VIEWS),
   })
 }
 
@@ -91,11 +123,8 @@ export function useCancelReservation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: reservationsApi.cancel,
-    onSuccess: (reservation) => queryClient.setQueryData(['reservations', 'detail', reservation.id], reservation),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['offers'] })
-      queryClient.invalidateQueries({ queryKey: ['reservations'] })
-    },
+    onSuccess: (reservation) => patchReservation(queryClient, reservation),
+    onSettled: () => refresh(queryClient, RESERVATION_VIEWS),
   })
 }
 
@@ -156,10 +185,7 @@ export function useSaveBusiness() {
   return useMutation({
     mutationFn: ({ id, body }: { id?: string; body: BusinessInput }) => (id ? businessesApi.update(id, body) : businessesApi.create(body)),
     onSuccess: (business) => queryClient.setQueryData(['businesses', 'detail', business.id], business),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['businesses'] })
-      queryClient.invalidateQueries({ queryKey: ['offers'] })
-    },
+    onSettled: () => refresh(queryClient, [...CATALOG_VIEWS, ['partner', 'workplaces']]),
   })
 }
 
@@ -170,10 +196,7 @@ export function useSaveOffer() {
     mutationFn: (input: { id: string; body: OfferPatch } | { id?: undefined; body: OfferInput }) =>
       input.id ? offersApi.update(input.id, input.body) : offersApi.create(input.body as OfferInput),
     onSuccess: (offer) => queryClient.setQueryData(['offers', 'detail', offer.id], offer),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['offers'] })
-      queryClient.invalidateQueries({ queryKey: ['businesses'] })
-    },
+    onSettled: () => refresh(queryClient, CATALOG_VIEWS),
   })
 }
 
@@ -181,11 +204,7 @@ export function useDeleteBusiness() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: businessesApi.remove,
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['businesses'] })
-      queryClient.invalidateQueries({ queryKey: ['offers'] })
-      queryClient.invalidateQueries({ queryKey: ['admin'] })
-    },
+    onSettled: () => refresh(queryClient, [...CATALOG_VIEWS, ['partner', 'workplaces'], ['admin']]),
   })
 }
 
@@ -193,10 +212,7 @@ export function useDeleteOffer() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: offersApi.remove,
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['offers'] })
-      queryClient.invalidateQueries({ queryKey: ['businesses'] })
-    },
+    onSettled: () => refresh(queryClient, CATALOG_VIEWS),
   })
 }
 
@@ -228,11 +244,7 @@ export function useSetBusinessActive() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => businessesApi.update(id, { isActive }),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin'] })
-      queryClient.invalidateQueries({ queryKey: ['businesses'] })
-      queryClient.invalidateQueries({ queryKey: ['offers'] })
-    },
+    onSettled: () => refresh(queryClient, [...CATALOG_VIEWS, ['admin']]),
   })
 }
 
@@ -500,11 +512,53 @@ export function usePlatformStatement(month: string) {
   return useQuery({ queryKey: ['admin', 'statement', month], queryFn: () => adminApi.statement(month) })
 }
 
+export function useOutstanding(admin: boolean) {
+  return useQuery({ queryKey: [admin ? 'admin' : 'partner', 'outstanding'], queryFn: admin ? adminApi.outstanding : partnerApi.outstanding })
+}
+
+/** Record / undo a payment; refreshes the month statement and the open balances. */
+export function useRecordPayment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: adminApi.recordPayment,
+    onSettled: () => Promise.all([queryClient.invalidateQueries({ queryKey: ['admin', 'statement'] }), queryClient.invalidateQueries({ queryKey: ['admin', 'outstanding'] })]),
+  })
+}
+
+export function useDeletePayment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: adminApi.deletePayment,
+    onSettled: () => Promise.all([queryClient.invalidateQueries({ queryKey: ['admin', 'statement'] }), queryClient.invalidateQueries({ queryKey: ['admin', 'outstanding'] })]),
+  })
+}
+
+/** The signed-in partner's status and warnings from the platform team. */
+export function useMyStanding(enabled: boolean) {
+  return useQuery({ queryKey: ['partner', 'standing'], queryFn: partnerApi.standing, enabled, staleTime: 60_000 })
+}
+
+export function usePartnerStanding(id: string | null) {
+  return useQuery({ queryKey: ['admin', 'standing', id], queryFn: () => adminApi.partnerStanding(id!), enabled: !!id })
+}
+
+/** Pause / block / reactivate / warn / resolve / delete; everything admin-side refreshes. */
+export function usePartnerModeration() {
+  const queryClient = useQueryClient()
+  const onSettled = () => queryClient.invalidateQueries({ queryKey: ['admin'] })
+  return {
+    setStatus: useMutation({ mutationFn: (v: { id: string; status: 'active' | 'paused' | 'blocked'; reason?: string }) => adminApi.setPartnerStatus(v.id, v), onSettled }),
+    warn: useMutation({ mutationFn: (v: { id: string; message: string }) => adminApi.warnPartner(v.id, v.message), onSettled }),
+    resolve: useMutation({ mutationFn: adminApi.resolveWarning, onSettled }),
+    remove: useMutation({ mutationFn: (v: { id: string; reason: string }) => adminApi.deletePartner(v.id, v.reason), onSettled }),
+  }
+}
+
 export function useSetCommission() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ businessId, rate }: { businessId: string; rate: number | null }) => adminApi.setCommission(businessId, rate),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin', 'statement'] }),
+    onSettled: () => refresh(queryClient, [['admin', 'statement'], ['admin', 'outstanding'], ['partner', 'statement']]),
   })
 }
 

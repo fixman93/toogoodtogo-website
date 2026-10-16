@@ -9,6 +9,7 @@ import * as staffService from '../services/staff.service.js'
 import * as donationService from '../services/donation.service.js'
 import * as integrationService from '../services/integration.service.js'
 import * as statementService from '../services/statement.service.js'
+import * as moderationService from '../services/partner-moderation.service.js'
 import * as suggestionService from '../services/suggestion.service.js'
 import { z } from 'zod'
 import { WEBHOOK_EVENTS } from '../models/index.js'
@@ -71,6 +72,16 @@ export async function deleteDonation(req: Request, res: Response) {
 export async function statement(req: Request, res: Response) {
   const { month: m } = z.object({ month }).parse(req.query)
   ok(res, await statementService.partnerStatement(currentUser(req), m))
+}
+
+/** Months the partner hasn't settled yet. */
+export async function outstanding(req: Request, res: Response) {
+  ok(res, await statementService.outstanding(currentUser(req).id))
+}
+
+/** Account standing: paused/blocked status and warnings from the platform team. */
+export async function standing(req: Request, res: Response) {
+  ok(res, await moderationService.myStanding(currentUser(req).id))
 }
 
 export async function listApiKeys(req: Request, res: Response) {

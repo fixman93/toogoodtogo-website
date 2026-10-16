@@ -21,5 +21,15 @@ adminRoutes.patch('/applications/:id', requirePermission('applications.manage'),
 adminRoutes.get('/audit', requirePermission('audit.view'), c.listAudit)
 adminRoutes.get('/support', requirePermission('support.manage'), adminTickets)
 adminRoutes.get('/statements', requirePermission('finance.view'), c.platformStatement)
+adminRoutes.get('/statements/outstanding', requirePermission('finance.view'), c.outstanding)
+// Confirm what a partner paid (or what the platform paid out) for a month.
+adminRoutes.post('/payments', requirePermission('finance.manage'), c.recordPayment)
+adminRoutes.delete('/payments/:id', requirePermission('finance.manage'), c.deletePayment)
+// Partner moderation: warnings, pause, block, delete (all visible to the partner).
+adminRoutes.get('/partners/:id/standing', requirePermission('partners.manage'), c.partnerStanding)
+adminRoutes.patch('/partners/:id/status', requirePermission('partners.manage'), c.setPartnerStatus)
+adminRoutes.post('/partners/:id/warnings', requirePermission('partners.manage'), c.warnPartner)
+adminRoutes.patch('/partner-notes/:id/resolve', requirePermission('partners.manage'), c.resolveWarning)
+adminRoutes.delete('/partners/:id', requirePermission('partners.manage'), c.deletePartner)
 adminRoutes.patch('/businesses/:id/commission', requirePermission('finance.view'), c.setCommission)
 adminRoutes.get('/donations', requirePermission('donations.view'), c.listDonations)

@@ -23,6 +23,7 @@ export async function list(
     filter.owner = actor.id
   } else {
     filter.isActive = true
+    filter.suspended = { $ne: true }
   }
   if (query.city) filter['address.city'] = new RegExp(`^${escapeRegex(query.city)}$`, 'i')
   if (query.category) filter.category = query.category
@@ -37,7 +38,7 @@ export async function list(
 export async function get(id: string, actor?: Actor) {
   const business = await Business.findById(id)
   const canSeeInactive = actor && (isAdmin(actor) || hasPermission(actor, 'businesses.moderate') || business?.owner.toString() === actor.id)
-  if (!business || business.deletedAt || (!business.isActive && !canSeeInactive)) throw ApiError.notFound('Lokal nije pronađen.')
+  if (!business || business.deletedAt || ((!business.isActive || business.suspended) && !canSeeInactive)) throw ApiError.notFound('Lokal nije pronađen.')
   return serializeBusiness(business)
 }
 

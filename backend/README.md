@@ -157,6 +157,14 @@ Base path: `/api`. Requests and responses are JSON.
 | `GET /admin/reviews` · `PATCH /admin/reviews/:id` | admin | Moderation `{ hidden }`; rating average kept consistent |
 | `GET /admin/applications` · `PATCH /admin/applications/:id` | admin | `{ status: approved\|rejected, note? }` |
 | `GET /admin/audit` | admin | Audit log of administrative actions |
+| `GET /admin/statements?month=` | finance.view | Monthly statement per partner incl. payments and status (`unpaid\|partial\|paid\|overpaid`) |
+| `GET /admin/statements/outstanding` | finance.view | Every month not fully settled, per partner |
+| `POST /admin/payments` · `DELETE /admin/payments/:id` | finance.manage | Confirm a payment `{ ownerId, month, amountMinor, direction: to_platform\|to_partner, method, paidAt?, note? }` / undo it |
+| `GET /admin/partners/:id/standing` | partners.manage | Partner status and moderation history |
+| `PATCH /admin/partners/:id/status` | partners.manage | `{ status: active\|paused\|blocked, reason }` – paused/blocked hides all locations and offers |
+| `POST /admin/partners/:id/warnings` · `PATCH /admin/partner-notes/:id/resolve` | partners.manage | Warning visible to the partner / mark resolved |
+| `DELETE /admin/partners/:id` | partners.manage | `{ reason }`; refused while there are active reservations; sales and payment history kept |
+| `GET /partner/standing` · `GET /partner/statements/outstanding` | partner | Own status/warnings and unsettled months |
 | `GET /health` | public | |
 
 ## Structure

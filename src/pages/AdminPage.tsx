@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
-import { Ban, CalendarCheck, ClipboardList, History, Leaf, Loader2, MapPin, MessageSquare, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Ban, CalendarCheck, CheckCircle2, ChevronDown, ClipboardList, History, Leaf, Loader2, MapPin, MessageSquare, PauseCircle, PlayCircle, ReceiptText, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import { PLATFORM_ROLES, type AdminBusiness, type AdminReview, type AdminUser, type ApplicationStatus, type PartnerApplication, type Permission, type PlatformStatement, type ReservationStatus, type Role, type TicketStatus } from '@/api/types'
+import { PLATFORM_ROLES, type AdminBusiness, type AdminReview, type AdminUser, type ApplicationStatus, type PartnerApplication, type Permission, type PaymentDirection, type PaymentMethod, type PlatformStatementPartner, type ReservationStatus, type Role, type TicketStatus } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
@@ -28,6 +28,11 @@ import {
   useAuditLog,
   useDonations,
   usePlatformStatement,
+  useOutstanding,
+  useRecordPayment,
+  useDeletePayment,
+  usePartnerStanding,
+  usePartnerModeration,
   useSetCommission,
   useTicket,
   useDecideApplication,
@@ -42,16 +47,19 @@ import { currentMonth } from '@/lib/time'
 import { TicketStatusBadge, TicketThread } from '@/features/support/TicketThread'
 import { PromotionsManager } from '@/features/promotions/PromotionsManager'
 import { DonationTable } from '@/pages/partner/DonationsPage'
-import { StatementSummary } from '@/pages/partner/StatementPage'
+import { OpenMonths, SettlementInfo, StatementSummary } from '@/pages/partner/StatementPage'
+import { ConfirmDelete } from '@/components/common/ConfirmDelete'
+import { NoteItem } from '@/features/business/StandingNotice'
 import { cn } from '@/lib/utils'
 
-const TABS = ['overview', 'applications', 'users', 'businesses', 'reservations', 'reviews', 'support', 'promotions', 'finance', 'donations', 'audit'] as const
+const TABS = ['overview', 'applications', 'users', 'partners', 'businesses', 'reservations', 'reviews', 'support', 'promotions', 'finance', 'donations', 'audit'] as const
 type Tab = (typeof TABS)[number]
 /** Which permission each tab needs (mirrors the API). */
 const TAB_PERMISSION: Record<Tab, Permission> = {
   overview: 'stats.view',
   applications: 'applications.manage',
   users: 'users.view',
+  partners: 'partners.manage',
   businesses: 'businesses.moderate',
   reservations: 'reservations.view',
   reviews: 'reviews.moderate',
@@ -692,9 +700,167 @@ function CommissionEditor({ businessId, rate }: { businessId: string; rate: numb
   )
 }
 
-function FinanceTab() {
-  const [month, setMonth] = useState(currentMonth())
+const todayIso = () => new Date().toLocaleDateString('en-CA')
+
+/** Confirm a payment for one partner and month (pre-filled with what is still open). */
+function PaymentForm({ partner, month, currency, onDone }: { partner: PlatformStatementPartner; month: string; currency: string; onDone: () => void }) {
+  const record = useRecordPayment()
+  const [direction, setDirection] = useState<PaymentDirection>(partner.remainingMinor < 0 ? 'to_partner' : 'to_platform')
+  const [amount, setAmount] = useState(partner.remainingMinor ? String(Math.abs(partner.remainingMinor) / 100) : '')
+  const [method, setMethod] = useState<PaymentMethod>('bank')
+  const [paidAt, setPaidAt] = useState(todayIso())
+  const [note, setNote] = useState('')
+  const [invalid, setInvalid] = useState(false)
+
+  return (
+    <form
+      className="space-y-3 rounded-xl border bg-card p-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const amountMinor = Math.round(Number(amount.replace(',', '.')) * 100)
+        if (!Number.isFinite(amountMinor) || amountMinor <= 0) return setInvalid(true)
+        setInvalid(false)
+        record.mutate({ ownerId: partner.ownerId, month, amountMinor, direction, method, paidAt, note: note.trim() || undefined }, { onSuccess: onDone })
+      }}
+    >
+      <NativeSelect value={direction} onChange={(e) => setDirection(e.target.value as PaymentDirection)} className="h-10 w-full rounded-lg" aria-label={t('settle.direction.to_platform')}>
+        <option value="to_platform">{t('settle.direction.to_platform')}</option>
+        <option value="to_partner">{t('settle.direction.to_partner')}</option>
+      </NativeSelect>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <label className="space-y-1 text-xs font-semibold">
+          {t('settle.amount', { currency })}
+          <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-10 rounded-lg" required />
+        </label>
+        <label className="space-y-1 text-xs font-semibold">
+          {t('settle.method')}
+          <NativeSelect value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className="h-10 w-full rounded-lg">
+            {(['bank', 'cash', 'other'] as const).map((m) => (
+              <option key={m} value={m}>
+                {t(`settle.method.${m}`)}
+              </option>
+            ))}
+          </NativeSelect>
+        </label>
+        <label className="space-y-1 text-xs font-semibold">
+          {t('settle.date')}
+          <Input type="date" value={paidAt} max={todayIso()} onChange={(e) => setPaidAt(e.target.value)} className="h-10 rounded-lg" required />
+        </label>
+      </div>
+      <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('settle.note')} maxLength={300} className="h-10 rounded-lg" />
+      {(invalid || record.isError) && (
+        <p role="alert" className="text-xs font-semibold text-destructive">
+          {invalid ? t('settle.invalidAmount') : record.error instanceof ApiError ? record.error.message : t('common.errorText')}
+        </p>
+      )}
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={record.isPending}>
+          {record.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+          {t('settle.save')}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+          {t('settle.cancel')}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function FinancePartnerRow({ p, month, currency }: { p: PlatformStatementPartner; month: string; currency: string }) {
+  const { can } = useAuth()
+  const manage = can('finance.manage')
+  const remove = useDeletePayment()
+  const [paying, setPaying] = useState(false)
+  const [details, setDetails] = useState(false)
+
+  return (
+    <li className="space-y-3 p-4 text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <span className="min-w-0">
+          <span className="flex flex-wrap items-center gap-2 font-semibold">
+            {p.name}
+            {p.partnerStatus !== 'active' && <Badge variant="destructive">{t(`pm.status.${p.partnerStatus}`)}</Badge>}
+          </span>
+          <span className="block truncate text-muted-foreground">{p.email}</span>
+        </span>
+        <span className="text-right">
+          <span className="block font-bold tabular-nums">
+            {p.balanceMinor >= 0 ? t('statement.balance') : t('statement.balanceCredit')}: {formatMoney(Math.abs(p.balanceMinor), currency)}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {t('statement.ordersCount', { count: p.orders })} · {formatMoney(p.grossMinor, currency)}
+          </span>
+        </span>
+      </div>
+
+      <SettlementInfo
+        s={p}
+        payments={p.payments}
+        currency={currency}
+        paymentAction={
+          manage
+            ? (pay) => (
+                <ConfirmDelete
+                  label={t('settle.undo')}
+                  question={t('settle.undoConfirm', { amount: formatMoney(pay.amountMinor, currency) })}
+                  onConfirm={() => remove.mutate(pay.id)}
+                  pending={remove.isPending}
+                  error={remove.error}
+                />
+              )
+            : undefined
+        }
+      />
+
+      {paying ? (
+        <PaymentForm partner={p} month={month} currency={currency} onDone={() => setPaying(false)} />
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {manage && p.status !== 'paid' && p.status !== 'none' && (
+            <Button size="sm" onClick={() => setPaying(true)}>
+              <CheckCircle2 />
+              {p.remainingMinor < 0 ? t('settle.recordPayout') : t('settle.record')}
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" aria-expanded={details} onClick={() => setDetails((v) => !v)}>
+            {t('admin.locations', { count: p.businesses.length })}
+            <ChevronDown className={cn('transition-transform', details && 'rotate-180')} />
+          </Button>
+        </div>
+      )}
+
+      {details && (
+        <ul className="space-y-1.5">
+          {p.businesses.map((b) => (
+            <li key={b.businessId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+              <span>
+                {b.name} · {b.orders} · {formatMoney(b.grossMinor, currency)} · {formatMoney(b.commissionMinor, currency)}
+              </span>
+              <CommissionEditor businessId={b.businessId} rate={b.rate} />
+            </li>
+          ))}
+          <li className="px-1 text-xs text-muted-foreground">{t('finance.rateFrozen')}</li>
+        </ul>
+      )}
+    </li>
+  )
+}
+
+function MoneyTile({ label, value, currency, tone }: { label: string; value: number; currency: string; tone?: 'good' | 'bad' }) {
+  return (
+    <Card className="space-y-1 p-4">
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p className={cn('text-xl font-extrabold tabular-nums', tone === 'good' && 'text-success', tone === 'bad' && value > 0 && 'text-destructive')}>{formatMoney(value, currency)}</p>
+    </Card>
+  )
+}
+
+function MonthFinance({ month, setMonth }: { month: string; setMonth: (m: string) => void }) {
+  const [filter, setFilter] = useState<'open' | 'paid'>()
   const { data, isLoading, isError, refetch } = usePlatformStatement(month)
+  const partners = (data?.partners ?? []).filter((p) =>
+    filter === 'paid' ? p.status === 'paid' || p.status === 'none' : filter === 'open' ? p.status === 'unpaid' || p.status === 'partial' || p.status === 'overpaid' : true,
+  )
   return (
     <div className="space-y-4">
       <Input type="month" value={month} max={currentMonth()} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-10 w-auto rounded-full" aria-label={t('statement.month')} />
@@ -704,35 +870,354 @@ function FinanceTab() {
         <ErrorState onRetry={() => refetch()} />
       ) : (
         <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <MoneyTile label={t('finance.earned')} value={data.commissionMinor} currency={data.currency} tone="good" />
+            <MoneyTile label={t('finance.settled')} value={data.settledMinor} currency={data.currency} />
+            <MoneyTile label={t('finance.owedToUs')} value={data.owedToPlatformMinor} currency={data.currency} tone="bad" />
+            <MoneyTile label={t('finance.owedByUs')} value={data.owedToPartnersMinor} currency={data.currency} tone="bad" />
+          </div>
           <Card className="p-5">
             <StatementSummary s={data} currency={data.currency} />
           </Card>
-          <Card className="overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Chips<'open' | 'paid'>
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { label: t('finance.filter.all') },
+                { value: 'open', label: t('finance.filter.open') },
+                { value: 'paid', label: t('finance.filter.paid') },
+              ]}
+            />
+            <span className="text-sm text-muted-foreground">{t('finance.partnersPaid', { paid: data.paidPartners, open: data.openPartners })}</span>
+          </div>
+          {partners.length === 0 ? (
+            <EmptyState icon={ReceiptText} title={t('finance.noPartners')} className="py-8" />
+          ) : (
+            <Card className="overflow-hidden">
+              <ul className="divide-y">
+                {partners.map((p) => (
+                  <FinancePartnerRow key={p.ownerId} p={p} month={month} currency={data.currency} />
+                ))}
+              </ul>
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function OutstandingFinance({ onOpen }: { onOpen: (month: string) => void }) {
+  const { data, isLoading, isError, refetch } = useOutstanding(true)
+  if (isLoading) return <Skeleton className="h-40 rounded-2xl" />
+  if (isError || !data) return <ErrorState onRetry={() => refetch()} />
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">{t('finance.outstandingIntro')}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <MoneyTile label={`${t('finance.owedToUs')} (${t('finance.due').toLowerCase()})`} value={data.owedToPlatformMinor} currency={data.currency} tone="bad" />
+        <MoneyTile label={`${t('finance.owedByUs')} (${t('finance.due').toLowerCase()})`} value={data.owedToPartnersMinor} currency={data.currency} tone="bad" />
+      </div>
+      {data.partners.length === 0 ? (
+        <EmptyState icon={CheckCircle2} title={t('finance.outstandingEmpty')} className="py-8" />
+      ) : (
+        <Card className="overflow-hidden">
+          <ul className="divide-y">
+            {data.partners.map((p) => (
+              <li key={p.ownerId} className="space-y-2 p-4 text-sm">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="min-w-0">
+                    <span className="flex flex-wrap items-center gap-2 font-semibold">
+                      {p.name}
+                      {p.partnerStatus !== 'active' && <Badge variant="destructive">{t(`pm.status.${p.partnerStatus}`)}</Badge>}
+                    </span>
+                    <span className="block truncate text-muted-foreground">{p.email}</span>
+                  </span>
+                  {p.dueMinor !== 0 && (
+                    <span className={cn('font-bold tabular-nums', p.dueMinor > 0 ? 'text-destructive' : 'text-success')}>
+                      {t('finance.due')}: {formatMoney(Math.abs(p.dueMinor), data.currency)}
+                    </span>
+                  )}
+                </div>
+                <OpenMonths months={p.months} currency={data.currency} onOpen={onOpen} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+function FinanceTab() {
+  const [view, setView] = useState<'month' | 'outstanding'>('month')
+  const [month, setMonth] = useState(currentMonth())
+  return (
+    <div className="space-y-4">
+      <Chips<'month' | 'outstanding'>
+        value={view}
+        onChange={(v) => setView(v ?? 'month')}
+        options={[
+          { value: 'month', label: t('finance.view.month') },
+          { value: 'outstanding', label: t('finance.view.outstanding') },
+        ]}
+      />
+      {view === 'month' ? (
+        <MonthFinance month={month} setMonth={setMonth} />
+      ) : (
+        <OutstandingFinance
+          onOpen={(m) => {
+            setMonth(m)
+            setView('month')
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Partners: status (pause / block / delete) and warnings
+
+const STATUS_BADGE = { active: 'success', paused: 'accent', blocked: 'destructive', deleted: 'muted' } as const
+
+function PartnerPanel({ partner }: { partner: AdminUser }) {
+  const { data, isLoading } = usePartnerStanding(partner.id)
+  const { setStatus, warn, resolve, remove } = usePartnerModeration()
+  const [pending, setPending] = useState<'paused' | 'blocked' | 'active' | null>(null)
+  const [reason, setReason] = useState('')
+  const [warning, setWarning] = useState('')
+  const [warned, setWarned] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
+  const status = data?.status ?? partner.partnerStatus
+  const errorOf = (e: unknown) => (e instanceof ApiError ? e.message : t('common.errorText'))
+
+  if (isLoading) return <Skeleton className="h-32 rounded-xl" />
+  return (
+    <div className="space-y-4 rounded-xl border bg-muted/30 p-3 text-sm">
+      {data?.reason && status !== 'active' && <p className="font-medium">{t('standing.reason', { reason: data.reason })}</p>}
+
+      {/* Status */}
+      {pending ? (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">{t(pending === 'paused' ? 'pm.pauseHint' : pending === 'blocked' ? 'pm.blockHint' : 'pm.activateHint')}</p>
+          {pending !== 'active' && (
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('pm.reason')} maxLength={1000} rows={2} aria-label={t('pm.reason')} />
+          )}
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={pending === 'active' ? 'default' : 'destructive'}
+              disabled={setStatus.isPending || (pending !== 'active' && reason.trim().length < 3)}
+              onClick={() =>
+                setStatus.mutate(
+                  { id: partner.id, status: pending, reason: reason.trim() || undefined },
+                  {
+                    onSuccess: () => {
+                      setPending(null)
+                      setReason('')
+                    },
+                  },
+                )
+              }
+            >
+              {setStatus.isPending && <Loader2 className="animate-spin" />}
+              {t('pm.confirm')}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setPending(null)}>
+              {t('settle.cancel')}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {status !== 'active' && (
+            <Button size="sm" onClick={() => setPending('active')}>
+              <PlayCircle />
+              {t('pm.activate')}
+            </Button>
+          )}
+          {status === 'active' && (
+            <Button size="sm" variant="outline" onClick={() => setPending('paused')}>
+              <PauseCircle />
+              {t('pm.pause')}
+            </Button>
+          )}
+          {status !== 'blocked' && (
+            <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => setPending('blocked')}>
+              <Ban />
+              {t('pm.block')}
+            </Button>
+          )}
+        </div>
+      )}
+      {setStatus.isError && (
+        <p role="alert" className="text-xs font-semibold text-destructive">
+          {errorOf(setStatus.error)}
+        </p>
+      )}
+
+      {/* Warning */}
+      <form
+        className="space-y-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          warn.mutate(
+            { id: partner.id, message: warning.trim() },
+            {
+              onSuccess: () => {
+                setWarning('')
+                setWarned(true)
+              },
+            },
+          )
+        }}
+      >
+        <label className="text-xs font-semibold" htmlFor={`warn-${partner.id}`}>
+          {t('pm.warn')}
+        </label>
+        <Textarea
+          id={`warn-${partner.id}`}
+          value={warning}
+          onChange={(e) => {
+            setWarning(e.target.value)
+            setWarned(false)
+          }}
+          placeholder={t('pm.warningPlaceholder')}
+          maxLength={1000}
+          rows={2}
+        />
+        <Button type="submit" size="sm" variant="outline" disabled={warn.isPending || warning.trim().length < 5}>
+          {warn.isPending ? <Loader2 className="animate-spin" /> : <AlertTriangle />}
+          {t('pm.sendWarning')}
+        </Button>
+        {warned && (
+          <p role="status" className="text-xs font-semibold text-success">
+            {t('pm.warningSent')}
+          </p>
+        )}
+        {warn.isError && (
+          <p role="alert" className="text-xs font-semibold text-destructive">
+            {errorOf(warn.error)}
+          </p>
+        )}
+      </form>
+
+      {/* History */}
+      <div>
+        <p className="text-xs font-semibold">{t('pm.history')}</p>
+        {data?.history.length ? (
+          <ul className="divide-y">
+            {data.history.map((n) => (
+              <NoteItem
+                key={n.id}
+                note={n}
+                action={
+                  n.kind === 'warning' &&
+                  !n.resolvedAt && (
+                    <Button size="sm" variant="ghost" className="h-8" disabled={resolve.isPending} onClick={() => resolve.mutate(n.id)}>
+                      <CheckCircle2 />
+                      {t('pm.resolve')}
+                    </Button>
+                  )
+                }
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="py-2 text-xs text-muted-foreground">{t('pm.noHistory')}</p>
+        )}
+      </div>
+
+      {/* Delete */}
+      <div className="space-y-2 border-t pt-3">
+        <Input value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)} placeholder={t('pm.deleteReason')} maxLength={1000} className="h-10 rounded-lg" aria-label={t('pm.deleteReason')} />
+        {deleteReason.trim().length >= 3 ? (
+          <ConfirmDelete
+            label={t('pm.delete')}
+            question={t('pm.deleteConfirm', { name: partner.name })}
+            onConfirm={() => remove.mutate({ id: partner.id, reason: deleteReason.trim() })}
+            pending={remove.isPending}
+            error={remove.error}
+          />
+        ) : (
+          <p className="text-xs text-muted-foreground">{t('pm.deleteNeedsReason')}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PartnerRow({ partner }: { partner: AdminUser }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <li className="space-y-3 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-2 font-semibold">
+            <span className="truncate">{partner.name}</span>
+            <Badge variant={STATUS_BADGE[partner.partnerStatus]}>{t(`pm.status.${partner.partnerStatus}`)}</Badge>
+          </p>
+          <p className="truncate text-sm text-muted-foreground">{partner.email}</p>
+          <p className="text-xs text-muted-foreground">{t('admin.locations', { count: partner.businessCount })}</p>
+        </div>
+        <Button size="sm" variant={open ? 'secondary' : 'outline'} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {t('pm.manage')}
+          <ChevronDown className={cn('transition-transform', open && 'rotate-180')} />
+        </Button>
+      </div>
+      {open && <PartnerPanel partner={partner} />}
+    </li>
+  )
+}
+
+function PartnersTab() {
+  const [q, setQ] = useState('')
+  const [status, setStatus] = useState<'active' | 'paused' | 'blocked'>()
+  const [limit, setLimit] = useState(PAGE)
+  const { data, isLoading, isError, refetch, isFetching } = useAdminUsers({ q: q || undefined, role: 'business', limit })
+  const partners = (data?.data ?? []).filter((u) => !status || u.partnerStatus === status)
+
+  return (
+    <div className="space-y-4">
+      <SearchBox
+        placeholder={t('pm.searchPartners')}
+        onSearch={(v) => {
+          setQ(v)
+          setLimit(PAGE)
+        }}
+      />
+      <Chips<'active' | 'paused' | 'blocked'>
+        value={status}
+        onChange={setStatus}
+        options={[
+          { label: t('admin.all') },
+          { value: 'active', label: t('pm.status.active') },
+          { value: 'paused', label: t('pm.status.paused') },
+          { value: 'blocked', label: t('pm.status.blocked') },
+        ]}
+      />
+      {isLoading ? (
+        <Skeleton className="h-64 rounded-2xl" />
+      ) : isError ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : partners.length === 0 ? (
+        <EmptyState icon={Store} title={q || status ? t('admin.noResults') : t('pm.empty')} />
+      ) : (
+        <>
+          <Card className={cn('overflow-hidden', isFetching && 'opacity-70')}>
             <ul className="divide-y">
-              {(data as PlatformStatement).partners.map((p) => (
-                <li key={p.ownerId} className="space-y-2 p-4 text-sm">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-semibold">
-                      {p.name} <span className="font-normal text-muted-foreground">{p.email}</span>
-                    </span>
-                    <span className="font-bold tabular-nums">
-                      {formatMoney(p.balanceMinor, data.currency)} <span className="font-normal text-muted-foreground">/ {formatMoney(p.grossMinor, data.currency)}</span>
-                    </span>
-                  </div>
-                  <ul className="space-y-1.5">
-                    {p.businesses.map((b) => (
-                      <li key={b.businessId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                        <span>
-                          {b.name} · {b.orders} · {formatMoney(b.grossMinor, data.currency)}
-                        </span>
-                        <CommissionEditor businessId={b.businessId} rate={b.rate} />
-                      </li>
-                    ))}
-                  </ul>
-                </li>
+              {partners.map((u) => (
+                <PartnerRow key={u.id} partner={u} />
               ))}
             </ul>
           </Card>
+          {data && data.data.length < data.meta.total && (
+            <Button variant="outline" className="w-full" onClick={() => setLimit((l) => l + PAGE)}>
+              {t('admin.showMore')}
+            </Button>
+          )}
         </>
       )}
     </div>
@@ -778,6 +1263,7 @@ function AdminPanel() {
       </div>
       {tab === 'overview' && <Overview />}
       {tab === 'users' && <UsersTab />}
+      {tab === 'partners' && <PartnersTab />}
       {tab === 'businesses' && <BusinessesTab />}
       {tab === 'applications' && <ApplicationsTab />}
       {tab === 'reservations' && <ReservationsTab />}

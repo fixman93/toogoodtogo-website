@@ -29,6 +29,8 @@ export interface IOffer {
   pickupEnd: Date
   timezone: string
   status: OfferStatus
+  /** Paused by the platform when the partner was suspended; re-activated on reactivation. */
+  pausedByAdmin?: boolean
   reservedCount: number
   // Denormalized from Business for geo queries and search.
   location: GeoPoint
@@ -63,6 +65,7 @@ const offerSchema = new Schema<IOffer>(
     pickupEnd: { type: Date, required: true },
     timezone: { type: String, required: true },
     status: { type: String, enum: OFFER_STATUSES, default: 'active' },
+    pausedByAdmin: Boolean,
     reservedCount: { type: Number, default: 0, min: 0 },
     location: { type: pointSchema, required: true },
     businessName: { type: String, required: true },

@@ -8,6 +8,7 @@ import { RequireAuth } from '@/components/common/RequireAuth'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { market } from '@/config/markets'
+import { StandingNotice } from '@/features/business/StandingNotice'
 import { useAuth } from '@/features/auth/auth-context'
 import { PLATFORM_ROLES } from '@/api/types'
 import { useDeleteAccount, useReservations, useUpdatePreferences, useUpdateProfile, useUploadImage } from '@/hooks/api'
@@ -284,6 +285,7 @@ function Profile() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <StandingNotice />
       <Card className="flex items-center gap-4 p-5">
         <AvatarEditor initials={initials} url={user.avatarUrl} />
         <div className="min-w-0">

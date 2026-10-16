@@ -14,7 +14,7 @@ export async function list(actor: Actor) {
   const offerIds = favorites.filter((f) => f.targetType === 'offer').map((f) => f.targetId)
 
   const [businesses, offers, activeCounts] = await Promise.all([
-    Business.find({ _id: { $in: businessIds }, isActive: true }).lean(),
+    Business.find({ _id: { $in: businessIds }, isActive: true, suspended: { $ne: true } }).lean(),
     Offer.find({ _id: { $in: offerIds }, status: { $ne: 'archived' } }).lean(),
     Offer.aggregate<{ _id: unknown; count: number }>([
       { $match: { business: { $in: businessIds }, status: 'active', pickupEnd: { $gt: new Date() }, quantityAvailable: { $gt: 0 } } },

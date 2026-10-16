@@ -23,11 +23,13 @@ export type Permission =
   | 'users.block'
   | 'applications.manage'
   | 'businesses.moderate'
+  | 'partners.manage'
   | 'reservations.view'
   | 'reviews.moderate'
   | 'support.manage'
   | 'promotions.manage'
   | 'finance.view'
+  | 'finance.manage'
   | 'donations.view'
   | 'audit.view'
 
@@ -258,9 +260,33 @@ export interface AdminStats {
   reservations: { total: number; today: number; upcoming: number; collected: number }
 }
 
+export type PartnerStatus = 'active' | 'paused' | 'blocked' | 'deleted'
+
 export interface AdminUser extends User {
   businessCount: number
   isBlocked: boolean
+  partnerStatus: PartnerStatus
+}
+
+export type PartnerNoteKind = 'warning' | 'paused' | 'blocked' | 'reactivated' | 'deleted'
+
+export interface PartnerNote {
+  id: string
+  kind: PartnerNoteKind
+  message: string
+  createdAt: string
+  resolvedAt: string | null
+  /** Team member who wrote it (admin view only). */
+  author: string | null
+}
+
+/** A partner's status and moderation history (partner portal + admin). */
+export interface PartnerStanding {
+  status: PartnerStatus
+  reason: string | null
+  since: string | null
+  openWarnings: number
+  history: PartnerNote[]
 }
 
 export interface AdminBusiness extends Business {
@@ -500,16 +526,79 @@ export interface StatementLine extends StatementTotals {
   rate: number
 }
 
-export interface PartnerStatement extends StatementTotals {
+export type SettlementStatus = 'none' | 'unpaid' | 'partial' | 'paid' | 'overpaid'
+export type PaymentDirection = 'to_platform' | 'to_partner'
+export type PaymentMethod = 'bank' | 'cash' | 'other'
+
+export interface PartnerPayment {
+  id: string
+  month: string
+  amountMinor: number
+  direction: PaymentDirection
+  method: PaymentMethod
+  paidAt: string
+  note?: string
+  recordedBy: string | null
+  createdAt: string
+}
+
+/** Paid against the balance and what is still open (> 0 partner owes, < 0 platform owes). */
+export interface Settlement {
+  settledMinor: number
+  remainingMinor: number
+  status: SettlementStatus
+}
+
+export interface PartnerStatement extends StatementTotals, Settlement {
   month: string
   currency: string
+  payments: PartnerPayment[]
+  businesses: StatementLine[]
+}
+
+export interface PlatformStatementPartner extends StatementTotals, Settlement {
+  ownerId: string
+  name: string
+  email: string
+  partnerStatus: PartnerStatus
+  payments: PartnerPayment[]
   businesses: StatementLine[]
 }
 
 export interface PlatformStatement extends StatementTotals {
   month: string
   currency: string
-  partners: (StatementTotals & { ownerId: string; name: string; email: string; businesses: StatementLine[] })[]
+  settledMinor: number
+  owedToPlatformMinor: number
+  owedToPartnersMinor: number
+  paidPartners: number
+  openPartners: number
+  partners: PlatformStatementPartner[]
+}
+
+export interface OutstandingMonth extends Settlement {
+  month: string
+  balanceMinor: number
+  /** Current month: not due yet. */
+  inProgress: boolean
+}
+
+export interface Outstanding {
+  currency: string
+  currentMonth: string
+  owedToPlatformMinor: number
+  owedToPartnersMinor: number
+  partners: { ownerId: string; name: string; email: string; partnerStatus: PartnerStatus; dueMinor: number; months: OutstandingMonth[] }[]
+}
+
+export interface PaymentInput {
+  ownerId: string
+  month: string
+  amountMinor: number
+  direction: PaymentDirection
+  method: PaymentMethod
+  paidAt?: string
+  note?: string
 }
 
 export interface ApiKeyInfo {

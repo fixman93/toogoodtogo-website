@@ -13,6 +13,7 @@ import { zonedTime } from '../utils/time.js'
 import type { AdminBusinessesQuery, AdminUsersQuery } from '../validators/admin.validators.js'
 import type { Actor } from './access.service.js'
 import { audit } from './audit.service.js'
+import * as moderation from './partner-moderation.service.js'
 import { toDto } from './reservation.service.js'
 
 export async function stats() {
@@ -62,7 +63,7 @@ export async function listUsers(query: AdminUsersQuery) {
   ])
   const byOwner = new Map(counts.map((c) => [String(c._id), c.count]))
   return {
-    items: users.map((u) => ({ ...serializeUser(u), isBlocked: u.isBlocked, businessCount: byOwner.get(u.id) ?? 0 })),
+    items: users.map((u) => ({ ...serializeUser(u), isBlocked: u.isBlocked, partnerStatus: u.partnerStatus ?? 'active', businessCount: byOwner.get(u.id) ?? 0 })),
     meta: { page: query.page, limit: query.limit, total },
   }
 }
@@ -122,6 +123,13 @@ export async function setBlocked(userId: string, blocked: boolean, actor: Actor)
   const user = await User.findById(userId)
   if (!user || user.deletedAt) throw ApiError.notFound('Korisnik nije pronađen.')
   if (blocked && PLATFORM_ROLES.includes(user.role)) throw ApiError.conflict('Nalog tima se ne može blokirati. Prvo mu promeni ulogu.', 'CANNOT_BLOCK_ADMIN')
+  // Partners: blocking also hides their locations and offers (see partner-moderation).
+  const partnerSuspended = (user.partnerStatus ?? 'active') !== 'active'
+  if ((blocked || partnerSuspended) && (await Business.exists({ owner: user._id, deletedAt: null }))) {
+    await moderation.setStatus(userId, blocked ? 'blocked' : 'active', blocked ? 'Nalog je blokirao tim Zalogaj.' : undefined, actor)
+    const fresh = await User.findById(userId)
+    return { ...serializeUser(fresh!), isBlocked: fresh!.isBlocked, partnerStatus: fresh!.partnerStatus ?? 'active', businessCount: await Business.countDocuments({ owner: user._id, deletedAt: null }) }
+  }
   user.isBlocked = blocked
   await user.save()
   void audit(actor, { action: blocked ? 'user.block' : 'user.unblock', targetType: 'user', targetId: user._id, summary: `${blocked ? 'Blokiran' : 'Odblokiran'}: ${user.email}` })

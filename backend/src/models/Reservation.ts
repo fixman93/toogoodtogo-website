@@ -51,6 +51,8 @@ export interface IReservation {
   /** Secret for the "send to a friend" pickup link. */
   shareToken?: string
   collectedAt?: Date
+  /** Commission rate in force when the bag was collected, so later rate changes don't rewrite past statements. */
+  commissionRate?: number
   createdAt: Date
   updatedAt: Date
 }
@@ -86,6 +88,7 @@ const reservationSchema = new Schema<IReservation>(
     cancelledAt: Date,
     cancelledBy: { type: String, enum: ['customer', 'business', 'system'] },
     collectedAt: Date,
+    commissionRate: { type: Number, min: 0, max: 0.5 },
     shareToken: { type: String, unique: true, sparse: true },
   },
   { timestamps: true },

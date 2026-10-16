@@ -11,6 +11,7 @@ import { assertBusinessAccess, type Actor } from './access.service.js'
 import { notify } from './notification.service.js'
 import { notifyIfAvailable } from './waitlist.service.js'
 import { deleteIfOwned } from './storage.service.js'
+import { assertNotSuspended } from './partner-moderation.service.js'
 
 type OfferWithBusiness = IOffer & { _id: Types.ObjectId; distanceMeters?: number; businessDoc: IBusiness & { _id: Types.ObjectId } }
 
@@ -192,6 +193,7 @@ export async function get(id: string) {
 
 export async function create(input: CreateOfferInput, actor: Actor) {
   const business = await assertBusinessAccess(input.businessId, actor)
+  await assertNotSuspended(business)
   if (!business.isActive) throw ApiError.conflict('Lokal nije aktivan.', 'BUSINESS_INACTIVE')
   if (input.pickupEnd <= new Date()) throw ApiError.badRequest('Vreme preuzimanja mora biti u budućnosti.', 'PICKUP_IN_PAST')
   if (input.priceDrop && input.priceDrop.priceMinor >= input.priceMinor) {
@@ -227,6 +229,7 @@ export async function update(id: string, input: UpdateOfferInput, actor: Actor) 
   const offer = await Offer.findById(id)
   if (!offer || offer.status === 'archived') throw ApiError.notFound('Ponuda nije pronađena.')
   const business = await assertBusinessAccess(offer.business, actor)
+  if (input.status === 'active') await assertNotSuspended(business)
 
   const merged = { ...offer.toObject(), ...input }
   if (merged.priceMinor >= merged.originalPriceMinor) throw ApiError.badRequest('Cena mora biti niža od redovne.', 'INVALID_PRICE')
@@ -243,6 +246,8 @@ export async function update(id: string, input: UpdateOfferInput, actor: Actor) 
   const change: { $set: Record<string, unknown>; $inc?: Record<string, number>; $unset?: Record<string, 1> } = { $set: fields }
   if (priceDrop === null) change.$unset = { priceDrop: 1 }
   else if (priceDrop) change.$set.priceDrop = priceDrop
+  // The partner decided this offer's state themselves: reactivating the partner mustn't override it.
+  if (input.status) change.$unset = { ...change.$unset, pausedByAdmin: 1 }
 
   if (quantityTotal != null && quantityTotal !== offer.quantityTotal) {
     // Adjust availability by the same delta; refuse to drop below what's already reserved.

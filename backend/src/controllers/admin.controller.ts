@@ -5,6 +5,7 @@ import * as applicationService from '../services/application.service.js'
 import * as auditService from '../services/audit.service.js'
 import * as donationService from '../services/donation.service.js'
 import * as statementService from '../services/statement.service.js'
+import * as moderationService from '../services/partner-moderation.service.js'
 import { z } from 'zod'
 import { list, ok } from '../utils/respond.js'
 import {
@@ -16,6 +17,11 @@ import {
   applicationDecisionBody,
   auditQuery,
   blockBody,
+  deletePartnerBody,
+  monthQuery,
+  partnerStatusBody,
+  paymentBody,
+  warningBody,
   reviewHiddenBody,
   roleBody,
 } from '../validators/admin.validators.js'
@@ -75,8 +81,42 @@ export async function listAudit(req: Request, res: Response) {
 }
 
 export async function platformStatement(req: Request, res: Response) {
-  const { month } = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM') }).parse(req.query)
-  ok(res, await statementService.platformStatement(month))
+  ok(res, await statementService.platformStatement(monthQuery.parse(req.query).month))
+}
+
+export async function outstanding(_req: Request, res: Response) {
+  ok(res, await statementService.outstanding())
+}
+
+export async function recordPayment(req: Request, res: Response) {
+  ok(res, await statementService.recordPayment(paymentBody.parse(req.body), currentUser(req)), 201)
+}
+
+export async function deletePayment(req: Request, res: Response) {
+  await statementService.deletePayment(idParams.parse(req.params).id, currentUser(req))
+  res.status(204).end()
+}
+
+export async function partnerStanding(req: Request, res: Response) {
+  ok(res, await moderationService.standing(idParams.parse(req.params).id))
+}
+
+export async function setPartnerStatus(req: Request, res: Response) {
+  const { status, reason } = partnerStatusBody.parse(req.body)
+  ok(res, await moderationService.setStatus(idParams.parse(req.params).id, status, reason, currentUser(req)))
+}
+
+export async function warnPartner(req: Request, res: Response) {
+  ok(res, await moderationService.warn(idParams.parse(req.params).id, warningBody.parse(req.body).message, currentUser(req)), 201)
+}
+
+export async function resolveWarning(req: Request, res: Response) {
+  ok(res, await moderationService.resolveWarning(idParams.parse(req.params).id, currentUser(req)))
+}
+
+export async function deletePartner(req: Request, res: Response) {
+  await moderationService.remove(idParams.parse(req.params).id, deletePartnerBody.parse(req.body).reason, currentUser(req))
+  res.status(204).end()
 }
 
 export async function setCommission(req: Request, res: Response) {
