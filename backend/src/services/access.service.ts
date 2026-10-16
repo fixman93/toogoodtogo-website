@@ -1,4 +1,5 @@
 import type { Types } from 'mongoose'
+import { marketFor } from '../config/markets.js'
 import { can, type Permission } from '../config/permissions.js'
 import { Business, type IBusiness } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
@@ -36,4 +37,14 @@ export async function workplaceIds(actor: Actor) {
   const owned = await Business.find({ owner: actor.id, deletedAt: null }).select('_id').lean()
   const ids = new Set([...owned.map((b) => b._id.toString()), ...(actor.staffOf ?? [])])
   return [...ids]
+}
+
+/**
+ * Currency and timezone of a partner (all their locations share one currency,
+ * see business.service). Falls back to the default market for a new partner.
+ */
+export async function partnerLocale(ownerId: string | Types.ObjectId) {
+  const b = await Business.findOne({ owner: ownerId }).sort({ deletedAt: 1, createdAt: 1 }).select('currency timezone address.countryCode').lean()
+  const market = marketFor(b?.address.countryCode)
+  return { currency: b?.currency ?? market.currency, timezone: b?.timezone ?? market.timezone, countryCode: market.code }
 }

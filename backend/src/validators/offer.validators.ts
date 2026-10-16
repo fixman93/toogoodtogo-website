@@ -7,6 +7,8 @@ const offerFilters = {
   q: z.string().trim().max(100).optional(),
   category: category.optional(),
   maxPriceMinor: z.coerce.number().int().positive().optional(),
+  /** Currency of maxPriceMinor (prices in other currencies can't be compared). */
+  currency: z.string().length(3).toUpperCase().optional(),
   pickupDay: z.enum(['today', 'tomorrow']).optional(),
   timeOfDay: z.enum(['morning', 'afternoon', 'evening']).optional(),
 }
@@ -77,5 +79,5 @@ export const offerLocationsQuery = z
   })
   .refine((q) => q.minLat < q.maxLat && q.minLng < q.maxLng, 'Invalid bounding box')
 
-export type OfferFilters = Pick<OfferListQuery, 'q' | 'category' | 'maxPriceMinor' | 'pickupDay' | 'timeOfDay'>
+export type OfferFilters = Pick<OfferListQuery, 'q' | 'category' | 'maxPriceMinor' | 'currency' | 'pickupDay' | 'timeOfDay'>
 export type OfferLocationsQuery = z.infer<typeof offerLocationsQuery>

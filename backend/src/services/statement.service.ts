@@ -6,31 +6,37 @@
  * Commission uses the rate frozen on each reservation at pickup, so changing a
  * partner's rate never rewrites months that were already settled. Finance
  * records payments per partner and month; the statement shows what is open.
+ *
+ * Money is always in the partner's own currency (one currency per partner,
+ * see business.service) and months follow each location's timezone. Platform
+ * totals are reported per currency — RSD and EUR are never added together.
  */
 import type { Types } from 'mongoose'
 import { env } from '../config/env.js'
-import { getMarket } from '../config/markets.js'
+import { marketFor } from '../config/markets.js'
 import { Business, PartnerPayment, Reservation, User, type IPartnerPayment } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
-import { zonedTime } from '../utils/time.js'
-import type { Actor } from './access.service.js'
+import { partnerLocale, type Actor } from './access.service.js'
 import { audit } from './audit.service.js'
 
-const market = () => getMarket(env.DEFAULT_MARKET)
+const defaultMarket = () => marketFor(env.DEFAULT_MARKET)
 
-export const monthOf = (date: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: market().timezone, year: 'numeric', month: '2-digit' }).format(date)
+export const monthOf = (date: Date, timeZone = defaultMarket().timezone) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit' }).format(date)
 
-function monthRange(month: string) {
-  const tz = market().timezone
+/** UTC window that contains the month in every supported timezone (exact month is matched per reservation). */
+function monthWindow(month: string) {
   const [y, m] = month.split('-').map(Number)
   if (!y || !m || m < 1 || m > 12) throw ApiError.badRequest('Mesec mora biti u formatu YYYY-MM.')
-  const anchor = (yy: number, mm: number) => new Date(Date.UTC(yy, mm - 1, 1, 12))
-  return { start: zonedTime(0, '00:00', tz, anchor(y, m)), end: zonedTime(0, '00:00', tz, anchor(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1)) }
+  return { start: new Date(Date.UTC(y, m - 1, 1) - 86_400_000), end: new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1) + 86_400_000) }
 }
+
+const formatAmount = (minor: number, currency: string) => `${(minor / 100).toFixed(2)} ${currency}`
 
 interface Line {
   businessId: string
   name: string
+  currency: string
   rate: number
   bags: number
   orders: number
@@ -53,14 +59,21 @@ interface Agg {
   unratedGross: number
 }
 
-/** Collected reservations grouped by location (and month when `byMonth`). */
-function aggregate(match: Record<string, unknown>, byMonth: boolean) {
+/**
+ * Collected reservations grouped by location (and month when `byMonth`). The
+ * month is the local month of pickup in the reservation's own timezone;
+ * `month` restricts the result to one month.
+ */
+function aggregate(match: Record<string, unknown>, options: { byMonth?: boolean; month?: string }) {
   const gross = { $add: ['$totalMinor', { $cond: [{ $eq: ['$discountFundedBy', 'platform'] }, '$discountMinor', 0] }] }
+  const localMonth = { $dateToString: { format: '%Y-%m', date: '$collectedAt', timezone: { $ifNull: ['$timezone', defaultMarket().timezone] } } }
   return Reservation.aggregate<Agg>([
     { $match: { status: 'collected', ...match } },
+    { $addFields: { localMonth } },
+    ...(options.month ? [{ $match: { localMonth: options.month } }] : []),
     {
       $group: {
-        _id: { business: '$business', ...(byMonth ? { month: { $dateToString: { format: '%Y-%m', date: '$collectedAt', timezone: market().timezone } } } : {}) },
+        _id: { business: '$business', ...(options.byMonth ? { month: '$localMonth' } : {}) },
         bags: { $sum: '$quantity' },
         orders: { $sum: 1 },
         revenue: { $sum: '$totalMinor' },
@@ -72,14 +85,17 @@ function aggregate(match: Record<string, unknown>, byMonth: boolean) {
   ])
 }
 
-function toLine(b: { _id: Types.ObjectId; name: string; commissionRate?: number }, r?: Agg): Line {
-  const rate = b.commissionRate ?? market().commissionRate
+type BusinessRow = { _id: Types.ObjectId; name: string; currency: string; commissionRate?: number; address: { countryCode: string } }
+
+function toLine(b: BusinessRow, r?: Agg): Line {
+  const rate = b.commissionRate ?? marketFor(b.address.countryCode).commissionRate
   const revenue = r?.revenue ?? 0
   const platformDiscount = r?.platformDiscount ?? 0
   const commission = Math.round((r?.ratedCommission ?? 0) + (r?.unratedGross ?? 0) * rate)
   return {
     businessId: b._id.toString(),
     name: b.name,
+    currency: b.currency,
     rate,
     bags: r?.bags ?? 0,
     orders: r?.orders ?? 0,
@@ -91,10 +107,12 @@ function toLine(b: { _id: Types.ObjectId; name: string; commissionRate?: number 
   }
 }
 
+const BUSINESS_FIELDS = 'name currency commissionRate owner deletedAt address.countryCode'
+
 async function lines(businessFilter: Record<string, unknown>, month: string) {
-  const { start, end } = monthRange(month)
-  const businesses = await Business.find(businessFilter).select('name commissionRate owner deletedAt').lean()
-  const rows = await aggregate({ business: { $in: businesses.map((b) => b._id) }, collectedAt: { $gte: start, $lt: end } }, false)
+  const { start, end } = monthWindow(month)
+  const businesses = await Business.find(businessFilter).select(BUSINESS_FIELDS).lean()
+  const rows = await aggregate({ business: { $in: businesses.map((b) => b._id) }, collectedAt: { $gte: start, $lt: end } }, { month })
   const byBusiness = new Map(rows.map((r) => [r._id.business.toString(), r]))
   return businesses
     .map((b) => ({ owner: b.owner.toString(), deleted: !!b.deletedAt, line: toLine(b, byBusiness.get(b._id.toString())) }))
@@ -136,6 +154,7 @@ function serializePayment(p: IPartnerPayment & { _id: Types.ObjectId }, recorded
     id: p._id.toString(),
     month: p.month,
     amountMinor: p.amountMinor,
+    currency: p.currency ?? defaultMarket().currency,
     direction: p.direction,
     method: p.method,
     paidAt: p.paidAt.toISOString(),
@@ -157,7 +176,7 @@ export async function partnerStatement(actor: Actor, month: string) {
   const t = totals(items)
   return {
     month,
-    currency: market().currency,
+    currency: items[0]?.currency ?? (await partnerLocale(actor.id)).currency,
     ...t,
     ...settlement(t.balanceMinor, payments.map((p) => p.raw)),
     payments: payments.map((p) => p.dto),
@@ -171,6 +190,9 @@ export async function platformStatement(month: string) {
   const payments = await paymentsFor({ month })
   const ownerIds = [...new Set([...items.map((i) => i.owner), ...payments.map((p) => p.owner)])]
   const users = new Map((await User.find({ _id: { $in: ownerIds } }).select('name email partnerStatus').lean()).map((u) => [u._id.toString(), u]))
+  const currencyOf = new Map<string, string>()
+  for (const i of items) currencyOf.set(i.owner, i.line.currency)
+  for (const p of payments) if (!currencyOf.has(p.owner)) currencyOf.set(p.owner, p.dto.currency)
 
   const partners = ownerIds
     .map((ownerId) => {
@@ -183,6 +205,7 @@ export async function platformStatement(month: string) {
         name: user?.name ?? '—',
         email: user?.email ?? '',
         partnerStatus: user?.partnerStatus ?? 'active',
+        currency: currencyOf.get(ownerId) ?? defaultMarket().currency,
         ...t,
         ...settlement(t.balanceMinor, ps.map((p) => p.raw)),
         payments: ps.map((p) => p.dto),
@@ -191,18 +214,20 @@ export async function platformStatement(month: string) {
     })
     .sort((a, b) => b.grossMinor - a.grossMinor)
 
-  const all = totals(items.map((i) => i.line))
-  const settledMinor = partners.reduce((s, p) => s + p.settledMinor, 0)
-  // Open amounts per direction (a partner who overpaid doesn't hide another's debt).
-  const owedToPlatformMinor = partners.reduce((s, p) => s + Math.max(p.remainingMinor, 0), 0)
-  const owedToPartnersMinor = partners.reduce((s, p) => s + Math.max(-p.remainingMinor, 0), 0)
+  // Totals per currency. Open amounts per direction (one partner's overpayment doesn't hide another's debt).
+  const currencies = [...new Set(partners.map((p) => p.currency))].sort().map((currency) => {
+    const group = partners.filter((p) => p.currency === currency)
+    return {
+      currency,
+      ...totals(items.filter((i) => i.line.currency === currency).map((i) => i.line)),
+      settledMinor: group.reduce((s, p) => s + p.settledMinor, 0),
+      owedToPlatformMinor: group.reduce((s, p) => s + Math.max(p.remainingMinor, 0), 0),
+      owedToPartnersMinor: group.reduce((s, p) => s + Math.max(-p.remainingMinor, 0), 0),
+    }
+  })
   return {
     month,
-    currency: market().currency,
-    ...all,
-    settledMinor,
-    owedToPlatformMinor,
-    owedToPartnersMinor,
+    currencies,
     paidPartners: partners.filter((p) => p.status === 'paid').length,
     openPartners: partners.filter((p) => p.status === 'unpaid' || p.status === 'partial' || p.status === 'overpaid').length,
     partners,
@@ -215,9 +240,10 @@ export async function platformStatement(month: string) {
  * progress (it isn't due yet).
  */
 export async function outstanding(ownerFilter?: string) {
-  const businesses = await Business.find(ownerFilter ? { owner: ownerFilter } : {}).select('name commissionRate owner').lean()
+  const businesses = await Business.find(ownerFilter ? { owner: ownerFilter } : {}).select(`${BUSINESS_FIELDS} timezone`).lean()
   const businessById = new Map(businesses.map((b) => [b._id.toString(), b]))
-  const rows = await aggregate({ business: { $in: businesses.map((b) => b._id) } }, true)
+  const ownerLocale = new Map(businesses.map((b) => [b.owner.toString(), { currency: b.currency, timezone: b.timezone }]))
+  const rows = await aggregate({ business: { $in: businesses.map((b) => b._id) } }, { byMonth: true })
   const payments = await PartnerPayment.find(ownerFilter ? { owner: ownerFilter } : {}).lean()
 
   // owner → month → balance
@@ -233,10 +259,11 @@ export async function outstanding(ownerFilter?: string) {
   }
   for (const p of payments) add(p.owner.toString(), p.month, 0)
 
-  const current = monthOf(new Date())
   const users = new Map((await User.find({ _id: { $in: [...balances.keys()] } }).select('name email partnerStatus').lean()).map((u) => [u._id.toString(), u]))
   const partners = [...balances.entries()]
     .map(([ownerId, months]) => {
+      const locale = ownerLocale.get(ownerId) ?? { currency: defaultMarket().currency, timezone: defaultMarket().timezone }
+      const current = monthOf(new Date(), locale.timezone)
       const open = [...months.entries()]
         .map(([month, balanceMinor]) => ({
           month,
@@ -253,6 +280,7 @@ export async function outstanding(ownerFilter?: string) {
         name: user?.name ?? '—',
         email: user?.email ?? '',
         partnerStatus: user?.partnerStatus ?? 'active',
+        currency: locale.currency,
         /** Due (completed months) the partner still owes the platform; negative = platform owes. */
         dueMinor: due.reduce((s, m) => s + m.remainingMinor, 0),
         months: open,
@@ -261,34 +289,38 @@ export async function outstanding(ownerFilter?: string) {
     .filter((p) => p.months.length > 0)
     .sort((a, b) => b.dueMinor - a.dueMinor)
 
-  return {
-    currency: market().currency,
-    currentMonth: current,
-    owedToPlatformMinor: partners.reduce((s, p) => s + Math.max(p.dueMinor, 0), 0),
-    owedToPartnersMinor: partners.reduce((s, p) => s + Math.max(-p.dueMinor, 0), 0),
-    partners,
-  }
+  const currencies = [...new Set(partners.map((p) => p.currency))].sort().map((currency) => {
+    const group = partners.filter((p) => p.currency === currency)
+    return {
+      currency,
+      owedToPlatformMinor: group.reduce((s, p) => s + Math.max(p.dueMinor, 0), 0),
+      owedToPartnersMinor: group.reduce((s, p) => s + Math.max(-p.dueMinor, 0), 0),
+    }
+  })
+  return { currentMonth: monthOf(new Date()), currencies, partners }
 }
 
 export async function recordPayment(
   input: { ownerId: string; month: string; amountMinor: number; direction: 'to_platform' | 'to_partner'; method: 'bank' | 'cash' | 'other'; paidAt?: Date; note?: string },
   actor: Actor,
 ) {
-  monthRange(input.month)
+  monthWindow(input.month)
   if (input.month > monthOf(new Date())) throw ApiError.badRequest('Ne možeš evidentirati uplatu za budući mesec.', 'FUTURE_MONTH')
   const owner = await User.findById(input.ownerId).select('name email').lean()
   if (!owner || !(await Business.exists({ owner: owner._id }))) throw ApiError.notFound('Partner nije pronađen.')
+  const { currency } = await partnerLocale(owner._id)
   const payment = await PartnerPayment.create({
     owner: owner._id,
     month: input.month,
     amountMinor: input.amountMinor,
+    currency,
     direction: input.direction,
     method: input.method,
     paidAt: input.paidAt ?? new Date(),
     note: input.note,
     recordedBy: actor.id,
   })
-  const amount = `${(input.amountMinor / 100).toFixed(2)} ${market().currency}`
+  const amount = formatAmount(input.amountMinor, currency)
   void audit(actor, {
     action: 'payment.record',
     targetType: 'user',
@@ -306,7 +338,7 @@ export async function deletePayment(id: string, actor: Actor) {
     action: 'payment.delete',
     targetType: 'user',
     targetId: payment.owner,
-    summary: `Poništena uplata · ${payment.month} · ${(payment.amountMinor / 100).toFixed(2)} ${market().currency}`,
+    summary: `Poništena uplata · ${payment.month} · ${formatAmount(payment.amountMinor, payment.currency ?? defaultMarket().currency)}`,
   })
 }
 

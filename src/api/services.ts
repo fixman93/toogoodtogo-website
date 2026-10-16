@@ -59,14 +59,14 @@ const unwrap = <T>(promise: Promise<{ data: ApiSuccess<T> }>) => promise.then((r
 
 export const authApi = {
   login: (body: { email: string; password: string }) => unwrap<AuthResult>(api.post('/auth/login', body)),
-  register: (body: { name: string; email: string; password: string; referralCode?: string }) =>
+  register: (body: { name: string; email: string; password: string; referralCode?: string; countryCode?: string }) =>
     unwrap<AuthResult>(api.post('/auth/register', body)),
   me: () => unwrap<User>(api.get('/auth/me')),
   forgotPassword: (email: string) => unwrap<{ sent: boolean }>(api.post('/auth/forgot-password', { email })),
   resetPassword: (body: { token: string; password: string }) => unwrap<AuthResult>(api.post('/auth/reset-password', body)),
   deleteAccount: (password: string) => api.delete('/auth/me', { data: { password } }).then(() => undefined),
   updatePreferences: (prefs: { push?: boolean; email?: boolean }) => unwrap<User>(api.patch('/auth/me/preferences', prefs)),
-  updateProfile: (body: { name?: string; avatarUrl?: string }) => unwrap<User>(api.patch('/auth/me', body)),
+  updateProfile: (body: { name?: string; avatarUrl?: string; countryCode?: string }) => unwrap<User>(api.patch('/auth/me', body)),
 }
 
 export const offersApi = {

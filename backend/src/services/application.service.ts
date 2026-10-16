@@ -13,6 +13,7 @@ type ApplicationInput = {
   contactName: string
   phone: string
   city: string
+  countryCode?: string
   category: Category
   locationsCount: number
   message?: string
@@ -25,6 +26,7 @@ function serialize(a: InstanceType<typeof PartnerApplication>, user?: { name: st
     contactName: a.contactName,
     phone: a.phone,
     city: a.city,
+    countryCode: a.countryCode ?? null,
     category: a.category,
     locationsCount: a.locationsCount,
     message: a.message,

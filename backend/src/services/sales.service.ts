@@ -4,12 +4,10 @@
  * picked up or cancelled — and how many are left in stock.
  */
 import type { Types } from 'mongoose'
-import { env } from '../config/env.js'
-import { getMarket } from '../config/markets.js'
 import { Business, Offer, Reservation } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { zonedTime } from '../utils/time.js'
-import { assertBusinessAccess, type Actor } from './access.service.js'
+import { assertBusinessAccess, partnerLocale, type Actor } from './access.service.js'
 
 interface Counts {
   bagsTotal: number
@@ -51,12 +49,12 @@ export function dayRange(date: string | undefined, tz: string) {
 }
 
 export async function partnerSales(actor: Actor, query: { date?: string; businessId?: string }) {
-  const market = getMarket(env.DEFAULT_MARKET)
-  const { date, start, end } = dayRange(query.date, market.timezone)
-
   const businesses = query.businessId
     ? [await assertBusinessAccess(query.businessId, actor)]
     : await Business.find({ owner: actor.id, deletedAt: null }).sort({ name: 1 })
+  // The partner's own currency and local day (not the platform default).
+  const locale = businesses[0] ? { currency: businesses[0].currency, timezone: businesses[0].timezone } : await partnerLocale(actor.id)
+  const { date, start, end } = dayRange(query.date, locale.timezone)
   const businessIds = businesses.map((b) => b._id)
 
   // Offers whose pickup window starts on that day (including deleted/archived ones: sales still count).
@@ -109,5 +107,5 @@ export async function partnerSales(actor: Actor, query: { date?: string; busines
     return { id: business.id, name: business.name, address: business.address, ...businessTotals, offers: offerRows }
   })
 
-  return { date, timezone: market.timezone, currency: market.currency, ...totals, businesses: perBusiness }
+  return { date, timezone: locale.timezone, currency: locale.currency, ...totals, businesses: perBusiness }
 }

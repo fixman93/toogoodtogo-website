@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { market } from '@/config/markets'
+import { currencyInfo, market } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
 import { useDeleteOffer, useMyBusinesses, useOffer, useSaveOffer, useSuggestion } from '@/hooks/api'
 import { t } from '@/i18n'
@@ -22,7 +22,6 @@ import { addDays, toZonedInput, zonedDateTimeToUtc } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 const TAGS = ['vegetarian', 'vegan'] as const
-const minorUnits = market.currencyMinorUnits
 
 interface FormState {
   businessId: string
@@ -60,6 +59,7 @@ function nextOpenDate(date: string, to: string, timeZone: string) {
 function initialState(mode: Mode, businesses: Business[], preferredBusinessId: string | null): FormState {
   const source = mode.kind === 'edit' ? mode.offer : mode.kind === 'copy' ? mode.source : null
   if (source) {
+    const { minorUnits } = currencyInfo(source.currency)
     const start = toZonedInput(source.pickupStart, source.timezone)
     const end = toZonedInput(source.pickupEnd, source.timezone)
     return {
@@ -121,6 +121,10 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
   const reserved = editing ? editing.quantityTotal - editing.quantityAvailable : 0
   const business = businesses.find((b) => b.id === form.businessId)
   const timezone = business?.timezone ?? market.timezone
+  // Prices are entered in the location's own currency (RSD, BAM, EUR, …).
+  const currency = business?.currency ?? market.currency
+  const { minorUnits, displayDecimals } = currencyInfo(currency)
+  const moneyInput = displayDecimals ? { inputMode: 'decimal' as const, step: 0.01, min: 0.01 } : { inputMode: 'numeric' as const, min: 1 }
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }))
     // A field's error disappears as soon as the user edits it.
@@ -304,11 +308,11 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
 
       <FormSection title={t('partner.section.price')}>
         <div className="grid grid-cols-2 gap-4">
-          <FormField label={t('partner.field.originalPrice')} htmlFor="originalPrice" error={errors.originalPrice}>
-            <Input {...field('originalPrice')} type="number" inputMode="numeric" min={1} placeholder="900" />
+          <FormField label={t('partner.field.originalPrice', { currency })} htmlFor="originalPrice" error={errors.originalPrice}>
+            <Input {...field('originalPrice')} type="number" {...moneyInput} placeholder={displayDecimals ? '9' : '900'} />
           </FormField>
-          <FormField label={t('partner.field.price')} htmlFor="price" error={errors.price} hint={t('partner.field.priceHint')}>
-            <Input {...field('price')} type="number" inputMode="numeric" min={1} placeholder={original ? String(Math.round(original / 3)) : '299'} />
+          <FormField label={t('partner.field.price', { currency })} htmlFor="price" error={errors.price} hint={t('partner.field.priceHint')}>
+            <Input {...field('price')} type="number" {...moneyInput} placeholder={original ? String(Math.round((original / 3) * 10 ** displayDecimals) / 10 ** displayDecimals) : displayDecimals ? '2.99' : '299'} />
           </FormField>
           <FormField
             label={t('partner.field.quantity')}
@@ -343,8 +347,8 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
         {showPreview && (
           <p className="rounded-xl bg-success/10 p-3 text-sm font-semibold text-success">
             {t('partner.pricePreview', {
-              price: formatMoney(price * minorUnits),
-              original: formatMoney(original * minorUnits),
+              price: formatMoney(price * minorUnits, currency),
+              original: formatMoney(original * minorUnits, currency),
               percent: discountPercent(original, price),
             })}
           </p>
@@ -390,8 +394,8 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
               <FormField label={t('partner.field.priceDropAt')} htmlFor="dropTime">
                 <Input {...field('dropTime')} type="time" step={900} />
               </FormField>
-              <FormField label={t('partner.field.priceDropPrice')} htmlFor="dropPrice" error={errors.dropPrice}>
-                <Input {...field('dropPrice')} type="number" inputMode="numeric" min={1} placeholder={price ? String(Math.round(price * 0.7)) : ''} />
+              <FormField label={t('partner.field.priceDropPrice', { currency })} htmlFor="dropPrice" error={errors.dropPrice}>
+                <Input {...field('dropPrice')} type="number" {...moneyInput} placeholder={price ? String(Math.round(price * 0.7 * 10 ** displayDecimals) / 10 ** displayDecimals) : ''} />
               </FormField>
             </div>
           </div>

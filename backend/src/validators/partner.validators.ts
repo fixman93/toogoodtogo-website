@@ -1,3 +1,4 @@
+import { MARKET_CODES } from '../config/markets.js'
 import { z } from 'zod'
 import { category, objectId } from './common.js'
 
@@ -24,6 +25,7 @@ export const applicationBody = z.object({
   contactName: z.string().trim().min(2).max(80),
   phone: z.string().trim().min(6).max(40),
   city: z.string().trim().min(2).max(80),
+  countryCode: z.string().length(2).toUpperCase().pipe(z.enum(MARKET_CODES)).optional(),
   category,
   locationsCount: z.coerce.number().int().min(1).max(500).default(1),
   message: z.string().trim().max(1000).optional(),

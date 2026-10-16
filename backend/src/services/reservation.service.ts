@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import type { Types } from 'mongoose'
 import { env } from '../config/env.js'
-import { getMarket } from '../config/markets.js'
+import { getMarket, marketFor } from '../config/markets.js'
 import {
   ACTIVE_RESERVATION_STATUSES,
   Business,
@@ -113,7 +113,7 @@ export async function create(input: { offerId: string; quantity: number; promoCo
     const unitPrice = effectivePriceMinor(offer)
     const subtotal = unitPrice * quantity
     // Optional promo code: validated, then counted atomically (respects maxUses).
-    const promo = input.promoCode ? await promotions.resolve(input.promoCode, { businessId: offer.business, userId: actor.id }) : null
+    const promo = input.promoCode ? await promotions.resolve(input.promoCode, { businessId: offer.business, userId: actor.id, currency: offer.currency }) : null
     if (promo) {
       await promotions.consume(promo, session)
       onRollback(() => promotions.release(promo._id))
@@ -267,8 +267,8 @@ export async function cancel(id: string, actor: Actor) {
  */
 async function markCollected(reservation: ReservationDoc, actor: Actor) {
   // Same default as the monthly statement (statement.service).
-  const business = await Business.findById(reservation.business).select('commissionRate').lean()
-  const commissionRate = business?.commissionRate ?? getMarket(env.DEFAULT_MARKET).commissionRate
+  const business = await Business.findById(reservation.business).select('commissionRate address.countryCode').lean()
+  const commissionRate = business?.commissionRate ?? marketFor(business?.address.countryCode).commissionRate
   const updated = await Reservation.findOneAndUpdate(
     { _id: reservation._id, status: 'confirmed' },
     {

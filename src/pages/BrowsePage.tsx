@@ -9,7 +9,7 @@ import { OfferCard } from '@/components/offers/OfferCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/select'
-import { market } from '@/config/markets'
+import { currencyInfo, market } from '@/config/markets'
 import { useLocation } from '@/features/location/location-context'
 import { MapView } from '@/features/map/MapView'
 import { useOffers } from '@/hooks/api'
@@ -19,7 +19,8 @@ import { cn } from '@/lib/utils'
 
 const PAGE_SIZE = 24
 const DISTANCES = [1, 3, 5, 10, 25]
-const PRICES_MAJOR = [300, 500, 800]
+// Price filter in the visitor's currency; the API compares it only with offers in that currency.
+const PRICE = currencyInfo(market.currency)
 const SORTS: OfferSort[] = ['distance', 'price', 'popularity', 'rating', 'pickup']
 const FILTER_KEYS = ['maxDistanceKm', 'maxPriceMinor', 'pickupDay', 'timeOfDay'] as const
 
@@ -97,6 +98,7 @@ export function BrowsePage() {
     sort: (params.get('sort') as OfferSort) ?? 'distance',
     maxDistanceKm: params.get('maxDistanceKm') ? Number(params.get('maxDistanceKm')) : undefined,
     maxPriceMinor: params.get('maxPriceMinor') ? Number(params.get('maxPriceMinor')) : undefined,
+    currency: params.get('maxPriceMinor') ? market.currency : undefined,
     pickupDay: (params.get('pickupDay') as PickupDay) ?? undefined,
     timeOfDay: (params.get('timeOfDay') as TimeOfDay) ?? undefined,
     lat: location.lat,
@@ -128,8 +130,8 @@ export function BrowsePage() {
           onChange={(v) => setParam('maxPriceMinor', v)}
           options={[
             { value: undefined, label: t('browse.priceAny') },
-            ...PRICES_MAJOR.map((p) => {
-              const minor = p * market.currencyMinorUnits
+            ...PRICE.priceSteps.map((p) => {
+              const minor = p * PRICE.minorUnits
               return { value: String(minor), label: `≤ ${formatMoney(minor)}` }
             }),
           ]}
@@ -238,7 +240,7 @@ export function BrowsePage() {
 
         {view === 'map' ? (
           <MapView
-            filters={{ q: query.q, category: query.category, maxPriceMinor: query.maxPriceMinor, pickupDay: query.pickupDay, timeOfDay: query.timeOfDay }}
+            filters={{ q: query.q, category: query.category, maxPriceMinor: query.maxPriceMinor, currency: query.currency, pickupDay: query.pickupDay, timeOfDay: query.timeOfDay }}
           />
         ) : (
           <div>

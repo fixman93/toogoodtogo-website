@@ -1,3 +1,4 @@
+import { MARKET_CODES } from '../config/markets.js'
 import { z } from 'zod'
 import { category, pagination } from './common.js'
 
@@ -14,7 +15,7 @@ const address = z.object({
   street: z.string().trim().min(2).max(200),
   city: z.string().trim().min(2).max(100),
   postalCode: z.string().trim().max(20).optional(),
-  countryCode: z.string().length(2).toUpperCase(),
+  countryCode: z.string().length(2).toUpperCase().pipe(z.enum(MARKET_CODES, { message: 'Zemlja nije podržana.' })),
 })
 
 export const createBusinessBody = z.object({
@@ -27,7 +28,7 @@ export const createBusinessBody = z.object({
   phone: z.string().max(40).optional(),
   address,
   location: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }),
-  /** Optional overrides; defaults come from the market of address.countryCode. */
+  /** Ignored: currency and timezone always come from address.countryCode (config/markets). */
   timezone: z.string().optional(),
   currency: z.string().length(3).toUpperCase().optional(),
   collectionInstructions: z.string().max(1000).optional(),

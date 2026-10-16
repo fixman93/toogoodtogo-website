@@ -1,6 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { env } from '../config/env.js'
-import { MARKETS, getMarket } from '../config/markets.js'
+import { marketFor } from '../config/markets.js'
 import { ACTIVE_RESERVATION_STATUSES, Business, Favorite, Offer, Reservation, Review } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { serializeBusiness } from '../utils/serializers.js'
@@ -42,15 +41,31 @@ export async function get(id: string, actor?: Actor) {
   return serializeBusiness(business)
 }
 
+/**
+ * One partner = one currency: statements, payments and reports are kept per
+ * partner, so all of a partner's locations must use the same currency. A
+ * business in another currency zone opens a separate partner account.
+ */
+async function assertSameCurrency(ownerId: unknown, currency: string) {
+  const other = await Business.findOne({ owner: ownerId, deletedAt: null, currency: { $ne: currency } }).select('currency').lean()
+  if (other) {
+    throw ApiError.conflict(
+      `Sve lokacije jednog partnera moraju biti u istoj valuti (${other.currency}). Za lokal u drugoj zemlji otvori poseban partnerski nalog.`,
+      'CURRENCY_MISMATCH',
+    )
+  }
+}
+
 export async function create(input: CreateBusinessInput, actor: Actor) {
-  const market = MARKETS[input.address.countryCode] ?? getMarket(env.DEFAULT_MARKET)
+  const market = marketFor(input.address.countryCode)
+  await assertSameCurrency(actor.id, market.currency)
   const business = await Business.create({
     ...input,
     owner: actor.id,
     slug: `${slugify(input.name)}-${randomBytes(3).toString('hex')}`,
     location: toPoint(input.location),
-    timezone: input.timezone ?? market.timezone,
-    currency: input.currency ?? market.currency,
+    timezone: market.timezone,
+    currency: market.currency,
   })
   return serializeBusiness(business)
 }
@@ -61,6 +76,13 @@ export async function update(id: string, input: UpdateBusinessInput, actor: Acto
   const business = moderationOnly ? await Business.findOne({ _id: id, deletedAt: null }) : await assertBusinessAccess(id, actor)
   if (!business) throw ApiError.notFound('Lokal nije pronađen.')
   const { location, address, ...rest } = input
+  // Currency/timezone follow the country; existing prices, reservations and
+  // statements are in the old currency, so the country can't change later.
+  if (address && address.countryCode !== business.address.countryCode) {
+    throw ApiError.badRequest('Zemlja lokacije se ne može menjati. Za lokal u drugoj zemlji dodaj novu lokaciju.', 'COUNTRY_LOCKED')
+  }
+  delete (rest as { currency?: string }).currency
+  delete (rest as { timezone?: string }).timezone
   const oldImages = { logoUrl: business.logoUrl, coverUrl: business.coverUrl }
   business.set(rest)
   if (address) business.set('address', address)

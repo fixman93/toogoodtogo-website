@@ -156,6 +156,8 @@ export interface OfferQuery {
   lng?: number
   maxDistanceKm?: number
   maxPriceMinor?: number
+  /** Currency of maxPriceMinor. */
+  currency?: string
   pickupDay?: PickupDay
   timeOfDay?: TimeOfDay
   sort?: OfferSort
@@ -314,7 +316,7 @@ export interface BoundingBox {
   maxLng: number
 }
 
-export type OfferFilters = Pick<OfferQuery, 'q' | 'category' | 'maxPriceMinor' | 'pickupDay' | 'timeOfDay'>
+export type OfferFilters = Pick<OfferQuery, 'q' | 'category' | 'maxPriceMinor' | 'currency' | 'pickupDay' | 'timeOfDay'>
 
 export interface SalesCounts {
   bagsTotal: number
@@ -396,6 +398,7 @@ export interface PartnerApplicationInput {
   contactName: string
   phone: string
   city: string
+  countryCode?: string | null
   category: Category
   locationsCount: number
   message?: string
@@ -461,6 +464,8 @@ export interface Promotion {
   description?: string
   discountType: 'percent' | 'fixed'
   value: number
+  /** Currency of a fixed discount (the code only applies to offers in it). */
+  currency: string | null
   scope: 'platform' | 'partner'
   businessId?: string
   validFrom?: string
@@ -477,6 +482,7 @@ export interface PromotionInput {
   description?: string
   discountType: 'percent' | 'fixed'
   value: number
+  currency?: string
   businessId?: string
   validTo?: string
   maxUses?: number | null
@@ -523,6 +529,7 @@ export interface StatementTotals {
 export interface StatementLine extends StatementTotals {
   businessId: string
   name: string
+  currency: string
   rate: number
 }
 
@@ -534,6 +541,7 @@ export interface PartnerPayment {
   id: string
   month: string
   amountMinor: number
+  currency: string
   direction: PaymentDirection
   method: PaymentMethod
   paidAt: string
@@ -561,16 +569,23 @@ export interface PlatformStatementPartner extends StatementTotals, Settlement {
   name: string
   email: string
   partnerStatus: PartnerStatus
+  /** The partner's currency (all their locations share one). */
+  currency: string
   payments: PartnerPayment[]
   businesses: StatementLine[]
 }
 
-export interface PlatformStatement extends StatementTotals {
-  month: string
+/** Platform totals for one currency — different currencies are never added together. */
+export interface CurrencyTotals extends StatementTotals {
   currency: string
   settledMinor: number
   owedToPlatformMinor: number
   owedToPartnersMinor: number
+}
+
+export interface PlatformStatement {
+  month: string
+  currencies: CurrencyTotals[]
   paidPartners: number
   openPartners: number
   partners: PlatformStatementPartner[]
@@ -584,11 +599,9 @@ export interface OutstandingMonth extends Settlement {
 }
 
 export interface Outstanding {
-  currency: string
   currentMonth: string
-  owedToPlatformMinor: number
-  owedToPartnersMinor: number
-  partners: { ownerId: string; name: string; email: string; partnerStatus: PartnerStatus; dueMinor: number; months: OutstandingMonth[] }[]
+  currencies: { currency: string; owedToPlatformMinor: number; owedToPartnersMinor: number }[]
+  partners: { ownerId: string; name: string; email: string; partnerStatus: PartnerStatus; currency: string; dueMinor: number; months: OutstandingMonth[] }[]
 }
 
 export interface PaymentInput {

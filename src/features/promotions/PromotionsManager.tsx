@@ -10,13 +10,14 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { market } from '@/config/markets'
+import { MARKET_LIST, currencyInfo, market } from '@/config/markets'
 import { useCreatePromotion, useMyBusinesses, usePromotions, useTogglePromotion } from '@/hooks/api'
 import { t } from '@/i18n'
-import { formatDate, formatMoney } from '@/lib/format'
+import { formatDate, formatMoney, toMinor } from '@/lib/format'
 import { zonedDateTimeToUtc } from '@/lib/time'
 
-const label = (p: Promotion) => (p.discountType === 'percent' ? `−${p.value}%` : `−${formatMoney(p.value)}`)
+const label = (p: Promotion) => (p.discountType === 'percent' ? `−${p.value}%` : `−${formatMoney(p.value, p.currency ?? market.currency)}`)
+const CURRENCY_CODES = [...new Set(MARKET_LIST.map((m) => m.currency))]
 
 function PromotionForm({ platform }: { platform: boolean }) {
   const create = useCreatePromotion()
@@ -28,6 +29,10 @@ function PromotionForm({ platform }: { platform: boolean }) {
   const [businessId, setBusinessId] = useState('')
   const [maxUses, setMaxUses] = useState('')
   const [validTo, setValidTo] = useState('')
+  // A fixed discount is in one currency: the partner's own, or chosen for a platform code.
+  const partnerCurrency = businesses.data?.data[0]?.currency ?? market.currency
+  const [platformCurrency, setPlatformCurrency] = useState(market.currency)
+  const currency = platform ? platformCurrency : partnerCurrency
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -37,7 +42,8 @@ function PromotionForm({ platform }: { platform: boolean }) {
         code: code.trim().toUpperCase(),
         description: description.trim() || undefined,
         discountType,
-        value: discountType === 'percent' ? Math.round(amount) : Math.round(amount * market.currencyMinorUnits),
+        value: discountType === 'percent' ? Math.round(amount) : toMinor(amount, currency),
+        currency: discountType === 'fixed' ? currency : undefined,
         businessId: platform ? undefined : businessId || undefined,
         maxUses: maxUses ? Number(maxUses) : null,
         validTo: validTo ? zonedDateTimeToUtc(validTo, '23:59', market.timezone).toISOString() : undefined,
@@ -60,11 +66,31 @@ function PromotionForm({ platform }: { platform: boolean }) {
           <FormField label={t('promo.type')} htmlFor="promo-type">
             <NativeSelect id="promo-type" value={discountType} onChange={(e) => setDiscountType(e.target.value as 'percent' | 'fixed')}>
               <option value="percent">{t('promo.percent')}</option>
-              <option value="fixed">{t('promo.fixed')}</option>
+              <option value="fixed">{t('promo.fixed', { currency })}</option>
             </NativeSelect>
           </FormField>
+          {platform && discountType === 'fixed' && (
+            <FormField label={t('promo.currency')} htmlFor="promo-currency" hint={t('promo.currencyHint')}>
+              <NativeSelect id="promo-currency" value={platformCurrency} onChange={(e) => setPlatformCurrency(e.target.value)}>
+                {CURRENCY_CODES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          )}
           <FormField label={t('promo.value')} htmlFor="promo-value">
-            <Input id="promo-value" type="number" min={1} max={discountType === 'percent' ? 90 : undefined} value={value} onChange={(e) => setValue(e.target.value)} required />
+            <Input
+              id="promo-value"
+              type="number"
+              min={discountType === 'percent' || !currencyInfo(currency).displayDecimals ? 1 : 0.01}
+              step={discountType === 'fixed' && currencyInfo(currency).displayDecimals ? 0.01 : 1}
+              max={discountType === 'percent' ? 90 : undefined}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              required
+            />
           </FormField>
           {!platform && (
             <FormField label={t('promo.location')} htmlFor="promo-location">

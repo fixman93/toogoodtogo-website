@@ -56,6 +56,19 @@ if any are missing.
 For local development without Atlas, use `mongodb://127.0.0.1:27017/zalogaj`.
 A standalone local server works too; see the next section.
 
+## Countries and currencies
+
+Supported countries live in `src/config/markets.ts` (backend) and `src/config/markets.ts` (frontend):
+RS (RSD), BA (BAM), ME (EUR), HR (EUR), SI (EUR), MK (MKD). To add a country, add it to both files.
+
+- A location's **currency and timezone come from its country** and can't change later (`COUNTRY_LOCKED`).
+- **One currency per partner**: statements and payments are per partner, so all of a partner's locations share a currency (`CURRENCY_MISMATCH`); a business in another currency zone uses a separate partner account.
+- Prices are always stored and shown in the location's currency (`offer.currency`, `reservation.currency`).
+- Statements and payments are in the partner's currency; admin totals are returned **per currency** (`currencies[]`), never summed across currencies.
+- Fixed-amount promo codes carry a `currency` and apply only to offers in it; percent codes work everywhere.
+- `GET /offers?maxPriceMinor=&currency=` compares prices only within that currency.
+- The visitor's country (Profile → Zemlja, or detected from the browser timezone) only decides cities, the default city and the price-filter currency; it's also saved on the account (`PATCH /auth/me { countryCode }`).
+
 ## Reservations and inventory
 
 The reservation code lives in `src/services/reservation.service.ts`.

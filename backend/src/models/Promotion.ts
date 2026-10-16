@@ -11,6 +11,8 @@ export interface IPromotion {
   discountType: 'percent' | 'fixed'
   /** Percent (1–90) or fixed amount in minor units. */
   value: number
+  /** Currency of a fixed discount; the code only applies to offers in this currency. */
+  currency?: string
   owner?: Types.ObjectId
   business?: Types.ObjectId
   validFrom?: Date
@@ -31,6 +33,7 @@ const promotionSchema = new Schema<IPromotion>(
     description: { type: String, maxlength: 200 },
     discountType: { type: String, enum: ['percent', 'fixed'], required: true },
     value: { type: Number, required: true, min: 1 },
+    currency: { type: String, uppercase: true, minlength: 3, maxlength: 3 },
     owner: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     business: { type: Schema.Types.ObjectId, ref: 'Business' },
     validFrom: Date,

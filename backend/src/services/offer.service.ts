@@ -24,6 +24,8 @@ function liveOfferMatch(query: OfferFilters, now = new Date()) {
   const match: Record<string, unknown> = { status: 'active', pickupEnd: { $gt: now } }
 
   if (query.category) match.category = query.category
+  // A max price only compares offers in the same currency.
+  if (query.maxPriceMinor && query.currency) match.currency = query.currency
   if (query.q) {
     const rx = new RegExp(escapeRegex(query.q), 'i')
     match.$or = [{ title: rx }, { businessName: rx }, { city: rx }]

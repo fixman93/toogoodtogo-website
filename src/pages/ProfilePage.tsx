@@ -3,11 +3,12 @@ import { Link, useNavigate } from 'react-router'
 import { Bell, Camera, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/select'
 import { PageHeader } from '@/components/common/PageHeader'
 import { RequireAuth } from '@/components/common/RequireAuth'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { market } from '@/config/markets'
+import { MARKET_LIST, market, setMarket } from '@/config/markets'
 import { StandingNotice } from '@/features/business/StandingNotice'
 import { useAuth } from '@/features/auth/auth-context'
 import { PLATFORM_ROLES } from '@/api/types'
@@ -75,7 +76,10 @@ function Impact() {
   const { data } = useReservations('history')
   const collected = data?.data.filter((r) => r.status === 'collected') ?? []
   const bags = collected.reduce((sum, r) => sum + r.quantity, 0)
-  const saved = collected.reduce((sum, r) => sum + (r.originalUnitPriceMinor - r.unitPriceMinor) * r.quantity, 0)
+  // Savings per currency (bags bought in Serbia and Montenegro aren't added together).
+  const savedBy = new Map<string, number>()
+  for (const r of collected) savedBy.set(r.currency, (savedBy.get(r.currency) ?? 0) + (r.originalUnitPriceMinor - r.unitPriceMinor) * r.quantity)
+  const saved = savedBy.size ? [...savedBy].map(([currency, minor]) => formatMoney(minor, currency)).join(' + ') : formatMoney(0, market.currency)
   const co2Kg = bags * CO2E_KG_PER_BAG
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -86,7 +90,7 @@ function Impact() {
       </Card>
       <Card className="p-4">
         <Wallet className="mb-2 size-5 text-accent-foreground" />
-        <p className="text-2xl font-extrabold">{formatMoney(saved)}</p>
+        <p className="text-2xl font-extrabold">{saved}</p>
         <p className="text-sm text-muted-foreground">{t('profile.moneySaved')}</p>
       </Card>
       <Card className="col-span-2 p-4 sm:col-span-1" title={t('profile.co2Hint')}>
@@ -107,6 +111,32 @@ function SettingRow({ icon: Icon, label, value, children }: { icon: typeof Globe
       {value && <span className="text-sm text-muted-foreground">{value}</span>}
       {children}
     </div>
+  )
+}
+
+/** Country: default city, cities list and price filter. Saved on the account and on this device. */
+function CountrySetting() {
+  const update = useUpdateProfile()
+  return (
+    <SettingRow icon={Globe} label={t('profile.country')}>
+      <NativeSelect
+        aria-label={t('profile.country')}
+        value={market.code}
+        disabled={update.isPending}
+        onChange={(e) => {
+          const code = e.target.value
+          // Save on the account first so other devices follow; switch locally either way.
+          update.mutate({ countryCode: code }, { onSettled: () => setMarket(code) })
+        }}
+        className="h-9 w-auto max-w-[12rem] rounded-full text-sm"
+      >
+        {MARKET_LIST.map((m) => (
+          <option key={m.code} value={m.code}>
+            {localize(m.name)}
+          </option>
+        ))}
+      </NativeSelect>
+    </SettingRow>
   )
 }
 
@@ -353,7 +383,7 @@ function Profile() {
               ))}
             </div>
           </SettingRow>
-          <SettingRow icon={Globe} label={t('profile.country')} value={localize(market.name)} />
+          <CountrySetting />
           <SettingRow icon={Wallet} label={t('profile.currency')} value={market.currency} />
           <NotificationSettings />
         </Card>

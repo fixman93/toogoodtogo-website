@@ -25,6 +25,7 @@ function ApplicationForm({ onDone }: { onDone?: () => void }) {
     contactName: user?.name ?? '',
     phone: '',
     city: market.cities[0].name,
+    countryCode: market.code,
     category: 'bakery',
     locationsCount: 1,
     message: '',

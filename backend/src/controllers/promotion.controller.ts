@@ -16,6 +16,7 @@ const createBody = z.object({
   description: z.string().trim().max(200).optional(),
   discountType: z.enum(['percent', 'fixed']),
   value: z.number().int().positive(),
+  currency: z.string().length(3).toUpperCase().optional(),
   businessId: objectId.optional(),
   validFrom: z.coerce.date().optional(),
   validTo: z.coerce.date().optional(),
@@ -45,5 +46,5 @@ export async function checkPromotion(req: Request, res: Response) {
   const input = checkBody.parse(req.body)
   const offer = await Offer.findById(input.offerId)
   if (!offer) throw ApiError.notFound('Ponuda nije pronađena.')
-  ok(res, await promotionService.check({ code: input.code, quantity: input.quantity, offerPriceMinor: effectivePriceMinor(offer), businessId: offer.business }, currentUser(req)))
+  ok(res, await promotionService.check({ code: input.code, quantity: input.quantity, offerPriceMinor: effectivePriceMinor(offer), businessId: offer.business, currency: offer.currency }, currentUser(req)))
 }

@@ -1,7 +1,5 @@
 import type { Request, Response } from 'express'
 import { currentUser } from '../middleware/auth.js'
-import { env } from '../config/env.js'
-import { getMarket } from '../config/markets.js'
 import * as applicationService from '../services/application.service.js'
 import * as reservationService from '../services/reservation.service.js'
 import * as salesService from '../services/sales.service.js'
@@ -12,7 +10,8 @@ import * as statementService from '../services/statement.service.js'
 import * as moderationService from '../services/partner-moderation.service.js'
 import * as suggestionService from '../services/suggestion.service.js'
 import { z } from 'zod'
-import { WEBHOOK_EVENTS } from '../models/index.js'
+import { Business, WEBHOOK_EVENTS } from '../models/index.js'
+import { partnerLocale } from '../services/access.service.js'
 import { idParams, objectId } from '../validators/common.js'
 import { ok } from '../utils/respond.js'
 import { applicationBody, ordersQuery, salesQuery } from '../validators/partner.validators.js'
@@ -23,8 +22,11 @@ export async function getSales(req: Request, res: Response) {
 
 export async function listOrders(req: Request, res: Response) {
   const query = ordersQuery.parse(req.query)
-  const { date, start, end } = salesService.dayRange(query.date, getMarket(env.DEFAULT_MARKET).timezone)
-  const items = await reservationService.listForPartner(currentUser(req), { start, end, status: query.status, businessId: query.businessId })
+  const actor = currentUser(req)
+  const workplaceTz = actor.role === 'staff' && actor.staffOf?.[0] ? (await Business.findById(actor.staffOf[0]).select('timezone').lean())?.timezone : undefined
+  const timezone = workplaceTz ?? (await partnerLocale(actor.id)).timezone
+  const { date, start, end } = salesService.dayRange(query.date, timezone)
+  const items = await reservationService.listForPartner(actor, { start, end, status: query.status, businessId: query.businessId })
   res.json({ data: items, meta: { date, total: items.length } })
 }
 

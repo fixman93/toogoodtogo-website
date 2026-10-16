@@ -13,6 +13,8 @@ export interface IPartnerPayment {
   /** Statement month, YYYY-MM. */
   month: string
   amountMinor: number
+  /** The partner's currency (all their locations share one). */
+  currency?: string
   direction: 'to_platform' | 'to_partner'
   method: 'bank' | 'cash' | 'other'
   paidAt: Date
@@ -26,6 +28,7 @@ const partnerPaymentSchema = new Schema<IPartnerPayment>(
     owner: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     month: { type: String, required: true, match: /^\d{4}-\d{2}$/ },
     amountMinor: { ...moneyMinor, min: 1 },
+    currency: { type: String, uppercase: true, minlength: 3, maxlength: 3 },
     direction: { type: String, enum: ['to_platform', 'to_partner'], default: 'to_platform' },
     method: { type: String, enum: ['bank', 'cash', 'other'], default: 'bank' },
     paidAt: { type: Date, required: true },

@@ -42,7 +42,7 @@ import {
   useSetUserRole,
 } from '@/hooks/api'
 import { t } from '@/i18n'
-import { formatDate, formatDayLabel, formatMoney, formatPickupWindow, formatTime } from '@/lib/format'
+import { formatDate, formatDayLabel, formatMoney, formatPickupWindow, formatTime, fromMinor, toMinor } from '@/lib/format'
 import { currentMonth } from '@/lib/time'
 import { TicketStatusBadge, TicketThread } from '@/features/support/TicketThread'
 import { PromotionsManager } from '@/features/promotions/PromotionsManager'
@@ -51,6 +51,7 @@ import { OpenMonths, SettlementInfo, StatementSummary } from '@/pages/partner/St
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { NoteItem } from '@/features/business/StandingNotice'
 import { cn } from '@/lib/utils'
+import { MARKETS } from '@/config/markets'
 
 const TABS = ['overview', 'applications', 'users', 'partners', 'businesses', 'reservations', 'reviews', 'support', 'promotions', 'finance', 'donations', 'audit'] as const
 type Tab = (typeof TABS)[number]
@@ -425,7 +426,7 @@ function ApplicationRow({ a }: { a: PartnerApplication }) {
         <div className="min-w-0">
           <p className="font-semibold">{a.businessName}</p>
           <p className="text-sm text-muted-foreground">
-            {t(`category.${a.category}`)} · {a.city} · {t('admin.locations', { count: a.locationsCount })}
+            {t(`category.${a.category}`)} · {a.city}{a.countryCode && MARKETS[a.countryCode] ? `, ${MARKETS[a.countryCode].name}` : ''} · {t('admin.locations', { count: a.locationsCount })}
           </p>
           <p className="text-sm">
             {a.contactName} · {a.phone} · <span className="text-muted-foreground">{a.user?.email}</span>
@@ -703,10 +704,11 @@ function CommissionEditor({ businessId, rate }: { businessId: string; rate: numb
 const todayIso = () => new Date().toLocaleDateString('en-CA')
 
 /** Confirm a payment for one partner and month (pre-filled with what is still open). */
-function PaymentForm({ partner, month, currency, onDone }: { partner: PlatformStatementPartner; month: string; currency: string; onDone: () => void }) {
+function PaymentForm({ partner, month, onDone }: { partner: PlatformStatementPartner; month: string; onDone: () => void }) {
   const record = useRecordPayment()
+  const currency = partner.currency
   const [direction, setDirection] = useState<PaymentDirection>(partner.remainingMinor < 0 ? 'to_partner' : 'to_platform')
-  const [amount, setAmount] = useState(partner.remainingMinor ? String(Math.abs(partner.remainingMinor) / 100) : '')
+  const [amount, setAmount] = useState(partner.remainingMinor ? String(fromMinor(Math.abs(partner.remainingMinor), currency)) : '')
   const [method, setMethod] = useState<PaymentMethod>('bank')
   const [paidAt, setPaidAt] = useState(todayIso())
   const [note, setNote] = useState('')
@@ -717,7 +719,7 @@ function PaymentForm({ partner, month, currency, onDone }: { partner: PlatformSt
       className="space-y-3 rounded-xl border bg-card p-3"
       onSubmit={(e) => {
         e.preventDefault()
-        const amountMinor = Math.round(Number(amount.replace(',', '.')) * 100)
+        const amountMinor = toMinor(Number(amount.replace(',', '.')), currency)
         if (!Number.isFinite(amountMinor) || amountMinor <= 0) return setInvalid(true)
         setInvalid(false)
         record.mutate({ ownerId: partner.ownerId, month, amountMinor, direction, method, paidAt, note: note.trim() || undefined }, { onSuccess: onDone })
@@ -766,8 +768,9 @@ function PaymentForm({ partner, month, currency, onDone }: { partner: PlatformSt
   )
 }
 
-function FinancePartnerRow({ p, month, currency }: { p: PlatformStatementPartner; month: string; currency: string }) {
+function FinancePartnerRow({ p, month }: { p: PlatformStatementPartner; month: string }) {
   const { can } = useAuth()
+  const currency = p.currency
   const manage = can('finance.manage')
   const remove = useDeletePayment()
   const [paying, setPaying] = useState(false)
@@ -813,7 +816,7 @@ function FinancePartnerRow({ p, month, currency }: { p: PlatformStatementPartner
       />
 
       {paying ? (
-        <PaymentForm partner={p} month={month} currency={currency} onDone={() => setPaying(false)} />
+        <PaymentForm partner={p} month={month} onDone={() => setPaying(false)} />
       ) : (
         <div className="flex flex-wrap gap-2">
           {manage && p.status !== 'paid' && p.status !== 'none' && (
@@ -870,15 +873,20 @@ function MonthFinance({ month, setMonth }: { month: string; setMonth: (m: string
         <ErrorState onRetry={() => refetch()} />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MoneyTile label={t('finance.earned')} value={data.commissionMinor} currency={data.currency} tone="good" />
-            <MoneyTile label={t('finance.settled')} value={data.settledMinor} currency={data.currency} />
-            <MoneyTile label={t('finance.owedToUs')} value={data.owedToPlatformMinor} currency={data.currency} tone="bad" />
-            <MoneyTile label={t('finance.owedByUs')} value={data.owedToPartnersMinor} currency={data.currency} tone="bad" />
-          </div>
-          <Card className="p-5">
-            <StatementSummary s={data} currency={data.currency} />
-          </Card>
+          {data.currencies.map((c) => (
+            <section key={c.currency} className="space-y-3" aria-label={c.currency}>
+              {data.currencies.length > 1 && <h3 className="font-bold">{t('finance.inCurrency', { currency: c.currency })}</h3>}
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <MoneyTile label={t('finance.earned')} value={c.commissionMinor} currency={c.currency} tone="good" />
+                <MoneyTile label={t('finance.settled')} value={c.settledMinor} currency={c.currency} />
+                <MoneyTile label={t('finance.owedToUs')} value={c.owedToPlatformMinor} currency={c.currency} tone="bad" />
+                <MoneyTile label={t('finance.owedByUs')} value={c.owedToPartnersMinor} currency={c.currency} tone="bad" />
+              </div>
+              <Card className="p-5">
+                <StatementSummary s={c} currency={c.currency} />
+              </Card>
+            </section>
+          ))}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Chips<'open' | 'paid'>
               value={filter}
@@ -897,7 +905,7 @@ function MonthFinance({ month, setMonth }: { month: string; setMonth: (m: string
             <Card className="overflow-hidden">
               <ul className="divide-y">
                 {partners.map((p) => (
-                  <FinancePartnerRow key={p.ownerId} p={p} month={month} currency={data.currency} />
+                  <FinancePartnerRow key={p.ownerId} p={p} month={month} />
                 ))}
               </ul>
             </Card>
@@ -915,10 +923,12 @@ function OutstandingFinance({ onOpen }: { onOpen: (month: string) => void }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t('finance.outstandingIntro')}</p>
-      <div className="grid grid-cols-2 gap-3">
-        <MoneyTile label={`${t('finance.owedToUs')} (${t('finance.due').toLowerCase()})`} value={data.owedToPlatformMinor} currency={data.currency} tone="bad" />
-        <MoneyTile label={`${t('finance.owedByUs')} (${t('finance.due').toLowerCase()})`} value={data.owedToPartnersMinor} currency={data.currency} tone="bad" />
-      </div>
+      {data.currencies.map((c) => (
+        <div key={c.currency} className="grid grid-cols-2 gap-3">
+          <MoneyTile label={`${t('finance.owedToUs')} (${t('finance.due').toLowerCase()})`} value={c.owedToPlatformMinor} currency={c.currency} tone="bad" />
+          <MoneyTile label={`${t('finance.owedByUs')} (${t('finance.due').toLowerCase()})`} value={c.owedToPartnersMinor} currency={c.currency} tone="bad" />
+        </div>
+      ))}
       {data.partners.length === 0 ? (
         <EmptyState icon={CheckCircle2} title={t('finance.outstandingEmpty')} className="py-8" />
       ) : (
@@ -936,11 +946,11 @@ function OutstandingFinance({ onOpen }: { onOpen: (month: string) => void }) {
                   </span>
                   {p.dueMinor !== 0 && (
                     <span className={cn('font-bold tabular-nums', p.dueMinor > 0 ? 'text-destructive' : 'text-success')}>
-                      {t('finance.due')}: {formatMoney(Math.abs(p.dueMinor), data.currency)}
+                      {t('finance.due')}: {formatMoney(Math.abs(p.dueMinor), p.currency)}
                     </span>
                   )}
                 </div>
-                <OpenMonths months={p.months} currency={data.currency} onOpen={onOpen} />
+                <OpenMonths months={p.months} currency={p.currency} onOpen={onOpen} />
               </li>
             ))}
           </ul>

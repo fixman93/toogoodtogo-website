@@ -5,7 +5,7 @@ import { CategoryChips } from '@/components/offers/CategoryChips'
 import { OfferCarousel } from '@/components/offers/OfferCarousel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { market } from '@/config/markets'
+import { market, marketAt, setMarket } from '@/config/markets'
 import { useLocation } from '@/features/location/location-context'
 import { NewPartners } from '@/components/offers/NewPartners'
 import { useOffers } from '@/hooks/api'
@@ -20,6 +20,8 @@ export function DiscoverPage() {
   const nearbyTitle = isDeviceLocation || !city ? t('discover.nearby') : t('discover.inCity', { city: city.locative })
   const [search, setSearch] = useState('')
   const origin = { lat: location.lat, lng: location.lng }
+  // Physically in another supported country (e.g. a visitor from Sarajevo on the RS default).
+  const here = isOutsideMarket ? marketAt(origin) : undefined
 
   const nearby = useOffers({ ...origin, maxDistanceKm: NEARBY_RADIUS_KM, sort: 'distance', limit: 10 })
   const popular = useOffers({ ...origin, maxDistanceKm: NEARBY_RADIUS_KM, sort: 'popularity', limit: 10 })
@@ -62,15 +64,28 @@ export function DiscoverPage() {
         </Link>
       </Button>
 
-      {isOutsideMarket && (
+      {here && (
+        <section className="flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-card sm:flex-row sm:items-center">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary">
+            <Globe2 className="size-5 text-primary" />
+          </span>
+          <div className="flex-1">
+            <h2 className="font-bold">{t('location.switchTitle', { country: here.nameLocative })}</h2>
+            <p className="text-sm text-muted-foreground">{t('location.switchText')}</p>
+          </div>
+          <Button onClick={() => setMarket(here.code)}>{t('location.switchButton', { name: here.name })}</Button>
+        </section>
+      )}
+
+      {isOutsideMarket && !here && (
         <section className="space-y-3 rounded-2xl border bg-card p-5 shadow-card">
           <div className="flex items-start gap-3">
             <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary">
               <Globe2 className="size-5 text-primary" />
             </span>
             <div>
-              <h2 className="font-bold">{t('location.outsideTitle')}</h2>
-              <p className="text-sm text-muted-foreground">{t('location.outsideText')}</p>
+              <h2 className="font-bold">{t('location.outsideTitle', { country: market.nameLocative })}</h2>
+              <p className="text-sm text-muted-foreground">{t('location.outsideText', { name: market.name })}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">

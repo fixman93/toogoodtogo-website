@@ -1,22 +1,32 @@
-import { market } from '@/config/markets'
+import { currencyInfo, market } from '@/config/markets'
 import { activeLocale, t } from '@/i18n'
 
 const moneyFormatters = new Map<string, Intl.NumberFormat>()
 
-/** Format an amount stored in minor units (e.g. para) as a localized price. */
+/**
+ * Format an amount stored in minor units as a localized price in its own
+ * currency (pass the offer's/location's currency; the visitor's market is only
+ * the fallback).
+ */
 export function formatMoney(amountMinor: number, currency = market.currency): string {
+  const info = currencyInfo(currency)
   let formatter = moneyFormatters.get(currency)
   if (!formatter) {
     formatter = new Intl.NumberFormat(activeLocale, {
       style: 'currency',
       currency,
-      minimumFractionDigits: market.currencyDisplayDecimals,
-      maximumFractionDigits: market.currencyDisplayDecimals,
+      minimumFractionDigits: info.displayDecimals,
+      maximumFractionDigits: info.displayDecimals,
     })
     moneyFormatters.set(currency, formatter)
   }
-  return formatter.format(amountMinor / market.currencyMinorUnits)
+  return formatter.format(amountMinor / info.minorUnits)
 }
+
+/** Major units → minor units in a currency (e.g. "4,50" € → 450). */
+export const toMinor = (amount: number, currency: string) => Math.round(amount * currencyInfo(currency).minorUnits)
+/** Minor units → major units for form inputs. */
+export const fromMinor = (amountMinor: number, currency: string) => amountMinor / currencyInfo(currency).minorUnits
 
 const decimal = new Intl.NumberFormat(activeLocale, { maximumFractionDigits: 1 })
 

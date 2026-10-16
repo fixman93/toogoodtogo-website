@@ -19,12 +19,12 @@ import { serializeUser } from '../utils/serializers.js'
 
 const BCRYPT_ROUNDS = 12
 
-export async function register(input: { name: string; email: string; password: string; referralCode?: string }) {
+export async function register(input: { name: string; email: string; password: string; referralCode?: string; countryCode?: string }) {
   if (await User.exists({ email: input.email })) throw ApiError.conflict('Nalog sa ovom e-poštom već postoji.', 'EMAIL_TAKEN')
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS)
   // Self-registration always creates customers; partner/admin roles are granted by an admin.
   const referrer = await findReferrer(input.referralCode)
-  const user = await User.create({ name: input.name, email: input.email, passwordHash, role: 'customer', referredBy: referrer?._id })
+  const user = await User.create({ name: input.name, email: input.email, passwordHash, role: 'customer', referredBy: referrer?._id, ...(input.countryCode ? { countryCode: input.countryCode } : {}) })
   void sendMail(
     user.email,
     `Dobro došao/la, ${user.name.split(' ')[0]}!`,
@@ -95,12 +95,13 @@ export async function updatePreferences(userId: string, prefs: { push?: boolean;
 }
 
 /** Name and profile photo. A replaced/removed photo is deleted from storage. */
-export async function updateProfile(userId: string, input: { name?: string; avatarUrl?: string }) {
+export async function updateProfile(userId: string, input: { name?: string; avatarUrl?: string; countryCode?: string }) {
   const user = await User.findById(userId)
   if (!user) throw ApiError.notFound('Nalog nije pronađen.')
   const previous = user.avatarUrl
   if (input.name != null) user.name = input.name
   if (input.avatarUrl !== undefined) user.avatarUrl = input.avatarUrl || undefined
+  if (input.countryCode) user.countryCode = input.countryCode
   await user.save()
   if (input.avatarUrl !== undefined && previous && previous !== user.avatarUrl) void deleteIfOwned(previous)
   return me(user.id)

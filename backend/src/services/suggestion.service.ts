@@ -3,8 +3,6 @@
  * sold on the same weekday in recent weeks (simple, explainable statistics).
  */
 import type { Types } from 'mongoose'
-import { env } from '../config/env.js'
-import { getMarket } from '../config/markets.js'
 import { Offer, Reservation } from '../models/index.js'
 import { zonedTime } from '../utils/time.js'
 import { assertBusinessAccess, type Actor } from './access.service.js'
@@ -13,7 +11,7 @@ const WEEKS = 8
 
 export async function suggestQuantity(businessId: string, date: string, actor: Actor) {
   const business = await assertBusinessAccess(businessId, actor)
-  const tz = getMarket(env.DEFAULT_MARKET).timezone
+  const tz = business.timezone
   const [y, m, d] = date.split('-').map(Number)
   const noon = new Date(Date.UTC(y, m - 1, d, 12))
 

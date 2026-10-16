@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { market } from '@/config/markets'
+import { MARKETS, MARKET_LIST, market } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { useBusiness, useDeleteBusiness, useSaveBusiness } from '@/hooks/api'
@@ -25,6 +25,7 @@ interface FormState {
   category: Category
   description: string
   phone: string
+  countryCode: string
   street: string
   city: string
   postalCode: string
@@ -44,6 +45,7 @@ function initialState(business?: Business): FormState {
     category: business?.category ?? 'bakery',
     description: business?.description ?? '',
     phone: business?.phone ?? '',
+    countryCode: business?.address.countryCode ?? market.code,
     street: business?.address.street ?? '',
     city: business?.address.city ?? market.cities[0].name,
     postalCode: business?.address.postalCode ?? '',
@@ -65,6 +67,8 @@ function LocationForm({ business }: { business?: Business }) {
   const [locating, setLocating] = useState<'address' | 'gps' | null>(null)
   const [locateError, setLocateError] = useState<string | null>(null)
 
+  // The country sets the location's currency and timezone; it can't change after creation.
+  const country = MARKETS[form.countryCode] ?? market
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }))
     // A field's error disappears as soon as the user edits it.
@@ -81,7 +85,7 @@ function LocationForm({ business }: { business?: Business }) {
     setLocating('address')
     setLocateError(null)
     try {
-      const point = await geocodeAddress({ street: form.street, city: form.city, postalCode: form.postalCode }, market.code)
+      const point = await geocodeAddress({ street: form.street, city: form.city, postalCode: form.postalCode }, country.code)
       if (point) set('location', point)
       else setLocateError(t('partner.field.addressNotFound'))
     } catch {
@@ -128,7 +132,7 @@ function LocationForm({ business }: { business?: Business }) {
       category: form.category,
       description: form.description.trim() || undefined,
       phone: form.phone.trim() || undefined,
-      address: { street: form.street.trim(), city: form.city.trim(), postalCode: form.postalCode.trim() || undefined, countryCode: market.code },
+      address: { street: form.street.trim(), city: form.city.trim(), postalCode: form.postalCode.trim() || undefined, countryCode: country.code },
       location: form.location!,
       collectionInstructions: form.collectionInstructions.trim() || undefined,
       openingHours: form.openingHours.trim(),
@@ -171,6 +175,33 @@ function LocationForm({ business }: { business?: Business }) {
       </FormSection>
 
       <FormSection title={t('partner.section.address')}>
+        <FormField
+          label={t('partner.field.country')}
+          htmlFor="countryCode"
+          hint={business ? t('partner.field.countryLocked', { currency: country.currency }) : t('partner.field.countryHint', { currency: country.currency })}
+        >
+          <NativeSelect
+            id="countryCode"
+            value={form.countryCode}
+            disabled={!!business}
+            onChange={(e) => {
+              const next = MARKETS[e.target.value]
+              setForm((f) => ({
+                ...f,
+                countryCode: next.code,
+                // Keep a typed city, but swap the old country's default for the new one's.
+                city: country.cities.some((c) => c.name === f.city) ? next.cities[0].name : f.city,
+                location: null,
+              }))
+            }}
+          >
+            {MARKET_LIST.map((m) => (
+              <option key={m.code} value={m.code}>
+                {m.name} ({m.currency})
+              </option>
+            ))}
+          </NativeSelect>
+        </FormField>
         <FormField label={t('partner.field.street')} htmlFor="street" error={errors.street}>
           <Input {...text('street')} autoComplete="street-address" placeholder="Cara Dušana 45" />
         </FormField>
@@ -178,7 +209,7 @@ function LocationForm({ business }: { business?: Business }) {
           <FormField label={t('partner.field.city')} htmlFor="city" error={errors.city}>
             <Input {...text('city')} list="market-cities" autoComplete="address-level2" />
             <datalist id="market-cities">
-              {market.cities.map((c) => (
+              {country.cities.map((c) => (
                 <option key={c.id} value={c.name} />
               ))}
             </datalist>

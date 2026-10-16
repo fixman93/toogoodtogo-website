@@ -139,11 +139,11 @@ function MyOpenMonths({ onOpen }: { onOpen: (month: string) => void }) {
         <h2 className="font-bold">{t('statement.openMonths')}</h2>
         {me.dueMinor > 0 && (
           <span className="text-sm">
-            {t('statement.dueTotal')}: <span className="font-bold text-destructive tabular-nums">{formatMoney(me.dueMinor, data.currency)}</span>
+            {t('statement.dueTotal')}: <span className="font-bold text-destructive tabular-nums">{formatMoney(me.dueMinor, me.currency)}</span>
           </span>
         )}
       </div>
-      <OpenMonths months={me.months} currency={data.currency} onOpen={onOpen} />
+      <OpenMonths months={me.months} currency={me.currency} onOpen={onOpen} />
     </Card>
   )
 }

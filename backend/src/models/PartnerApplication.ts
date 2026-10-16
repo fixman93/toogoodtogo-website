@@ -11,6 +11,7 @@ export interface IPartnerApplication {
   contactName: string
   phone: string
   city: string
+  countryCode?: string
   category: Category
   locationsCount: number
   message?: string
@@ -29,6 +30,7 @@ const applicationSchema = new Schema<IPartnerApplication>(
     contactName: { type: String, required: true, trim: true, maxlength: 80 },
     phone: { type: String, required: true, trim: true, maxlength: 40 },
     city: { type: String, required: true, trim: true, maxlength: 80 },
+    countryCode: { type: String, uppercase: true, minlength: 2, maxlength: 2 },
     category: { type: String, enum: CATEGORIES, required: true },
     locationsCount: { type: Number, default: 1, min: 1, max: 500 },
     message: { type: String, maxlength: 1000 },
