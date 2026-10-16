@@ -19,8 +19,11 @@ const schema = z.object({
   DEFAULT_MARKET: z.string().default('RS'),
   /** Max login/register attempts per IP per 15 minutes. */
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
-  /** Public web app URL — used for links in e-mails and push notifications. */
-  APP_URL: z.string().url().default('http://localhost:5173'),
+  /**
+   * Public web app URL — used for links in e-mails and push notifications.
+   * Falls back to the first CORS origin (the web app) when not set.
+   */
+  APP_URL: z.preprocess((v) => (v === '' ? undefined : v), z.string().url().optional()),
   /** Web push (optional). Generate with: npx web-push generate-vapid-keys */
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
@@ -48,5 +51,13 @@ if (!parsed.success) {
   process.exit(1)
 }
 
-export const env = parsed.data
+const isLocal = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(url)
+const appUrl = parsed.data.APP_URL ?? parsed.data.CORS_ORIGINS.find((o) => /^https?:\/\//.test(o)) ?? 'http://localhost:5173'
+
+export const env = { ...parsed.data, APP_URL: appUrl.replace(/\/+$/, '') }
 export const isProduction = env.NODE_ENV === 'production'
+
+// Links in e-mails/push must point at the public site: a localhost link breaks
+// the button and makes mail providers treat the message as suspicious.
+if (isProduction && isLocal(env.APP_URL)) console.warn('⚠️  APP_URL is not set to the public web app URL — e-mail and push links will not work.')
+else if (isProduction && !parsed.data.APP_URL) console.warn(`ℹ️  APP_URL not set; using ${env.APP_URL} (first CORS origin) for e-mail and push links.`)
