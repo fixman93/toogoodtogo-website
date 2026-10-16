@@ -23,7 +23,8 @@ export function FavoriteButton({
     <button
       type="button"
       aria-pressed={isFavorite}
-      aria-label={isFavorite ? t('offer.favoriteRemove') : t('offer.favoriteAdd')}
+      aria-label={targetType === 'business' ? (isFavorite ? t('favorites.unfollowBusiness') : t('favorites.followBusiness')) : isFavorite ? t('offer.favoriteRemove') : t('offer.favoriteAdd')}
+      title={targetType === 'business' ? (isFavorite ? t('favorites.unfollowBusiness') : t('favorites.followBusiness')) : undefined}
       onClick={(e) => {
         e.preventDefault()
         e.stopPropagation()

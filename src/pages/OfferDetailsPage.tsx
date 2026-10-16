@@ -173,7 +173,7 @@ export function OfferDetailsPage() {
         >
           <ArrowLeft className="size-5" />
         </Button>
-        <FavoriteButton targetType="business" targetId={business.id} className="absolute top-3 right-3 size-11" />
+        <FavoriteButton targetType="offer" targetId={offer.id} className="absolute top-3 right-3 size-11" />
         <div className="absolute bottom-4 left-4 flex items-center gap-3">
           <SafeImage src={business.logoUrl} alt="" className="size-16 rounded-full border-[3px] border-white shadow-lg" />
           <Badge variant={offer.quantityAvailable ? 'accent' : 'glass'}>

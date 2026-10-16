@@ -40,7 +40,8 @@ export function OfferCard({ offer, className }: { offer: Offer; className?: stri
           )}
           {!soldOut && <PriceDropBadge offer={offer} className="ml-1.5" />}
         </div>
-        <FavoriteButton targetType="business" targetId={offer.businessId} className="absolute top-2.5 right-2.5" />
+        {/* Saves only this offer; following the whole location is on the location page. */}
+        <FavoriteButton targetType="offer" targetId={offer.id} className="absolute top-2.5 right-2.5" />
         <div className="absolute right-3 bottom-3 left-3 flex items-center gap-2.5">
           <SafeImage src={offer.business.logoUrl} alt="" className="size-10 shrink-0 rounded-full border-2 border-white" />
           <span className="truncate text-base font-bold text-white drop-shadow">{offer.business.name}</span>

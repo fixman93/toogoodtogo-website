@@ -194,8 +194,10 @@ export const srLatn = {
   'favorites.title': 'Omiljeno',
   'favorites.businesses': 'Omiljeni lokali',
   'favorites.offers': 'Sačuvane ponude',
-  'favorites.emptyTitle': 'Još nemaš omiljene lokale',
-  'favorites.emptyText': 'Dodirni srce na ponudi da sačuvaš lokal i brže pronađeš njegove kese.',
+  'favorites.emptyTitle': 'Još nemaš ništa u omiljenom',
+  'favorites.emptyText': 'Dodirni srce na ponudi da sačuvaš tu ponudu, ili srce na stranici lokala da pratiš ceo lokal i dobiješ obaveštenje o novim kesama.',
+  'favorites.followBusiness': 'Prati lokal (sve ponude)',
+  'favorites.unfollowBusiness': 'Prestani da pratiš lokal',
   'favorites.activeOffers': { one: '{count} aktivna ponuda', few: '{count} aktivne ponude', other: '{count} aktivnih ponuda' },
   'favorites.noActiveOffers': 'Trenutno nema ponuda',
 
