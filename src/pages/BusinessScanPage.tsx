@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { ArrowLeft, CheckCircle2, Clock, Loader2, ShoppingBag, XCircle } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, Loader2, ScanLine, ShoppingBag, Store, XCircle } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import type { Business, Reservation } from '@/api/types'
+import type { Business, Reservation, ScanVerdict } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -12,41 +12,173 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CameraScanner } from '@/features/business/CameraScanner'
 import { StaffGuard } from '@/features/business/PartnerGuard'
 import { useAuth } from '@/features/auth/auth-context'
-import { useBusinessReservations, useCollectReservation, useMyBusinesses, useWorkplaces } from '@/hooks/api'
+import { useBusinessReservations, useCollectReservation, useMyBusinesses, useVerifyCode, useWorkplaces } from '@/hooks/api'
 import { t } from '@/i18n'
-import { formatMoney, formatPickupWindow } from '@/lib/format'
+import { formatMoney, formatPickupWindow, formatTime } from '@/lib/format'
 import { parsePickupQr } from '@/lib/pickup'
+import { scanFeedback, unlockAudio } from '@/lib/scan-feedback'
+import { scannerPrefs } from '@/lib/scanner-prefs'
+import { cn } from '@/lib/utils'
 
-type Outcome = { ok: true; reservation: Reservation } | { ok: false; message: string }
+type CodeInput = { code: string; reservationId?: string } | { id: string }
 
-const RESULT_HOLD_MS = 3_000
+/** What the answer panel shows. `handedOver` = the bag was just given out. */
+type Result =
+  | { kind: 'checking' }
+  | { kind: 'verdict'; verdict: ScanVerdict | 'invalid_qr' | 'error'; reservation?: Reservation; businessName?: string; message?: string; input?: CodeInput }
+  | { kind: 'handedOver'; reservation: Reservation }
 
-function ResultCard({ outcome }: { outcome: Outcome }) {
-  if (!outcome.ok) {
+type Tone = 'ok' | 'warn' | 'error'
+/** Valid → green; valid but outside the pickup window → amber (can still hand over); anything else → red. */
+const toneOf = (verdict: string): Tone => (verdict === 'valid' ? 'ok' : verdict === 'early' || verdict === 'late' ? 'warn' : 'error')
+/** After handing over, the scanner is ready for the next customer by itself. */
+const NEXT_SCAN_MS = 3_500
+
+function verdictText(r: Extract<Result, { kind: 'verdict' }>): { title: string; detail?: string } {
+  const res = r.reservation
+  switch (r.verdict) {
+    case 'valid':
+      return { title: t('scan.valid') }
+    case 'early':
+      return { title: t('scan.early'), detail: res && t('scan.earlyDetail', { time: formatTime(res.pickupStart, res.timezone) }) }
+    case 'late':
+      return { title: t('scan.late'), detail: res && t('scan.lateDetail', { time: formatTime(res.pickupEnd, res.timezone) }) }
+    case 'already_collected':
+      return { title: t('scan.alreadyCollected'), detail: res?.collectedAt ? t('scan.collectedAt', { time: formatTime(res.collectedAt, res.timezone) }) : undefined }
+    case 'cancelled':
+      return { title: t('scan.cancelled') }
+    case 'expired':
+      return { title: t('scan.expired'), detail: res && t('scan.expiredDetail', { time: formatTime(res.pickupEnd, res.timezone) }) }
+    case 'not_paid':
+      return { title: t('scan.notPaid') }
+    case 'not_found':
+      return { title: t('scan.notFound'), detail: t('scan.notFoundDetail') }
+    case 'other_location':
+      return { title: t('scan.otherLocation'), detail: r.businessName ? t('scan.otherLocationDetail', { name: r.businessName }) : undefined }
+    case 'ambiguous':
+      return { title: t('scan.ambiguous'), detail: t('scan.ambiguousDetail') }
+    case 'invalid_qr':
+      return { title: t('business.invalidQr'), detail: t('scan.notFoundDetail') }
+    default:
+      return { title: t('common.errorTitle'), detail: r.message }
+  }
+}
+
+/** `charge`: show what to collect at the till (not for codes that must not be handed over). */
+function Details({ r, charge = true }: { r: Reservation; charge?: boolean }) {
+  const payAtCounter = r.payment.method === 'pay_at_pickup'
+  return (
+    <div className="space-y-2">
+      <p className="text-lg">
+        <strong>{r.customer?.name ?? '—'}</strong> · <span className="font-mono">{r.code}</span>
+      </p>
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span className="flex items-center gap-1.5">
+          <ShoppingBag className="size-4" />
+          {r.quantity} × {r.offer.title}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Clock className="size-4" />
+          {formatPickupWindow(r.pickupStart, r.pickupEnd, r.timezone)}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Store className="size-4" />
+          {r.business.name}
+        </span>
+      </p>
+      {charge && (
+        <div className="flex items-center justify-between rounded-xl bg-card p-3 text-foreground">
+          <span className="text-sm font-semibold text-muted-foreground">{payAtCounter ? t('business.charge') : t('business.paidOnline')}</span>
+          <span className="text-2xl font-extrabold tabular-nums">{formatMoney(r.totalMinor, r.currency)}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Panel({ tone, icon, title, detail, children }: { tone: Tone; icon: ReactNode; title: string; detail?: string; children: ReactNode }) {
+  return (
+    <div
+      role={tone === 'error' ? 'alert' : 'status'}
+      data-tone={tone}
+      className={cn(
+        'space-y-4 rounded-3xl border-4 p-5',
+        tone === 'ok' && 'border-success bg-success/15',
+        tone === 'warn' && 'border-accent bg-accent/25',
+        tone === 'error' && 'border-destructive bg-destructive/10',
+      )}
+    >
+      <div className={cn('flex items-start gap-3', tone === 'ok' && 'text-success', tone === 'warn' && 'text-accent-foreground', tone === 'error' && 'text-destructive')}>
+        {icon}
+        <div>
+          <p className="text-2xl leading-tight font-extrabold">{title}</p>
+          {detail && <p className="mt-1 font-semibold text-foreground">{detail}</p>}
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/** Full-width, colour-coded answer: readable at a glance across the counter. */
+function ResultPanel({
+  result,
+  onHandOver,
+  onNext,
+  handingOver,
+  error,
+}: {
+  result: Result
+  onHandOver: () => void
+  onNext: () => void
+  handingOver: boolean
+  error: string | null
+}) {
+  if (result.kind === 'checking') {
     return (
-      <div role="alert" className="flex items-center gap-3 rounded-2xl bg-destructive/10 p-4 font-semibold text-destructive">
-        <XCircle className="size-7 shrink-0" />
-        {outcome.message}
+      <div className="flex items-center gap-3 rounded-3xl bg-muted p-5 text-lg font-semibold">
+        <Loader2 className="size-6 animate-spin" />
+        {t('scan.checking')}
       </div>
     )
   }
-  const r = outcome.reservation
-  const payAtCounter = r.payment.method === 'pay_at_pickup'
+  if (result.kind === 'handedOver') {
+    const r = result.reservation
+    return (
+      <Panel tone="ok" icon={<CheckCircle2 className="size-9 shrink-0" />} title={t('scan.handedOver', { count: r.quantity })}>
+        <Details r={r} />
+        <Button variant="outline" size="lg" className="h-14 w-full bg-card text-lg" onClick={onNext}>
+          <ScanLine />
+          {t('scan.next')}
+        </Button>
+      </Panel>
+    )
+  }
+  const { title, detail } = verdictText(result)
+  const tone = toneOf(result.verdict)
+  const canHandOver = !!result.reservation && tone !== 'error'
+  const Icon = tone === 'ok' ? CheckCircle2 : tone === 'warn' ? AlertTriangle : XCircle
   return (
-    <div role="status" className="space-y-3 rounded-2xl border-2 border-success bg-success/10 p-5">
-      <p className="flex items-center gap-2 font-bold text-success">
-        <CheckCircle2 className="size-6" />
-        {t('business.collectedOk')} · {r.code}
-      </p>
-      <p className="text-3xl font-extrabold">{t('business.handOver', { count: r.quantity })}</p>
-      <p className="text-sm">
-        <strong>{r.customer?.name}</strong> · {r.offer.title}
-      </p>
-      <div className="flex items-center justify-between rounded-xl bg-card p-3">
-        <span className="text-sm font-semibold text-muted-foreground">{payAtCounter ? t('business.charge') : t('business.paidOnline')}</span>
-        <span className="text-2xl font-extrabold">{formatMoney(r.totalMinor, r.currency)}</span>
+    <Panel tone={tone} icon={<Icon className="size-9 shrink-0" />} title={title} detail={detail}>
+      {result.reservation && <Details r={result.reservation} charge={canHandOver} />}
+      {error && (
+        <p role="alert" className="rounded-lg bg-card p-2 text-sm font-semibold text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        {canHandOver && (
+          <Button size="lg" className="h-14 w-full text-lg sm:w-auto sm:flex-1" disabled={handingOver} onClick={onHandOver}>
+            {handingOver ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+            {tone === 'warn' ? t('scan.handOverAnyway') : t('business.handOver', { count: result.reservation!.quantity })}
+          </Button>
+        )}
+        <Button variant="outline" size="lg" className={cn('h-14 bg-card text-lg', !canHandOver && 'w-full')} onClick={onNext}>
+          <ScanLine />
+          {canHandOver ? t('scan.cancel') : t('scan.next')}
+        </Button>
       </div>
-    </div>
+    </Panel>
   )
 }
 
@@ -87,6 +219,15 @@ function ExpectedPickups({ business, onGiveOut, pendingId }: { business: Busines
   )
 }
 
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <label className="flex min-h-11 items-center gap-3 text-sm font-medium">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="size-5 shrink-0 accent-[var(--primary)]" />
+      {label}
+    </label>
+  )
+}
+
 function Scanner() {
   const { hasRole } = useAuth()
   const isStaff = hasRole('staff')
@@ -94,29 +235,65 @@ function Scanner() {
   const workplaces = useWorkplaces(isStaff)
   // Staff see the locations they work at; owners their own.
   const businesses = isStaff ? { isLoading: workplaces.isLoading, data: { data: (workplaces.data ?? []) as unknown as Business[] } } : owned
+  const verify = useVerifyCode()
   const collect = useCollectReservation()
-  const [outcome, setOutcome] = useState<Outcome | null>(null)
+  const [result, setResult] = useState<Result | null>(null)
+  const [handError, setHandError] = useState<string | null>(null)
   const [code, setCode] = useState('')
-  const [busy, setBusy] = useState(false)
   const [pendingId, setPendingId] = useState<string>()
+  const [autoCollect, setAutoCollect] = useState(scannerPrefs.autoCollect)
+  const [openOnLaunch, setOpenOnLaunch] = useState(scannerPrefs.openOnLaunch)
   const lastScan = useRef({ text: '', at: 0 })
+  const nextTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const panelRef = useRef<HTMLDivElement>(null)
 
-  const run = useCallback(
-    async (input: Parameters<typeof collect.mutateAsync>[0]) => {
-      setBusy(true)
+  useEffect(() => () => clearTimeout(nextTimer.current), [])
+  // Keep the answer in view on a phone.
+  useEffect(() => {
+    if (result && result.kind !== 'checking') panelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [result])
+
+  const reset = useCallback(() => {
+    clearTimeout(nextTimer.current)
+    setResult(null)
+    setHandError(null)
+    lastScan.current = { text: '', at: 0 }
+  }, [])
+
+  const handOver = useCallback(
+    async (input: CodeInput) => {
+      setHandError(null)
       try {
         const reservation = await collect.mutateAsync(input)
-        setOutcome({ ok: true, reservation })
-        navigator.vibrate?.(120)
+        setResult({ kind: 'handedOver', reservation })
+        scanFeedback('ok')
+        clearTimeout(nextTimer.current)
+        nextTimer.current = setTimeout(reset, NEXT_SCAN_MS)
       } catch (error) {
-        setOutcome({ ok: false, message: error instanceof ApiError ? error.message : t('common.errorText') })
-        navigator.vibrate?.([60, 60, 60])
-      } finally {
-        // Keep the result on screen briefly before accepting the next scan.
-        setTimeout(() => setBusy(false), RESULT_HOLD_MS)
+        setHandError(error instanceof ApiError ? error.message : t('common.errorText'))
+        scanFeedback('error')
       }
     },
-    [collect],
+    [collect, reset],
+  )
+
+  const check = useCallback(
+    async (input: { code: string; reservationId?: string }) => {
+      setHandError(null)
+      setResult({ kind: 'checking' })
+      try {
+        const answer = await verify.mutateAsync(input)
+        // Hand over by id from now on: exact, even if the typed code were ambiguous.
+        const exact = answer.reservation ? { code: answer.reservation.code, reservationId: answer.reservation.id } : input
+        setResult({ kind: 'verdict', ...answer, input: exact })
+        if (answer.verdict === 'valid' && autoCollect) return handOver(exact)
+        scanFeedback(toneOf(answer.verdict))
+      } catch (error) {
+        setResult({ kind: 'verdict', verdict: 'error', message: error instanceof ApiError ? error.message : t('common.errorText') })
+        scanFeedback('error')
+      }
+    },
+    [verify, autoCollect, handOver],
   )
 
   const onScan = useCallback(
@@ -125,24 +302,38 @@ function Scanner() {
       if (text === lastScan.current.text && now - lastScan.current.at < 8_000) return
       lastScan.current = { text, at: now }
       const parsed = parsePickupQr(text)
-      if (!parsed) setOutcome({ ok: false, message: t('business.invalidQr') })
-      else void run(parsed)
+      if (!parsed) {
+        setResult({ kind: 'verdict', verdict: 'invalid_qr' })
+        scanFeedback('error')
+      } else void check(parsed)
     },
-    [run],
+    [check],
   )
 
   const onManual = (e: FormEvent) => {
     e.preventDefault()
     if (!code.trim()) return
-    void run({ code }).then(() => setCode(''))
+    void check({ code }).then(() => setCode(''))
   }
 
+  const verdictInput = result?.kind === 'verdict' ? result.input : undefined
+
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-6 lg:grid-cols-2" onPointerDown={unlockAudio}>
       <div className="space-y-4">
-        {/* Result first: on a phone it must be visible without scrolling. */}
-        <div aria-live="polite">{outcome && <ResultCard outcome={outcome} />}</div>
-        <CameraScanner onScan={onScan} paused={busy} />
+        {/* Answer first: on a phone it must be visible without scrolling. */}
+        <div ref={panelRef} aria-live="polite" className="scroll-mt-20">
+          {result && (
+            <ResultPanel
+              result={result}
+              error={handError}
+              handingOver={collect.isPending}
+              onHandOver={() => verdictInput && void handOver(verdictInput)}
+              onNext={reset}
+            />
+          )}
+        </div>
+        <CameraScanner onScan={onScan} paused={!!result} />
         <form onSubmit={onManual} className="space-y-2">
           <Label htmlFor="pickup-code">{t('business.manualCode')}</Label>
           <div className="flex gap-2">
@@ -156,12 +347,30 @@ function Scanner() {
               spellCheck={false}
               className="font-mono text-lg tracking-widest"
             />
-            <Button type="submit" disabled={collect.isPending || !code.trim()}>
-              {collect.isPending && <Loader2 className="animate-spin" />}
-              {t('business.confirm')}
+            <Button type="submit" disabled={verify.isPending || !code.trim()}>
+              {verify.isPending && <Loader2 className="animate-spin" />}
+              {t('scan.check')}
             </Button>
           </div>
         </form>
+        <div className="rounded-2xl border bg-card px-4 py-1">
+          <Toggle
+            checked={autoCollect}
+            onChange={(v) => {
+              setAutoCollect(v)
+              scannerPrefs.setAutoCollect(v)
+            }}
+            label={t('scan.autoCollect')}
+          />
+          <Toggle
+            checked={openOnLaunch}
+            onChange={(v) => {
+              setOpenOnLaunch(v)
+              scannerPrefs.setOpenOnLaunch(v)
+            }}
+            label={t('scan.openOnLaunch')}
+          />
+        </div>
       </div>
 
       <section className="space-y-3">
@@ -176,7 +385,7 @@ function Scanner() {
               pendingId={pendingId}
               onGiveOut={(r) => {
                 setPendingId(r.id)
-                void run({ id: r.id }).finally(() => setPendingId(undefined))
+                void handOver({ id: r.id }).finally(() => setPendingId(undefined))
               }}
             />
           ))

@@ -357,6 +357,61 @@ export async function collectByCode(input: { code: string; reservationId?: strin
   return markCollected(collectable[0], actor)
 }
 
+export type ScanVerdict =
+  | 'valid'
+  | 'early'
+  | 'late'
+  | 'already_collected'
+  | 'cancelled'
+  | 'expired'
+  | 'not_paid'
+  | 'not_found'
+  | 'other_location'
+  | 'ambiguous'
+
+/**
+ * Counter check of a scanned/typed code WITHOUT handing the bag over: is it
+ * valid here and now, and if not, why. Never throws for a bad code — the
+ * answer is the verdict. `early`/`late` can still be handed over.
+ */
+export async function verifyCode(input: { code: string; reservationId?: string }, actor: Actor) {
+  const filter: Record<string, unknown> = { code: { $in: pickupCodeVariants(input.code) } }
+  if (input.reservationId) filter._id = input.reservationId
+  const found = await Reservation.find(filter).sort({ pickupStart: -1 }).limit(20)
+  if (!found.length) return { verdict: 'not_found' as ScanVerdict }
+
+  const mine = isAdmin(actor) ? null : new Set(await workplaceIds(actor))
+  const here = mine ? found.filter((r) => mine.has(r.business.toString())) : found
+  if (!here.length) {
+    // Another location of the same partner: say which one; otherwise reveal nothing.
+    const other = await Business.findById(found[0].business).select('name owner').lean()
+    const myOwners = mine ? await Business.distinct('owner', { _id: { $in: [...mine] } }) : []
+    const sameOwner = !!other && myOwners.some((o) => o.toString() === other.owner.toString())
+    return { verdict: 'other_location' as ScanVerdict, businessName: sameOwner ? other!.name : undefined }
+  }
+
+  const open = here.filter((r) => r.status === 'confirmed')
+  if (!input.reservationId && open.length > 1) return { verdict: 'ambiguous' as ScanVerdict }
+  const r = open[0] ?? here[0]
+  const now = Date.now()
+  const verdict: ScanVerdict =
+    r.status === 'collected'
+      ? 'already_collected'
+      : r.status === 'cancelled'
+        ? 'cancelled'
+        : r.status === 'expired'
+          ? 'expired'
+          : r.status === 'pending_payment'
+            ? 'not_paid'
+            : now < r.pickupStart.getTime()
+              ? 'early'
+              : now > r.pickupEnd.getTime()
+                ? 'late'
+                : 'valid'
+  const [reservation] = await toDto([r.toObject()], actor)
+  return { verdict, reservation }
+}
+
 /** Partner "Narudžbine": all reservations at the partner's locations for one local day. */
 export async function listForPartner(actor: Actor, query: { start: Date; end: Date; status?: string; businessId?: string }) {
   const businessIds = query.businessId ? [(await assertWorksAt(query.businessId, actor))._id.toString()] : await workplaceIds(actor)

@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login: (email, password) => authApi.login({ email, password }).then(onAuthenticated),
       resetPassword: (token, password) => authApi.resetPassword({ token, password }).then(onAuthenticated),
-      register: (name, email, password, referralCode) => authApi.register({ name, email, password, referralCode, countryCode: market.code }).then(onAuthenticated),
+      register: (input) => authApi.register({ ...input, countryCode: market.code }).then(onAuthenticated),
       logout: () => {
         tokenStorage.clear()
         queryClient.setQueryData(ME_QUERY_KEY, null)

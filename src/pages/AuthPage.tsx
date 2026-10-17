@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { market } from '@/config/markets'
 import { useAuth } from '@/features/auth/auth-context'
 import { t } from '@/i18n'
 
@@ -17,7 +18,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const referralCode = params.get('ref') ?? undefined
   const navigate = useNavigate()
   const from = (useRouterLocation().state as { from?: string } | null)?.from ?? '/profile'
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const isLogin = mode === 'login'
@@ -25,11 +26,12 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError(null)
+    if (!isLogin && form.phone.replace(/\D/g, '').length < 6) return setError(t('auth.phoneRequired'))
     if (!isLogin && form.password.length < 8) return setError(t('auth.passwordHint'))
     setPending(true)
     try {
       if (isLogin) await login(form.email, form.password)
-      else await register(form.name, form.email, form.password, referralCode)
+      else await register({ name: form.name, email: form.email, phone: form.phone, password: form.password, referralCode })
       navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.errorText'))
@@ -62,6 +64,13 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             <Label htmlFor="email">{t('auth.email')}</Label>
             <Input {...field('email')} type="email" autoComplete="email" inputMode="email" required />
           </div>
+          {!isLogin && (
+            <div className="space-y-2">
+              <Label htmlFor="phone">{t('auth.phone')}</Label>
+              <Input {...field('phone')} type="tel" autoComplete="tel" inputMode="tel" placeholder={market.phoneExample} required />
+              <p className="text-xs text-muted-foreground">{t('auth.phoneHint')}</p>
+            </div>
+          )}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">{t('auth.password')}</Label>

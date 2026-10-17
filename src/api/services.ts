@@ -4,6 +4,7 @@
  */
 import { api } from './client'
 import type {
+  VerifyResult,
   ApiKeyInfo,
   Donation,
   DonationList,
@@ -59,14 +60,14 @@ const unwrap = <T>(promise: Promise<{ data: ApiSuccess<T> }>) => promise.then((r
 
 export const authApi = {
   login: (body: { email: string; password: string }) => unwrap<AuthResult>(api.post('/auth/login', body)),
-  register: (body: { name: string; email: string; password: string; referralCode?: string; countryCode?: string }) =>
+  register: (body: { name: string; email: string; password: string; phone: string; referralCode?: string; countryCode?: string }) =>
     unwrap<AuthResult>(api.post('/auth/register', body)),
   me: () => unwrap<User>(api.get('/auth/me')),
   forgotPassword: (email: string) => unwrap<{ sent: boolean }>(api.post('/auth/forgot-password', { email })),
   resetPassword: (body: { token: string; password: string }) => unwrap<AuthResult>(api.post('/auth/reset-password', body)),
   deleteAccount: (password: string) => api.delete('/auth/me', { data: { password } }).then(() => undefined),
   updatePreferences: (prefs: { push?: boolean; email?: boolean }) => unwrap<User>(api.patch('/auth/me/preferences', prefs)),
-  updateProfile: (body: { name?: string; avatarUrl?: string; countryCode?: string }) => unwrap<User>(api.patch('/auth/me', body)),
+  updateProfile: (body: { name?: string; avatarUrl?: string; countryCode?: string; phone?: string }) => unwrap<User>(api.patch('/auth/me', body)),
 }
 
 export const offersApi = {
@@ -109,6 +110,8 @@ export const reservationsApi = {
   collect: (id: string) => unwrap<Reservation>(api.patch(`/reservations/${id}/collect`)),
   /** Business staff: hand over by scanned QR (code + id) or a typed code. */
   collectByCode: (body: { code: string; reservationId?: string }) => unwrap<Reservation>(api.post('/reservations/collect', body)),
+  /** Check a scanned/typed code without handing the bag over. */
+  verify: (body: { code: string; reservationId?: string }) => unwrap<VerifyResult>(api.post('/reservations/verify', body)),
 }
 
 export const favoritesApi = {

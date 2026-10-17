@@ -3,6 +3,8 @@ import { Camera, CameraOff, Loader2 } from 'lucide-react'
 import QrScanner from 'qr-scanner'
 import { Button } from '@/components/ui/button'
 import { t } from '@/i18n'
+import { unlockAudio } from '@/lib/scan-feedback'
+import { scannerPrefs } from '@/lib/scanner-prefs'
 
 type CameraState = 'idle' | 'starting' | 'scanning' | 'error'
 
@@ -10,6 +12,8 @@ type CameraState = 'idle' | 'starting' | 'scanning' | 'error'
  * Rear-camera QR scanner (qr-scanner: works in iOS Safari, Android Chrome and
  * desktop). Browsers only expose the camera on HTTPS or localhost.
  * `paused` keeps the camera on but ignores codes (e.g. while a result shows).
+ * The camera starts by itself when it already worked on this device (or the
+ * permission is granted), so the counter phone is ready to scan on opening.
  */
 export function CameraScanner({ onScan, paused }: { onScan: (text: string) => void; paused: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -27,6 +31,7 @@ export function CameraScanner({ onScan, paused }: { onScan: (text: string) => vo
   useEffect(() => () => scannerRef.current?.destroy(), [])
 
   const start = async () => {
+    if (scannerRef.current && state === 'scanning') return
     if (!window.isSecureContext) {
       setState('error')
       setError(t('business.cameraInsecure'))
@@ -44,12 +49,36 @@ export function CameraScanner({ onScan, paused }: { onScan: (text: string) => vo
         { preferredCamera: 'environment', highlightScanRegion: true, highlightCodeOutline: true, maxScansPerSecond: 5 },
       )
       await scannerRef.current.start()
+      scannerPrefs.setCameraOk()
       setState('scanning')
     } catch (e) {
       setState('error')
       setError(e instanceof Error && e.message === 'no-camera' ? t('business.cameraMissing') : t('business.cameraDenied'))
     }
   }
+
+  const startRef = useRef(start)
+  useEffect(() => {
+    startRef.current = start
+  })
+
+  // Auto-start when the camera is known to work here (no extra tap at the counter).
+  useEffect(() => {
+    let cancelled = false
+    const auto = async () => {
+      let granted = scannerPrefs.cameraOk()
+      try {
+        granted ||= (await navigator.permissions?.query({ name: 'camera' as PermissionName }))?.state === 'granted'
+      } catch {
+        /* Permissions API without "camera" (Safari) */
+      }
+      if (granted && !cancelled) void startRef.current()
+    }
+    void auto()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const stop = () => {
     scannerRef.current?.stop()
@@ -66,7 +95,14 @@ export function CameraScanner({ onScan, paused }: { onScan: (text: string) => vo
             {state === 'starting' && <p className="text-sm">{t('business.cameraStarting')}</p>}
             {error && <p className="max-w-xs text-sm text-white/85">{error}</p>}
             {state !== 'starting' && (
-              <Button variant="accent" size="lg" onClick={start}>
+              <Button
+                variant="accent"
+                size="lg"
+                onClick={() => {
+                  unlockAudio()
+                  void start()
+                }}
+              >
                 <Camera />
                 {t('business.startCamera')}
               </Button>

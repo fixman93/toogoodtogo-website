@@ -30,7 +30,7 @@ if any are missing.
 | --- | --- | --- | --- |
 | `MONGODB_URI` | ✅ | – | Atlas or local connection string |
 | `JWT_SECRET` | ✅ | – | ≥ 32 chars. Generate: `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"` |
-| `JWT_EXPIRES_IN` | | `7d` | |
+| `JWT_EXPIRES_IN` | | `60d` | Sign-out after this long without use; the token is renewed daily while the app is used (`X-Session-Token`). |
 | `PORT` | | `4000` | |
 | `NODE_ENV` | | `development` | `production` hides internal error details |
 | `CORS_ORIGINS` | | `http://localhost:5173` | Comma-separated list of browser origins |

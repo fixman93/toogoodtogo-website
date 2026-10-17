@@ -15,6 +15,7 @@ export interface IUser {
   role: Role
   locale: string
   countryCode: string
+  /** E.164 (+381641234567); one account per number (see utils/phone). */
   phone?: string
   /** Password reset (hash of the e-mailed token) and session invalidation. */
   passwordResetHash?: string
@@ -77,6 +78,9 @@ const userSchema = new Schema<IUser>(
   },
   { timestamps: true },
 )
+
+// One account per phone number (accounts without a number are not indexed).
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $type: 'string' } } })
 
 export type UserDoc = HydratedDocument<IUser>
 export const User = model<IUser>('User', userSchema)

@@ -18,6 +18,7 @@ export function serializeUser(u: WithId<IUser>) {
     locale: u.locale,
     countryCode: u.countryCode,
     avatarUrl: u.avatarUrl,
+    phone: u.phone ?? null,
     /** Partner locations a staff member works at. */
     staffOf: (u.staffOf ?? []).map(String),
     /** Platform permissions (admin panel), see config/permissions. */

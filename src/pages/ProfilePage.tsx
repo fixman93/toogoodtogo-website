@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Bell, Camera, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
+import { Bell, Camera, Phone, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { PasswordInput } from '@/components/ui/password-input'
 import { NativeSelect } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/common/PageHeader'
 import { RequireAuth } from '@/components/common/RequireAuth'
 import { Button } from '@/components/ui/button'
@@ -304,6 +305,75 @@ function AvatarEditor({ initials, url }: { initials: string; url?: string }) {
   )
 }
 
+/** Phone number: required for new accounts; older accounts are asked to add one. One number per account. */
+function PhoneSetting({ phone }: { phone: string | null }) {
+  const update = useUpdateProfile()
+  const [editing, setEditing] = useState(!phone)
+  const [value, setValue] = useState(phone ?? '')
+  const [saved, setSaved] = useState(false)
+  const cancel = () => {
+    setEditing(false)
+    setValue(phone ?? '')
+  }
+  const save = (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaved(false)
+    update.mutate(
+      { phone: value },
+      {
+        onSuccess: (u) => {
+          setValue(u.phone ?? '')
+          setEditing(false)
+          setSaved(true)
+        },
+      },
+    )
+  }
+  return (
+    <Card className={cn('space-y-3 p-4', !phone && 'border-accent bg-accent/10')}>
+      <div className="flex items-center gap-3">
+        <Phone className="size-5 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">{t('auth.phone')}</p>
+          {phone && !editing && <p className="text-sm text-muted-foreground tabular-nums">{phone}</p>}
+          {!phone && <p className="text-sm text-muted-foreground">{t('profile.phoneMissing')}</p>}
+        </div>
+        {phone && !editing && (
+          <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+            {t('profile.phoneChange')}
+          </Button>
+        )}
+      </div>
+      {editing && (
+        <form className="flex flex-col gap-2 sm:flex-row" onSubmit={save}>
+          <Input type="tel" inputMode="tel" autoComplete="tel" value={value} onChange={(e) => setValue(e.target.value)} placeholder={market.phoneExample} aria-label={t('auth.phone')} className="sm:flex-1" />
+          <div className="flex gap-2">
+            <Button type="submit" disabled={update.isPending || value.replace(/\D/g, '').length < 6}>
+              {update.isPending && <Loader2 className="animate-spin" />}
+              {t('profile.phoneSave')}
+            </Button>
+            {phone && (
+              <Button type="button" variant="ghost" onClick={cancel}>
+                {t('settle.cancel')}
+              </Button>
+            )}
+          </div>
+        </form>
+      )}
+      {update.isError && (
+        <p role="alert" className="text-sm font-semibold text-destructive">
+          {update.error instanceof ApiError ? update.error.message : t('common.errorText')}
+        </p>
+      )}
+      {saved && (
+        <p role="status" className="text-sm font-semibold text-success">
+          {t('profile.phoneSaved')}
+        </p>
+      )}
+    </Card>
+  )
+}
+
 function Profile() {
   const { user, logout, hasRole } = useAuth()
   if (!user) return null
@@ -324,6 +394,7 @@ function Profile() {
           <p className="text-xs text-muted-foreground">{t('profile.memberSince', { date: formatDate(user.createdAt) })}</p>
         </div>
       </Card>
+      <PhoneSetting phone={user.phone ?? null} />
 
       <section className="space-y-3">
         <h2 className="font-bold">{t('profile.impact')}</h2>

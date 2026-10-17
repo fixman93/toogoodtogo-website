@@ -11,7 +11,8 @@ const schema = z.object({
   JWT_SECRET: z
     .string({ error: 'JWT_SECRET is required (see backend/.env.example)' })
     .min(32, 'JWT_SECRET must be at least 32 characters'),
-  JWT_EXPIRES_IN: z.string().default('7d'),
+  /** How long an unused device stays signed in (renewed daily while used — see middleware/auth). */
+  JWT_EXPIRES_IN: z.string().default('60d'),
   CORS_ORIGINS: z
     .string()
     .default('http://localhost:5173')

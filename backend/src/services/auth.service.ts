@@ -1,5 +1,7 @@
 import bcrypt from 'bcryptjs'
+import { env } from '../config/env.js'
 import { signToken } from '../middleware/auth.js'
+import { isPhoneDuplicate, normalizePhone, phoneTaken } from '../utils/phone.js'
 import { ensureReferralCode, findReferrer, levelFor } from './loyalty.service.js'
 import { deleteIfOwned } from './storage.service.js'
 import { sendMail } from './mail.service.js'
@@ -19,12 +21,24 @@ import { serializeUser } from '../utils/serializers.js'
 
 const BCRYPT_ROUNDS = 12
 
-export async function register(input: { name: string; email: string; password: string; referralCode?: string; countryCode?: string }) {
+export async function register(input: { name: string; email: string; password: string; phone: string; referralCode?: string; countryCode?: string }) {
   if (await User.exists({ email: input.email })) throw ApiError.conflict('Nalog sa ovom e-poštom već postoji.', 'EMAIL_TAKEN')
+  const phone = normalizePhone(input.phone, input.countryCode ?? env.DEFAULT_MARKET)
+  if (await User.exists({ phone })) throw phoneTaken()
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS)
   // Self-registration always creates customers; partner/admin roles are granted by an admin.
   const referrer = await findReferrer(input.referralCode)
-  const user = await User.create({ name: input.name, email: input.email, passwordHash, role: 'customer', referredBy: referrer?._id, ...(input.countryCode ? { countryCode: input.countryCode } : {}) })
+  const user = await User.create({
+    name: input.name,
+    email: input.email,
+    phone,
+    passwordHash,
+    role: 'customer',
+    referredBy: referrer?._id,
+    ...(input.countryCode ? { countryCode: input.countryCode } : {}),
+  }).catch((error: unknown) => {
+    throw isPhoneDuplicate(error) ? phoneTaken() : error
+  })
   void sendMail(
     user.email,
     `Dobro došao/la, ${user.name.split(' ')[0]}!`,
@@ -95,14 +109,21 @@ export async function updatePreferences(userId: string, prefs: { push?: boolean;
 }
 
 /** Name and profile photo. A replaced/removed photo is deleted from storage. */
-export async function updateProfile(userId: string, input: { name?: string; avatarUrl?: string; countryCode?: string }) {
+export async function updateProfile(userId: string, input: { name?: string; avatarUrl?: string; countryCode?: string; phone?: string }) {
   const user = await User.findById(userId)
   if (!user) throw ApiError.notFound('Nalog nije pronađen.')
   const previous = user.avatarUrl
   if (input.name != null) user.name = input.name
   if (input.avatarUrl !== undefined) user.avatarUrl = input.avatarUrl || undefined
   if (input.countryCode) user.countryCode = input.countryCode
-  await user.save()
+  if (input.phone !== undefined) {
+    const phone = normalizePhone(input.phone, user.countryCode)
+    if (phone !== user.phone && (await User.exists({ phone, _id: { $ne: user._id } }))) throw phoneTaken()
+    user.phone = phone
+  }
+  await user.save().catch((error: unknown) => {
+    throw isPhoneDuplicate(error) ? phoneTaken() : error
+  })
   if (input.avatarUrl !== undefined && previous && previous !== user.avatarUrl) void deleteIfOwned(previous)
   return me(user.id)
 }

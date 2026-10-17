@@ -8,6 +8,7 @@ export const registerBody = z.object({
   email: z.email().trim().toLowerCase(),
   password: z.string().min(8).max(128),
   referralCode: z.string().trim().max(12).optional(),
+  phone: z.string({ error: 'Unesi broj telefona.' }).trim().min(1, 'Unesi broj telefona.').max(30),
   /** Country chosen in the app (prices, cities); defaults to the platform market. */
   countryCode: countryCode.optional(),
 })
@@ -27,6 +28,7 @@ export const profileBody = z.object({
   name: z.string().trim().min(2).max(80).optional(),
   avatarUrl: z.union([z.url(), z.literal('')]).optional(),
   countryCode: countryCode.optional(),
+  phone: z.string().trim().min(1, 'Unesi broj telefona.').max(30).optional(),
 })
 
 export const preferencesBody = z.object({ push: z.boolean().optional(), email: z.boolean().optional() })

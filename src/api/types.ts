@@ -60,6 +60,8 @@ export interface User {
   locale: string
   countryCode: string
   avatarUrl?: string
+  /** E.164, e.g. +381641234567 (null for accounts created before phones were required). */
+  phone?: string | null
   staffOf: string[]
   permissions: Permission[]
   notificationPrefs: { push: boolean; email: boolean }
@@ -637,4 +639,24 @@ export interface WebhookInfo {
   createdAt: string
   /** Only once, right after creation. */
   secret?: string
+}
+
+/** Result of checking a pickup code at the counter (POST /reservations/verify). */
+export type ScanVerdict =
+  | 'valid'
+  | 'early'
+  | 'late'
+  | 'already_collected'
+  | 'cancelled'
+  | 'expired'
+  | 'not_paid'
+  | 'not_found'
+  | 'other_location'
+  | 'ambiguous'
+
+export interface VerifyResult {
+  verdict: ScanVerdict
+  reservation?: Reservation
+  /** Another location of the same partner. */
+  businessName?: string
 }

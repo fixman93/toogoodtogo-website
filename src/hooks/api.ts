@@ -110,6 +110,11 @@ export function useCollectReservation() {
   })
 }
 
+/** Scanner: check a code (no side effects, nothing to refresh). */
+export function useVerifyCode() {
+  return useMutation({ mutationFn: reservationsApi.verify })
+}
+
 export function useCreateReservation() {
   const queryClient = useQueryClient()
   return useMutation({

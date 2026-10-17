@@ -51,7 +51,9 @@ export async function listUsers(query: AdminUsersQuery) {
   if (query.role) filter.role = query.role
   if (query.q) {
     const rx = new RegExp(escapeRegex(query.q), 'i')
-    filter.$or = [{ name: rx }, { email: rx }]
+    // "064 123…" finds +38164123…: match on the digits after the leading 0.
+    const digits = query.q.replace(/\D/g, '').replace(/^0+/, '')
+    filter.$or = [{ name: rx }, { email: rx }, ...(digits.length >= 4 ? [{ phone: new RegExp(escapeRegex(digits)) }] : [])]
   }
   const [users, total] = await Promise.all([
     User.find(filter).sort({ createdAt: -1 }).skip((query.page - 1) * query.limit).limit(query.limit),

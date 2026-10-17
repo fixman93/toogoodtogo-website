@@ -12,6 +12,14 @@ interface TokenPayload {
   iat?: number
 }
 
+/**
+ * Sliding session: a token older than this is replaced on the next request
+ * (header `X-Session-Token`), so someone who uses the app stays signed in and
+ * only an unused device is signed out after JWT_EXPIRES_IN.
+ */
+const RENEW_AFTER_SECONDS = 24 * 3600
+export const SESSION_TOKEN_HEADER = 'X-Session-Token'
+
 export function signToken(userId: string, role: Role) {
   return jwt.sign({ role }, env.JWT_SECRET, { subject: userId, expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] })
 }
@@ -32,7 +40,7 @@ function readUser(req: Request, strict: boolean): (Request['user'] & { iat?: num
  * Requires a valid bearer token. The role is read from the database (not the
  * token), so role changes and deleted accounts take effect immediately.
  */
-export async function authenticate(req: Request, _res: Response, next: NextFunction) {
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
   const apiKey = req.get('x-api-key')
   if (apiKey) {
     // Integration keys act as the partner, but never on account/admin endpoints.
@@ -52,6 +60,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   }
   if (user.isBlocked) throw ApiError.forbidden('Nalog je blokiran. Kontaktiraj podršku.', 'ACCOUNT_BLOCKED')
   req.user = { id: token.id, role: user.role, staffOf: (user.staffOf ?? []).map(String) }
+  if (token.iat && Date.now() / 1000 - token.iat > RENEW_AFTER_SECONDS) res.setHeader(SESSION_TOKEN_HEADER, signToken(token.id, user.role))
   next()
 }
 

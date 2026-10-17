@@ -1,11 +1,13 @@
-import { Link, NavLink, Outlet, useLocation as useRouterLocation } from 'react-router'
+import { Link, NavLink, Outlet, useLocation as useRouterLocation, useNavigate } from 'react-router'
 import { useEffect } from 'react'
+import { useAuth } from '@/features/auth/auth-context'
+import { scannerPrefs } from '@/lib/scanner-prefs'
 import { Logo } from '@/components/common/Logo'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { LocationPicker } from './LocationPicker'
-import { NAV_ITEMS } from './nav-items'
+import { NAV_ITEMS, PARTNER_NAV_ITEMS } from './nav-items'
 
 function ScrollToTop() {
   const { pathname } = useRouterLocation()
@@ -15,10 +17,39 @@ function ScrollToTop() {
   return null
 }
 
+const LAUNCH_KEY = 'zalogaj.launched'
+
+/**
+ * Partners and staff open the app to scan: on launch (the first screen of a
+ * session, at "/") go straight to the scanner, unless turned off on the scan page.
+ */
+function OpenScannerOnLaunch() {
+  const { user, isLoading, hasRole } = useAuth()
+  const navigate = useNavigate()
+  const { pathname } = useRouterLocation()
+  useEffect(() => {
+    if (isLoading) return
+    let firstScreen = false
+    try {
+      firstScreen = !sessionStorage.getItem(LAUNCH_KEY)
+      sessionStorage.setItem(LAUNCH_KEY, '1')
+    } catch {
+      /* ignore */
+    }
+    if (firstScreen && pathname === '/' && user && hasRole('business', 'staff') && scannerPrefs.openOnLaunch()) navigate('/business/scan', { replace: true })
+    // Only the first screen of the session counts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading])
+  return null
+}
+
 export function AppShell() {
+  const { hasRole } = useAuth()
+  const navItems = hasRole('business', 'staff') ? PARTNER_NAV_ITEMS : NAV_ITEMS
   return (
     <div className="min-h-dvh">
       <ScrollToTop />
+      <OpenScannerOnLaunch />
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 backdrop-blur-lg">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
           <Link to="/" className="hidden shrink-0 md:block" aria-label={t('brand.name')}>
@@ -26,7 +57,7 @@ export function AppShell() {
           </Link>
           <LocationPicker className="-ml-2 md:ml-2" />
           <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label="Glavna navigacija">
-            {NAV_ITEMS.map(({ to, label, Icon, end }) => (
+            {navItems.map(({ to, label, Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -58,7 +89,7 @@ export function AppShell() {
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-card/95 pb-safe backdrop-blur-lg md:hidden"
       >
         <ul className="mx-auto grid max-w-lg grid-cols-5">
-          {NAV_ITEMS.map(({ to, label, Icon, end }) => (
+          {navItems.map(({ to, label, Icon, end }) => (
             <li key={to}>
               <NavLink
                 to={to}

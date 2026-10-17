@@ -29,6 +29,8 @@ export interface MarketConfig {
   cities: City[]
   /** Locative of the country name for sentences: "u Srbiji", "u Crnoj Gori". */
   nameLocative: string
+  /** Example mobile number shown as a placeholder. */
+  phoneExample: string
   /** Rough bounding box of the country — used to tell if the user is outside the market. */
   bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }
 }
@@ -56,6 +58,7 @@ const city = (id: string, name: string, locative: string, lat: number, lng: numb
 export const MARKETS: Record<string, MarketConfig> = {
   RS: {
     code: 'RS',
+    phoneExample: '064 123 4567',
     name: 'Srbija',
     nameLocative: 'Srbiji',
     locale: 'sr-Latn-RS',
@@ -73,6 +76,7 @@ export const MARKETS: Record<string, MarketConfig> = {
   },
   BA: {
     code: 'BA',
+    phoneExample: '061 234 567',
     name: 'Bosna i Hercegovina',
     nameLocative: 'Bosni i Hercegovini',
     locale: 'sr-Latn-BA',
@@ -90,6 +94,7 @@ export const MARKETS: Record<string, MarketConfig> = {
   },
   ME: {
     code: 'ME',
+    phoneExample: '067 123 456',
     name: 'Crna Gora',
     nameLocative: 'Crnoj Gori',
     locale: 'sr-Latn-ME',
@@ -107,6 +112,7 @@ export const MARKETS: Record<string, MarketConfig> = {
   },
   HR: {
     code: 'HR',
+    phoneExample: '091 234 5678',
     name: 'Hrvatska',
     nameLocative: 'Hrvatskoj',
     locale: 'sr-Latn-HR',
@@ -124,6 +130,7 @@ export const MARKETS: Record<string, MarketConfig> = {
   },
   SI: {
     code: 'SI',
+    phoneExample: '041 234 567',
     name: 'Slovenija',
     nameLocative: 'Sloveniji',
     locale: 'sr-Latn-SI',
@@ -141,6 +148,7 @@ export const MARKETS: Record<string, MarketConfig> = {
   },
   MK: {
     code: 'MK',
+    phoneExample: '070 123 456',
     name: 'Severna Makedonija',
     nameLocative: 'Severnoj Makedoniji',
     locale: 'sr-Latn-MK',

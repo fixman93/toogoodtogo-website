@@ -191,7 +191,10 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
             <Badge variant={ROLE_BADGE[user.role]}>{t(`admin.role.${user.role}`)}</Badge>
             {user.isBlocked && <Badge variant="destructive">{t('admin.blocked')}</Badge>}
           </p>
-          <p className="truncate text-sm text-muted-foreground">{user.email}</p>
+          <p className="truncate text-sm text-muted-foreground">
+            {user.email}
+            {user.phone && ` · ${user.phone}`}
+          </p>
           <p className="text-xs text-muted-foreground">
             {t('profile.memberSince', { date: formatDate(user.createdAt) })}
             {user.businessCount > 0 && ` · ${t('admin.locations', { count: user.businessCount })}`}

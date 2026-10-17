@@ -13,6 +13,8 @@ reservationRoutes.get('/:id', c.getReservation)
 reservationRoutes.post('/', c.createReservation)
 // Scan / type a pickup code at the counter (business staff).
 reservationRoutes.post('/collect', requireRole('business', 'staff', 'admin'), c.collectByCode)
+// Check a code without handing over (scanner result screen).
+reservationRoutes.post('/verify', requireRole('business', 'staff', 'admin'), c.verifyCode)
 reservationRoutes.patch('/:id/cancel', c.cancelReservation)
 reservationRoutes.post('/:id/share', c.shareReservation)
 reservationRoutes.patch('/:id/collect', requireRole('business', 'staff', 'admin'), c.collectReservation)

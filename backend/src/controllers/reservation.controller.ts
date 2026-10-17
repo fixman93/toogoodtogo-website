@@ -31,6 +31,10 @@ export async function collectByCode(req: Request, res: Response) {
   ok(res, await reservationService.collectByCode(collectByCodeBody.parse(req.body), currentUser(req)))
 }
 
+export async function verifyCode(req: Request, res: Response) {
+  ok(res, await reservationService.verifyCode(collectByCodeBody.parse(req.body), currentUser(req)))
+}
+
 export async function shareReservation(req: Request, res: Response) {
   ok(res, await reservationService.share(idParams.parse(req.params).id, currentUser(req)))
 }
