@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { market } from '@/config/markets'
 import { t } from '@/i18n'
-import { isInMarket } from '@/lib/geo'
 import { LocationContext, type LocationContextValue, type UserLocation } from './location-context'
 
 const STORAGE_KEY = 'zalogaj.location'
@@ -82,7 +81,6 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     return {
       location,
       isDeviceLocation,
-      isOutsideMarket: isDeviceLocation && !isInMarket(location),
       setCity: (id) => persist(cityLocation(id)),
       locateDevice,
       isLocating,

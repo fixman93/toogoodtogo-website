@@ -28,11 +28,6 @@ export const srLatn = {
   'location.insecure': 'Lokacija radi samo na sigurnoj (https) adresi.',
   'location.nearMe': 'Najbliže meni',
   'location.fromCenter': '{distance} od centra',
-  'location.outsideTitle': 'Izgleda da nisi u {country}',
-  'location.outsideText': 'Izabrana zemlja je {name}. Izaberi grad ili promeni zemlju u profilu.',
-  'location.switchTitle': 'Izgleda da si u {country}',
-  'location.switchText': 'Prebaci Foodnesi na tu zemlju da vidiš lokalne gradove i ponude.',
-  'location.switchButton': 'Prebaci na: {name}',
 
   'discover.heroTitle': 'Hrana je predobra da bi se bacila',
   'discover.heroText': 'Rezerviši kesu iznenađenja iz obližnjih pekara, restorana i prodavnica – po trećini cene.',

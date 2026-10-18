@@ -1,5 +1,4 @@
 import type { GeoPoint } from '@/api/types'
-import { market } from '@/config/markets'
 
 /** Great-circle distance in meters. */
 export function distanceMeters(a: GeoPoint, b: GeoPoint): number {
@@ -18,10 +17,4 @@ export function directionsUrl(point: GeoPoint): string {
 export function osmEmbedUrl(point: GeoPoint, delta = 0.006): string {
   const bbox = [point.lng - delta, point.lat - delta / 2, point.lng + delta, point.lat + delta / 2].join(',')
   return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${point.lat},${point.lng}`
-}
-
-/** True when the point lies inside the active market's country bounds. */
-export function isInMarket(point: GeoPoint): boolean {
-  const b = market.bounds
-  return point.lat >= b.minLat && point.lat <= b.maxLat && point.lng >= b.minLng && point.lng <= b.maxLng
 }

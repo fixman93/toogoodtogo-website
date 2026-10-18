@@ -1,6 +1,6 @@
 /**
  * Country/market settings. Everything market-specific (currency, timezone,
- * cities, map bounds) lives here so the rest of the app never hardcodes Serbia.
+ * cities) lives here so the rest of the app never hardcodes one country.
  *
  * The active market is the visitor's country (Profile → Zemlja, or detected
  * from the browser's timezone). It decides the default city, the cities list
@@ -27,12 +27,8 @@ export interface MarketConfig {
   timezone: string
   defaultCityId: string
   cities: City[]
-  /** Locative of the country name for sentences: "u Srbiji", "u Crnoj Gori". */
-  nameLocative: string
   /** Example mobile number shown as a placeholder. */
   phoneExample: string
-  /** Rough bounding box of the country — used to tell if the user is outside the market. */
-  bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }
 }
 
 export interface CurrencyInfo {
@@ -60,7 +56,6 @@ export const MARKETS: Record<string, MarketConfig> = {
     code: 'RS',
     phoneExample: '064 123 4567',
     name: 'Srbija',
-    nameLocative: 'Srbiji',
     locale: 'sr-Latn-RS',
     language: 'sr-Latn',
     currency: 'RSD',
@@ -72,13 +67,11 @@ export const MARKETS: Record<string, MarketConfig> = {
       city('nis', 'Niš', 'Nišu', 43.3209, 21.8958),
       city('kragujevac', 'Kragujevac', 'Kragujevcu', 44.0128, 20.9114),
     ],
-    bounds: { minLat: 42.2, maxLat: 46.2, minLng: 18.8, maxLng: 23.1 },
   },
   BA: {
     code: 'BA',
     phoneExample: '061 234 567',
     name: 'Bosna i Hercegovina',
-    nameLocative: 'Bosni i Hercegovini',
     locale: 'sr-Latn-BA',
     language: 'sr-Latn',
     currency: 'BAM',
@@ -90,13 +83,11 @@ export const MARKETS: Record<string, MarketConfig> = {
       city('tuzla', 'Tuzla', 'Tuzli', 44.5384, 18.6763),
       city('mostar', 'Mostar', 'Mostaru', 43.3438, 17.8078),
     ],
-    bounds: { minLat: 42.5, maxLat: 45.3, minLng: 15.7, maxLng: 19.7 },
   },
   ME: {
     code: 'ME',
     phoneExample: '067 123 456',
     name: 'Crna Gora',
-    nameLocative: 'Crnoj Gori',
     locale: 'sr-Latn-ME',
     language: 'sr-Latn',
     currency: 'EUR',
@@ -108,13 +99,11 @@ export const MARKETS: Record<string, MarketConfig> = {
       city('budva', 'Budva', 'Budvi', 42.2864, 18.84),
       city('bar', 'Bar', 'Baru', 42.0931, 19.1003),
     ],
-    bounds: { minLat: 41.8, maxLat: 43.6, minLng: 18.4, maxLng: 20.4 },
   },
   HR: {
     code: 'HR',
     phoneExample: '091 234 5678',
     name: 'Hrvatska',
-    nameLocative: 'Hrvatskoj',
     locale: 'sr-Latn-HR',
     language: 'sr-Latn',
     currency: 'EUR',
@@ -126,13 +115,11 @@ export const MARKETS: Record<string, MarketConfig> = {
       city('rijeka', 'Rijeka', 'Rijeci', 45.3271, 14.4422),
       city('osijek', 'Osijek', 'Osijeku', 45.555, 18.6955),
     ],
-    bounds: { minLat: 42.3, maxLat: 46.6, minLng: 13.4, maxLng: 19.5 },
   },
   SI: {
     code: 'SI',
     phoneExample: '041 234 567',
     name: 'Slovenija',
-    nameLocative: 'Sloveniji',
     locale: 'sr-Latn-SI',
     language: 'sr-Latn',
     currency: 'EUR',
@@ -144,13 +131,11 @@ export const MARKETS: Record<string, MarketConfig> = {
       city('celje', 'Celje', 'Celju', 46.2397, 15.2677),
       city('koper', 'Koper', 'Kopru', 45.5481, 13.7302),
     ],
-    bounds: { minLat: 45.4, maxLat: 46.9, minLng: 13.3, maxLng: 16.6 },
   },
   MK: {
     code: 'MK',
     phoneExample: '070 123 456',
     name: 'Severna Makedonija',
-    nameLocative: 'Severnoj Makedoniji',
     locale: 'sr-Latn-MK',
     language: 'sr-Latn',
     currency: 'MKD',
@@ -162,7 +147,6 @@ export const MARKETS: Record<string, MarketConfig> = {
       city('ohrid', 'Ohrid', 'Ohridu', 41.1231, 20.8016),
       city('kumanovo', 'Kumanovo', 'Kumanovu', 42.1322, 21.7144),
     ],
-    bounds: { minLat: 40.8, maxLat: 42.4, minLng: 20.4, maxLng: 23.1 },
   },
 }
 
@@ -204,16 +188,4 @@ export function setMarket(code: string, reload = true) {
     /* ignore */
   }
   if (reload) window.location.reload()
-}
-
-/** Supported country whose nearest city is closest to the point (≤ 250 km), if any. */
-export function marketAt(point: { lat: number; lng: number }): MarketConfig | undefined {
-  let best: { m: MarketConfig; km: number } | undefined
-  for (const m of MARKET_LIST) {
-    for (const c of m.cities) {
-      const km = Math.hypot((c.lat - point.lat) * 111, (c.lng - point.lng) * 111 * Math.cos((point.lat * Math.PI) / 180))
-      if (!best || km < best.km) best = { m, km }
-    }
-  }
-  return best && best.km <= 250 ? best.m : undefined
 }
