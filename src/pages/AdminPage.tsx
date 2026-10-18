@@ -36,6 +36,8 @@ import {
   usePlatformIntegrity,
   useDisputes,
   useResolveDispute,
+  useStaffAccess,
+  useSetStaffAccess,
   useSetCommission,
   useTicket,
   useDecideApplication,
@@ -171,6 +173,74 @@ function Overview() {
 // ---------------------------------------------------------------------------
 // Users
 
+/** Staff = chosen locations of ONE partner: pick the partner, tick locations, save. */
+function StaffAccessEditor({ user, onDone }: { user: AdminUser; onDone?: () => void }) {
+  const current = useStaffAccess(user.id)
+  const all = useAdminBusinesses({ limit: 100 })
+  const save = useSetStaffAccess()
+  const [ownerId, setOwnerId] = useState<string | null>(null)
+  const [ids, setIds] = useState<string[] | null>(null)
+  const businesses = all.data?.data ?? []
+  const owners = [...new Map(businesses.filter((b) => b.owner).map((b) => [b.owner!.id, b.owner!])).values()]
+  const owner = ownerId ?? current.data?.ownerId ?? ''
+  const chosen = ids ?? current.data?.businessIds ?? []
+  const locations = businesses.filter((b) => b.owner?.id === owner)
+
+  if (current.isLoading || all.isLoading) return <Skeleton className="h-20 rounded-xl" />
+  return (
+    <div className="space-y-2 rounded-xl border bg-muted/30 p-3 text-sm">
+      <p className="font-semibold">{t('team.adminTitle')}</p>
+      <NativeSelect
+        value={owner}
+        onChange={(e) => {
+          setOwnerId(e.target.value)
+          setIds([])
+        }}
+        className="h-10 rounded-lg"
+        aria-label={t('team.partner')}
+      >
+        <option value="">{t('team.choosePartner')}</option>
+        {owners.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.name} ({o.email})
+          </option>
+        ))}
+      </NativeSelect>
+      {owner && (
+        <div className="flex flex-wrap gap-2">
+          {locations.map((b) => (
+            <label key={b.id} className="flex min-h-9 items-center gap-2 rounded-full border bg-card px-3">
+              <input
+                type="checkbox"
+                className="size-4 accent-[var(--primary)]"
+                checked={chosen.includes(b.id)}
+                onChange={(e) => setIds(e.target.checked ? [...chosen, b.id] : chosen.filter((x) => x !== b.id))}
+              />
+              {b.name}
+            </label>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" disabled={!chosen.length || save.isPending} onClick={() => save.mutate({ userId: user.id, businessIds: chosen }, { onSuccess: onDone })}>
+          {save.isPending && <Loader2 className="animate-spin" />}
+          {t('team.saveAccess')}
+        </Button>
+        {user.role === 'staff' && (
+          <Button size="sm" variant="ghost" className="text-destructive" disabled={save.isPending} onClick={() => save.mutate({ userId: user.id, businessIds: [] }, { onSuccess: onDone })}>
+            {t('team.removeAccess')}
+          </Button>
+        )}
+      </div>
+      {save.isError && (
+        <p role="alert" className="text-xs font-semibold text-destructive">
+          {save.error instanceof ApiError ? save.error.message : t('common.errorText')}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
   const { can } = useAuth()
   const canRoles = can('users.roles')
@@ -242,7 +312,7 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
               {user.isBlocked ? t('admin.unblock') : t('admin.block')}
             </Button>
           )}
-          {changed && (
+          {changed && role !== 'staff' && (
             <Button
               size="sm"
               disabled={setRole.isPending}
@@ -261,6 +331,9 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
       )}
 
       {changed && role === 'business' && <p className="text-xs text-muted-foreground">{t('admin.promoteHint')}</p>}
+      {canRoles && !isSelf && ((changed && role === 'staff') || (!changed && user.role === 'staff')) && (
+        <StaffAccessEditor user={user} onDone={() => setLocalRole(user.role === 'staff' ? 'staff' : role)} />
+      )}
       {changed && user.role === 'business' && user.businessCount > 0 && <p className="text-xs font-medium text-accent-foreground">{t('admin.demoteWarning')}</p>}
       {saved && <p role="status" className="text-xs font-semibold text-success">{saved}</p>}
       {block.isError && (

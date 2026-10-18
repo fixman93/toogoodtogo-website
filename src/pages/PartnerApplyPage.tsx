@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { ConsentNote } from '@/components/common/LegalLinks'
 import { Link } from 'react-router'
 import { CheckCircle2, Clock, Loader2, Store, XCircle } from 'lucide-react'
 import { ApiError } from '@/api/client'
@@ -86,6 +87,7 @@ function ApplicationForm({ onDone }: { onDone?: () => void }) {
         {apply.isPending && <Loader2 className="animate-spin" />}
         {t('apply.submit')}
       </Button>
+      <ConsentNote kind="partner" />
     </form>
   )
 }

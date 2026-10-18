@@ -11,6 +11,9 @@ adminRoutes.get('/users', requirePermission('users.view'), c.listUsers)
 // Grant roles. Self-registration only ever creates customers.
 adminRoutes.patch('/users/:id/role', requirePermission('users.roles'), c.setRole)
 adminRoutes.patch('/users/:id/block', requirePermission('users.block'), c.setBlocked)
+// Staff role = chosen locations of one partner.
+adminRoutes.get('/users/:id/staff-access', requirePermission('users.roles'), c.getStaffAccess)
+adminRoutes.put('/users/:id/staff-access', requirePermission('users.roles'), c.setStaffAccess)
 // Activating/deactivating a location uses PATCH /api/businesses/:id.
 adminRoutes.get('/businesses', requirePermission('businesses.moderate'), c.listBusinesses)
 adminRoutes.get('/reservations', requirePermission('reservations.view'), c.listReservations)

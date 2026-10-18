@@ -14,6 +14,8 @@ import { IntegrationsPage } from '@/pages/partner/IntegrationsPage'
 import { PromotionsPage } from '@/pages/partner/PromotionsPage'
 import { StatementPage } from '@/pages/partner/StatementPage'
 import { PickupsPage } from '@/pages/partner/PickupsPage'
+import { QuickOfferPage } from '@/pages/partner/QuickOfferPage'
+import { TeamPage } from '@/pages/partner/TeamPage'
 import { SupportPage } from '@/pages/SupportPage'
 import { DiscoverPage } from '@/pages/DiscoverPage'
 import { FavoritesPage } from '@/pages/FavoritesPage'
@@ -27,6 +29,7 @@ import { ProfilePage } from '@/pages/ProfilePage'
 import { ReservationDetailsPage } from '@/pages/ReservationDetailsPage'
 import { ReservationsPage } from '@/pages/ReservationsPage'
 import { RouteErrorPage } from '@/pages/RouteErrorPage'
+import { PrivacyPage, TermsPage } from '@/pages/LegalPage'
 
 const router = createBrowserRouter([
   {
@@ -56,8 +59,14 @@ const router = createBrowserRouter([
       { path: 'business/donations', element: <DonationsPage /> },
       { path: 'business/statements', element: <StatementPage /> },
       { path: 'business/pickups', element: <PickupsPage /> },
+      { path: 'business/new', element: <QuickOfferPage /> },
+      { path: 'business/team', element: <TeamPage /> },
       { path: 'business/integrations', element: <IntegrationsPage /> },
       { path: 'support', element: <SupportPage /> },
+      { path: 'privacy', element: <PrivacyPage /> },
+      { path: 'terms', element: <TermsPage /> },
+      { path: 'privatnost', element: <PrivacyPage lang="sr" /> },
+      { path: 'uslovi', element: <TermsPage lang="sr" /> },
       { path: 'support/:id', element: <SupportPage /> },
       { path: 'business/locations/new', element: <LocationFormPage /> },
       { path: 'business/locations/:id/edit', element: <LocationFormPage /> },

@@ -3,6 +3,7 @@ import { BellRing, Loader2, Share, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { t } from '@/i18n'
+import { isNativeApp } from '@/lib/platform'
 import { currentSubscription, enablePush, pushSupported } from '@/lib/push'
 
 const DISMISS_KEY = 'zalogaj.pushPrompt.dismissed'
@@ -25,12 +26,13 @@ const dismissed = () => {
  * blocked in settings, or after "Ne sada".
  */
 export function PushPrompt() {
-  const [state, setState] = useState<'hidden' | 'ios-install' | 'ask'>(() => (dismissed() ? 'hidden' : isIosBrowserTab() ? 'ios-install' : 'hidden'))
+  // Not in the iOS app: web push isn't available in its web view (native push comes later).
+  const [state, setState] = useState<'hidden' | 'ios-install' | 'ask'>(() => (dismissed() || isNativeApp() ? 'hidden' : isIosBrowserTab() ? 'ios-install' : 'hidden'))
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    if (dismissed() || isIosBrowserTab() || !pushSupported() || Notification.permission === 'denied') return
+    if (dismissed() || isNativeApp() || isIosBrowserTab() || !pushSupported() || Notification.permission === 'denied') return
     void currentSubscription()
       .then((sub) => setState(sub ? 'hidden' : 'ask'))
       .catch(() => undefined)

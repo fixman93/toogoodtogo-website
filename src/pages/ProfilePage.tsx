@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Bell, Camera, Phone, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
+import { Bell, Camera, Download, FileText, Phone, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
 import { ApiError } from '@/api/client'
+import { authApi } from '@/api/services'
 import { PasswordInput } from '@/components/ui/password-input'
 import { NativeSelect } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
@@ -14,6 +15,7 @@ import { StandingNotice } from '@/features/business/StandingNotice'
 import { useAuth } from '@/features/auth/auth-context'
 import { PLATFORM_ROLES } from '@/api/types'
 import { useDeleteAccount, useReservations, useUpdatePreferences, useUpdateProfile, useUploadImage } from '@/hooks/api'
+import { isNativeApp } from '@/lib/platform'
 import { currentSubscription, disablePush, enablePush, pushSupported } from '@/lib/push'
 import { activeLocale, localize, setScript, script, t } from '@/i18n'
 import { formatDate, formatMoney } from '@/lib/format'
@@ -163,7 +165,7 @@ function NotificationSettings() {
   const prefs = useUpdatePreferences()
   const [pushOn, setPushOn] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState<string | null>(pushSupported() ? null : t('profile.pushUnsupported'))
+  const [message, setMessage] = useState<string | null>(isNativeApp() ? t('profile.pushInApp') : pushSupported() ? null : t('profile.pushUnsupported'))
   useEffect(() => {
     void currentSubscription().then((sub) => setPushOn(!!sub))
   }, [])
@@ -374,6 +376,52 @@ function PhoneSetting({ phone }: { phone: string | null }) {
   )
 }
 
+/** GDPR: policy links + download of all personal data (access / portability). */
+function PrivacySection() {
+  const [state, setState] = useState<'idle' | 'busy' | 'error'>('idle')
+  const download = async () => {
+    setState('busy')
+    try {
+      const data = await authApi.exportMyData()
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `foodnesi-moji-podaci-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setState('idle')
+    } catch {
+      setState('error')
+    }
+  }
+  return (
+    <section className="space-y-3">
+      <h2 className="font-bold">{t('legal.privacySection')}</h2>
+      <Card className="divide-y">
+        <Link to="/privacy" className="flex min-h-14 items-center gap-3 px-4 font-medium">
+          <ShieldCheck className="size-5 text-muted-foreground" />
+          <span className="flex-1">{t('legal.privacy')}</span>
+          <ChevronRight className="size-5 text-muted-foreground" />
+        </Link>
+        <Link to="/terms" className="flex min-h-14 items-center gap-3 px-4 font-medium">
+          <FileText className="size-5 text-muted-foreground" />
+          <span className="flex-1">{t('legal.terms')}</span>
+          <ChevronRight className="size-5 text-muted-foreground" />
+        </Link>
+        <button type="button" onClick={download} disabled={state === 'busy'} className="flex min-h-14 w-full items-center gap-3 px-4 text-left font-medium disabled:opacity-60">
+          {state === 'busy' ? <Loader2 className="size-5 animate-spin text-muted-foreground" /> : <Download className="size-5 text-muted-foreground" />}
+          <span className="flex-1">{t('legal.export')}</span>
+        </button>
+      </Card>
+      {state === 'error' && (
+        <p role="alert" className="text-sm font-semibold text-destructive">
+          {t('common.errorText')}
+        </p>
+      )}
+    </section>
+  )
+}
+
 function Profile() {
   const { user, logout, hasRole } = useAuth()
   if (!user) return null
@@ -467,6 +515,7 @@ function Profile() {
         </Button>
       </div>
 
+      <PrivacySection />
       <DeleteAccount />
     </div>
   )

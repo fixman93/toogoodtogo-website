@@ -10,6 +10,7 @@ countries.
 | --- | --- | --- |
 | Web app | React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, React Router, TanStack Query, Axios | repository root (`src/`) |
 | API | Node.js, Express 5, TypeScript, MongoDB + Mongoose, Zod, JWT | [`backend/`](backend/README.md) |
+| iOS app | The web app packaged with Capacitor 8 (Xcode project) | [`mobile/`](mobile/README.md) |
 
 The two apps are independent: each has its own `package.json`, `.env` and
 commands. The same REST API is meant to serve future native iOS/Android apps.

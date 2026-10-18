@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Clock, Copy, HandHeart, MapPin, Pause, Pencil, Play, Plug, Plus, ReceiptText, ScanLine, ShieldCheck, Store, TicketPercent, type LucideIcon } from 'lucide-react'
+import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Clock, Copy, HandHeart, MapPin, Pause, Pencil, Play, Plug, Plus, ReceiptText, ScanLine, ShieldCheck, Store, TicketPercent, Users, type LucideIcon } from 'lucide-react'
 import type { Business, Offer } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -253,6 +253,12 @@ function Dashboard() {
     <div className="space-y-5">
       <StandingNotice />
       <PushPrompt />
+      <Button asChild size="lg" className="h-14 w-full text-lg">
+        <Link to="/business/new">
+          <Plus />
+          {t('nav.newOffer')}
+        </Link>
+      </Button>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile to="/business/scan" icon={ScanLine} label={t('business.scan')} primary />
         <Tile to="/business/orders" icon={ClipboardList} label={t('orders.title')} />
@@ -262,6 +268,7 @@ function Dashboard() {
         <Tile to="/business/donations" icon={HandHeart} label={t('donations.title')} />
         <Tile to="/business/statements" icon={ReceiptText} label={t('statement.title')} />
         <Tile to="/business/pickups" icon={ShieldCheck} label={t('pickups.title')} />
+        <Tile to="/business/team" icon={Users} label={t('team.title')} />
         <Tile to="/business/integrations" icon={Plug} label={t('integrations.title')} />
       </div>
 

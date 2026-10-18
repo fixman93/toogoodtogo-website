@@ -4,6 +4,8 @@
  */
 import { api } from './client'
 import type {
+  StaffAccess,
+  Team,
   PartnerIntegrity,
   PlatformIntegrity,
   VerifyResult,
@@ -67,6 +69,8 @@ export const authApi = {
   me: () => unwrap<User>(api.get('/auth/me')),
   forgotPassword: (email: string) => unwrap<{ sent: boolean }>(api.post('/auth/forgot-password', { email })),
   resetPassword: (body: { token: string; password: string }) => unwrap<AuthResult>(api.post('/auth/reset-password', body)),
+  /** GDPR: everything stored about me (JSON). */
+  exportMyData: () => unwrap<Record<string, unknown>>(api.get('/auth/me/export')),
   deleteAccount: (password: string) => api.delete('/auth/me', { data: { password } }).then(() => undefined),
   updatePreferences: (prefs: { push?: boolean; email?: boolean }) => unwrap<User>(api.patch('/auth/me/preferences', prefs)),
   updateProfile: (body: { name?: string; avatarUrl?: string; countryCode?: string; phone?: string }) => unwrap<User>(api.patch('/auth/me', body)),
@@ -154,6 +158,8 @@ export const adminApi = {
   warnPartner: (id: string, message: string) => unwrap<PartnerNote>(api.post(`/admin/partners/${id}/warnings`, { message })),
   resolveWarning: (noteId: string) => unwrap<PartnerNote>(api.patch(`/admin/partner-notes/${noteId}/resolve`)),
   integrity: (days = 30) => unwrap<PlatformIntegrity>(api.get('/admin/integrity', { params: { days } })),
+  staffAccess: (userId: string) => unwrap<StaffAccess>(api.get(`/admin/users/${userId}/staff-access`)),
+  setStaffAccess: (userId: string, businessIds: string[]) => unwrap<StaffAccess>(api.put(`/admin/users/${userId}/staff-access`, { businessIds })),
   disputes: () => unwrap<Reservation[]>(api.get('/admin/disputes')),
   resolveDispute: (id: string, body: { decision: 'upheld' | 'rejected'; note?: string }) => unwrap<Reservation>(api.patch(`/admin/disputes/${id}`, body)),
   deletePartner: (id: string, reason: string) => api.delete(`/admin/partners/${id}`, { data: { reason } }).then(() => undefined),
@@ -177,6 +183,9 @@ export const partnerApi = {
   outstanding: () => unwrap<Outstanding>(api.get('/partner/statements/outstanding')),
   standing: () => unwrap<PartnerStanding>(api.get('/partner/standing')),
   integrity: (days = 30) => unwrap<PartnerIntegrity>(api.get('/partner/integrity', { params: { days } })),
+  team: () => unwrap<Team>(api.get('/partner/team')),
+  addTeamMember: (body: { email: string; businessIds: string[] }) => unwrap<Team['members'][number]>(api.post('/partner/team', body)),
+  updateTeamMember: (userId: string, businessIds: string[]) => unwrap<Team['members'][number]>(api.put(`/partner/team/${userId}`, { businessIds })),
   apiKeys: () => unwrap<ApiKeyInfo[]>(api.get('/partner/api-keys')),
   createApiKey: (name: string) => unwrap<ApiKeyInfo>(api.post('/partner/api-keys', { name })),
   revokeApiKey: (id: string) => api.delete(`/partner/api-keys/${id}`).then(() => undefined),

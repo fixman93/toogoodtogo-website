@@ -1,0 +1,11 @@
+{
+  "appId": "com.foodnesi.app",
+  "appName": "Foodnesi",
+  "webDir": "../dist",
+  "backgroundColor": "#faf8f2",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#faf8f2",
+    "scheme": "Foodnesi"
+  }
+}

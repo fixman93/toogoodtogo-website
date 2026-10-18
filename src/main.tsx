@@ -7,6 +7,8 @@ import { LocationProvider } from '@/features/location/LocationProvider'
 import { handlePreloadErrors } from '@/lib/chunks'
 import { registerServiceWorker } from '@/lib/push'
 import App from './App.tsx'
+// Font is bundled with the app (no request to Google Fonts → no visitor IP sent to Google).
+import '@fontsource-variable/plus-jakarta-sans'
 import './index.css'
 
 const queryClient = new QueryClient({

@@ -7,6 +7,7 @@ import * as donationService from '../services/donation.service.js'
 import * as statementService from '../services/statement.service.js'
 import * as moderationService from '../services/partner-moderation.service.js'
 import * as integrityService from '../services/integrity.service.js'
+import * as staffService from '../services/staff.service.js'
 import * as reservationService from '../services/reservation.service.js'
 import { z } from 'zod'
 import { list, ok } from '../utils/respond.js'
@@ -142,4 +143,13 @@ export async function listDisputes(req: Request, res: Response) {
 export async function resolveDispute(req: Request, res: Response) {
   const { decision, note } = z.object({ decision: z.enum(['upheld', 'rejected']), note: z.string().trim().max(500).optional() }).parse(req.body)
   ok(res, await reservationService.resolveDispute(idParams.parse(req.params).id, decision, note, currentUser(req)))
+}
+
+export async function getStaffAccess(req: Request, res: Response) {
+  ok(res, await staffService.staffAccess(idParams.parse(req.params).id))
+}
+
+export async function setStaffAccess(req: Request, res: Response) {
+  const { businessIds } = z.object({ businessIds: z.array(z.string().regex(/^[a-f\d]{24}$/i)).max(200) }).parse(req.body)
+  ok(res, await staffService.setStaffAccess(idParams.parse(req.params).id, businessIds, currentUser(req)))
 }

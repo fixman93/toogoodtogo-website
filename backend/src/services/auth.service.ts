@@ -12,7 +12,10 @@ import {
   Favorite,
   Notification,
   PartnerApplication,
+  PushSubscription,
   Reservation,
+  Review,
+  SupportTicket,
   User,
   WaitlistEntry,
 } from '../models/index.js'
@@ -82,21 +85,90 @@ export async function deleteAccount(userId: string, password: string) {
     throw ApiError.conflict('Prvo obriši svoje lokacije u portalu za partnere.', 'HAS_BUSINESSES')
   }
 
+  const avatar = user.avatarUrl
   user.set({
     name: 'Obrisan korisnik',
     email: `deleted-${user.id}@deleted.invalid`,
     passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 4),
     phone: undefined,
+    avatarUrl: undefined,
+    referralCode: undefined,
     isBlocked: true,
     deletedAt: new Date(),
   })
   await user.save()
+  void deleteIfOwned(avatar)
   await Promise.all([
     Favorite.deleteMany({ user: user._id }),
     WaitlistEntry.deleteMany({ user: user._id }),
     Notification.deleteMany({ user: user._id }),
+    PushSubscription.deleteMany({ user: user._id }),
     PartnerApplication.deleteMany({ user: user._id, status: 'pending' }),
+    // Share links of the reservations stop working.
+    Reservation.updateMany({ user: user._id }, { $unset: { shareToken: 1 } }),
   ])
+}
+
+/**
+ * "Preuzmi moje podatke": everything stored about the signed-in user, as JSON
+ * (right of access and data portability).
+ */
+export async function exportMyData(userId: string) {
+  const user = await User.findById(userId).lean()
+  if (!user || user.deletedAt) throw ApiError.notFound('Nalog nije pronađen.')
+  const [reservations, reviews, favorites, waitlist, tickets, applications, pushDevices, notifications] = await Promise.all([
+    Reservation.find({ user: user._id }).sort({ createdAt: -1 }).lean(),
+    Review.find({ user: user._id }).lean(),
+    Favorite.find({ user: user._id }).lean(),
+    WaitlistEntry.find({ user: user._id }).lean(),
+    SupportTicket.find({ user: user._id }).lean(),
+    PartnerApplication.find({ user: user._id }).lean(),
+    PushSubscription.find({ user: user._id }).select('userAgent createdAt').lean(),
+    Notification.find({ user: user._id }).sort({ createdAt: -1 }).limit(500).lean(),
+  ])
+  const businessNames = new Map(
+    (await Business.find({ _id: { $in: [...reservations.map((r) => r.business), ...reviews.map((r) => r.business)] } }).select('name').lean()).map((b) => [b._id.toString(), b.name]),
+  )
+  const business = (id: unknown) => businessNames.get(String(id)) ?? null
+  return {
+    exportedAt: new Date().toISOString(),
+    account: {
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      phone: user.phone ?? null,
+      role: user.role,
+      countryCode: user.countryCode,
+      avatarUrl: user.avatarUrl ?? null,
+      points: user.points ?? 0,
+      referralCode: user.referralCode ?? null,
+      invitedBy: user.referredBy ? 'yes' : 'no',
+      notificationPrefs: user.notificationPrefs,
+      createdAt: user.createdAt,
+    },
+    reservations: reservations.map((r) => ({
+      code: r.code,
+      business: business(r.business),
+      offer: r.offerTitle,
+      quantity: r.quantity,
+      total: r.totalMinor / 100,
+      currency: r.currency,
+      promoCode: r.promoCode ?? null,
+      pickupStart: r.pickupStart,
+      pickupEnd: r.pickupEnd,
+      status: r.status,
+      collectedAt: r.collectedAt ?? null,
+      pickupConfirmation: r.pickupCheck?.answer ?? null,
+      createdAt: r.createdAt,
+    })),
+    reviews: reviews.map((r) => ({ business: business(r.business), rating: r.rating, comment: r.comment ?? null, createdAt: r.createdAt })),
+    favorites: favorites.map((f) => ({ type: f.targetType, id: f.targetId.toString(), createdAt: f.createdAt })),
+    waitlist: waitlist.map((w) => ({ offer: String(w.offer), createdAt: w.createdAt })),
+    supportTickets: tickets.map((t) => ({ subject: t.subject, status: t.status, messages: t.messages.map((m) => ({ fromTeam: m.fromTeam, body: m.body, at: m.createdAt })), createdAt: t.createdAt })),
+    partnerApplications: applications.map((a) => ({ businessName: a.businessName, city: a.city, phone: a.phone, status: a.status, createdAt: a.createdAt })),
+    pushDevices: pushDevices.map((d) => ({ device: d.userAgent ?? null, since: d.createdAt })),
+    notifications: notifications.map((n) => ({ title: n.title, body: n.body ?? null, at: n.createdAt })),
+  }
 }
 
 export async function updatePreferences(userId: string, prefs: { push?: boolean; email?: boolean }) {

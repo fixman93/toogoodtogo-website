@@ -72,6 +72,8 @@ export async function listUsers(query: AdminUsersQuery) {
 
 export async function setRole(userId: string, role: Role, actor: Actor) {
   if (userId === actor.id) throw ApiError.conflict('Ne možeš menjati sopstvenu ulogu.', 'CANNOT_CHANGE_OWN_ROLE')
+  // Staff need locations — assigned through PUT /admin/users/:id/staff-access.
+  if (role === 'staff') throw ApiError.badRequest('Za zaposlenog izaberi partnera i lokacije.', 'STAFF_NEEDS_LOCATIONS')
   const user = await User.findById(userId)
   if (!user) throw ApiError.notFound('Korisnik nije pronađen.')
   if (user.role === 'admin' && role !== 'admin' && (await User.countDocuments({ role: 'admin' })) <= 1) {
@@ -79,8 +81,8 @@ export async function setRole(userId: string, role: Role, actor: Actor) {
   }
   const previous = user.role
   user.role = role
-  // Staff assignments only make sense for the staff role.
-  if (role !== 'staff') user.staffOf = []
+  // Any other role than staff (handled by staff-access) loses its location assignments.
+  user.staffOf = []
   await user.save()
   void audit(actor, { action: 'user.role', targetType: 'user', targetId: user._id, summary: `${user.email}: ${previous} → ${role}` })
   const businessCount = await Business.countDocuments({ owner: user._id })

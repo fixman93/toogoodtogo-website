@@ -708,3 +708,14 @@ export interface PlatformIntegrity {
   platform: PickupCounts
   partners: PartnerRisk[]
 }
+
+/** Owner's staff across all locations (GET /partner/team). */
+export interface Team {
+  locations: { id: string; name: string; address: Address }[]
+  members: { id: string; name: string; email: string; businessIds: string[] }[]
+}
+
+export interface StaffAccess {
+  ownerId: string | null
+  businessIds: string[]
+}

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ConsentNote } from '@/components/common/LegalLinks'
 import { market } from '@/config/markets'
 import { useAuth } from '@/features/auth/auth-context'
 import { t } from '@/i18n'
@@ -92,6 +93,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             {pending && <Loader2 className="animate-spin" />}
             {t(isLogin ? 'auth.submitLogin' : 'auth.submitRegister')}
           </Button>
+          {!isLogin && <ConsentNote kind="register" />}
         </form>
 
         <p className="mt-5 text-center text-sm text-muted-foreground">

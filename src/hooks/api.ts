@@ -132,6 +132,32 @@ export function useDisputePickup() {
   })
 }
 
+export function useTeam() {
+  return useQuery({ queryKey: ['partner', 'team'], queryFn: partnerApi.team })
+}
+
+/** Add (email) or change locations (userId) of a staff member. */
+export function useSaveTeamMember() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { email?: string; userId?: string; businessIds: string[] }) =>
+      v.userId ? partnerApi.updateTeamMember(v.userId, v.businessIds) : partnerApi.addTeamMember({ email: v.email!, businessIds: v.businessIds }),
+    onSettled: () => refresh(queryClient, [['partner', 'team'], ['businesses']]),
+  })
+}
+
+export function useStaffAccess(userId: string | null) {
+  return useQuery({ queryKey: ['admin', 'staff-access', userId], queryFn: () => adminApi.staffAccess(userId!), enabled: !!userId })
+}
+
+export function useSetStaffAccess() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { userId: string; businessIds: string[] }) => adminApi.setStaffAccess(v.userId, v.businessIds),
+    onSettled: () => refresh(queryClient, [['admin']]),
+  })
+}
+
 export function usePlatformIntegrity(days = 30) {
   return useQuery({ queryKey: ['admin', 'integrity', days], queryFn: () => adminApi.integrity(days) })
 }

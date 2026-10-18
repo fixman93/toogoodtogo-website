@@ -38,3 +38,10 @@ export async function resetPassword(req: Request, res: Response) {
   const { token, password } = resetPasswordBody.parse(req.body)
   ok(res, await authService.resetPassword(token, password))
 }
+
+/** Download of everything stored about the signed-in user (GDPR access/portability). */
+export async function exportMyData(req: Request, res: Response) {
+  const data = await authService.exportMyData(currentUser(req).id)
+  res.setHeader('Content-Disposition', `attachment; filename="foodnesi-moji-podaci-${new Date().toISOString().slice(0, 10)}.json"`)
+  res.json({ data })
+}

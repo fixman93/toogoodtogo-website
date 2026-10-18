@@ -124,3 +124,25 @@ const daysQuery = z.object({ days: z.coerce.number().int().min(7).max(365).defau
 export async function integrity(req: Request, res: Response) {
   ok(res, await integrityService.partnerIntegrity(currentUser(req), daysQuery.parse(req.query).days))
 }
+
+const teamBody = z.object({
+  email: z.email().trim().toLowerCase().optional(),
+  businessIds: z.array(objectId).max(200),
+})
+
+/** Owner's staff and the locations each one sees. */
+export async function team(req: Request, res: Response) {
+  ok(res, await staffService.team(currentUser(req)))
+}
+
+/** Add a staff member by e-mail with chosen locations. */
+export async function addTeamMember(req: Request, res: Response) {
+  const body = teamBody.extend({ email: z.email().trim().toLowerCase() }).parse(req.body)
+  ok(res, await staffService.setTeamMember(body, currentUser(req)), 201)
+}
+
+/** Change which locations a staff member sees (empty = remove). */
+export async function updateTeamMember(req: Request, res: Response) {
+  const { businessIds } = teamBody.parse(req.body)
+  ok(res, await staffService.setTeamMember({ userId: idParams.parse({ id: req.params.userId }).id, businessIds }, currentUser(req)))
+}

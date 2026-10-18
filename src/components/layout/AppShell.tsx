@@ -7,7 +7,7 @@ import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { LocationPicker } from './LocationPicker'
-import { NAV_ITEMS, PARTNER_NAV_ITEMS } from './nav-items'
+import { NAV_ITEMS, OWNER_NAV_ITEMS, PARTNER_NAV_ITEMS } from './nav-items'
 
 function ScrollToTop() {
   const { pathname } = useRouterLocation()
@@ -45,12 +45,12 @@ function OpenScannerOnLaunch() {
 
 export function AppShell() {
   const { hasRole } = useAuth()
-  const navItems = hasRole('business', 'staff') ? PARTNER_NAV_ITEMS : NAV_ITEMS
+  const navItems = hasRole('business') ? OWNER_NAV_ITEMS : hasRole('staff') ? PARTNER_NAV_ITEMS : NAV_ITEMS
   return (
     <div className="min-h-dvh">
       <ScrollToTop />
       <OpenScannerOnLaunch />
-      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 backdrop-blur-lg">
+      <header className="sticky top-0 z-30 border-b border-border/60 bg-background/85 pt-safe backdrop-blur-lg">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
           <Link to="/" className="hidden shrink-0 md:block" aria-label={t('brand.name')}>
             <Logo />
@@ -82,6 +82,18 @@ export function AppShell() {
 
       <main className="mx-auto max-w-6xl px-4 pt-5 pb-28 md:pb-16">
         <Outlet />
+        <footer className="mt-12 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t pt-5 text-xs text-muted-foreground">
+          <span>© {new Date().getFullYear()} Foodnesi</span>
+          <Link to="/privacy" className="hover:text-foreground hover:underline">
+            {t('legal.privacy')}
+          </Link>
+          <Link to="/terms" className="hover:text-foreground hover:underline">
+            {t('legal.terms')}
+          </Link>
+          <Link to="/support" className="hover:text-foreground hover:underline">
+            {t('profile.support')}
+          </Link>
+        </footer>
       </main>
 
       <nav
@@ -89,7 +101,7 @@ export function AppShell() {
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-card/95 pb-safe backdrop-blur-lg md:hidden"
       >
         <ul className="mx-auto grid max-w-lg grid-cols-5">
-          {navItems.map(({ to, label, Icon, end }) => (
+          {navItems.map(({ to, label, Icon, end, highlight }) => (
             <li key={to}>
               <NavLink
                 to={to}
@@ -103,9 +115,15 @@ export function AppShell() {
               >
                 {({ isActive }) => (
                   <>
-                    <span className={cn('flex h-7 w-12 items-center justify-center rounded-full transition-colors', isActive && 'bg-secondary')}>
-                      <Icon className="size-5" strokeWidth={isActive ? 2.4 : 2} />
-                    </span>
+                    {highlight ? (
+                      <span className="-mt-1 flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
+                        <Icon className="size-6" strokeWidth={2.6} />
+                      </span>
+                    ) : (
+                      <span className={cn('flex h-7 w-12 items-center justify-center rounded-full transition-colors', isActive && 'bg-secondary')}>
+                        <Icon className="size-5" strokeWidth={isActive ? 2.4 : 2} />
+                      </span>
+                    )}
                     {t(label)}
                   </>
                 )}
