@@ -31,5 +31,9 @@ adminRoutes.patch('/partners/:id/status', requirePermission('partners.manage'), 
 adminRoutes.post('/partners/:id/warnings', requirePermission('partners.manage'), c.warnPartner)
 adminRoutes.patch('/partner-notes/:id/resolve', requirePermission('partners.manage'), c.resolveWarning)
 adminRoutes.delete('/partners/:id', requirePermission('partners.manage'), c.deletePartner)
+// Pickup integrity: are hand-overs recorded (scanned)? + disputes on customer-confirmed pickups.
+adminRoutes.get('/integrity', requirePermission('integrity.view'), c.integrity)
+adminRoutes.get('/disputes', requirePermission('integrity.view'), c.listDisputes)
+adminRoutes.patch('/disputes/:id', requirePermission('partners.manage'), c.resolveDispute)
 adminRoutes.patch('/businesses/:id/commission', requirePermission('finance.view'), c.setCommission)
 adminRoutes.get('/donations', requirePermission('donations.view'), c.listDonations)

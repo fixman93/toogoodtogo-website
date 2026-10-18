@@ -15,6 +15,9 @@ export const ACTIVE_RESERVATION_STATUSES: ReservationStatus[] = ['pending_paymen
 export const PAYMENT_STATUSES = ['not_required', 'pending', 'paid', 'refunded', 'failed'] as const
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
 
+export const COLLECTED_VIA = ['qr', 'code', 'list', 'customer'] as const
+export type CollectedVia = (typeof COLLECTED_VIA)[number]
+
 export interface IReservation {
   user: Types.ObjectId
   offer: Types.ObjectId
@@ -53,6 +56,23 @@ export interface IReservation {
   collectedAt?: Date
   /** Commission rate in force when the bag was collected, so later rate changes don't rewrite past statements. */
   commissionRate?: number
+  /**
+   * How the hand-over was recorded: scanned QR, typed code, "Izdaj" in the
+   * order list, or confirmed by the customer after the partner didn't record it.
+   */
+  collectedVia?: CollectedVia
+  /** "Did you pick it up?" asked to the customer when the reservation expired unclaimed. */
+  pickupCheck?: { askedAt?: Date; answer?: 'collected' | 'not_collected'; answeredAt?: Date }
+  /** Partner disputes a customer-confirmed pickup; the platform team decides. */
+  dispute?: {
+    status: 'open' | 'upheld' | 'rejected'
+    reason: string
+    openedAt: Date
+    openedBy: Types.ObjectId
+    resolvedAt?: Date
+    resolvedBy?: Types.ObjectId
+    note?: string
+  }
   createdAt: Date
   updatedAt: Date
 }
@@ -89,6 +109,27 @@ const reservationSchema = new Schema<IReservation>(
     cancelledBy: { type: String, enum: ['customer', 'business', 'system'] },
     collectedAt: Date,
     commissionRate: { type: Number, min: 0, max: 0.5 },
+    collectedVia: { type: String, enum: COLLECTED_VIA },
+    pickupCheck: {
+      askedAt: Date,
+      answer: { type: String, enum: ['collected', 'not_collected'] },
+      answeredAt: Date,
+    },
+    dispute: {
+      type: new Schema(
+        {
+          status: { type: String, enum: ['open', 'upheld', 'rejected'], required: true },
+          reason: { type: String, required: true, maxlength: 500 },
+          openedAt: { type: Date, required: true },
+          openedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+          resolvedAt: Date,
+          resolvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+          note: { type: String, maxlength: 500 },
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
     shareToken: { type: String, unique: true, sparse: true },
   },
   { timestamps: true },
@@ -96,6 +137,8 @@ const reservationSchema = new Schema<IReservation>(
 
 reservationSchema.index({ user: 1, pickupStart: -1 })
 reservationSchema.index({ status: 1, pickupEnd: 1 })
+reservationSchema.index({ business: 1, pickupEnd: -1 })
+reservationSchema.index({ 'dispute.status': 1 }, { sparse: true })
 reservationSchema.index({ business: 1, code: 1 })
 
 export type ReservationDoc = HydratedDocument<IReservation>

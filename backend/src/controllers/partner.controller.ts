@@ -8,6 +8,7 @@ import * as donationService from '../services/donation.service.js'
 import * as integrationService from '../services/integration.service.js'
 import * as statementService from '../services/statement.service.js'
 import * as moderationService from '../services/partner-moderation.service.js'
+import * as integrityService from '../services/integrity.service.js'
 import * as suggestionService from '../services/suggestion.service.js'
 import { z } from 'zod'
 import { Business, WEBHOOK_EVENTS } from '../models/index.js'
@@ -115,4 +116,11 @@ export async function deleteWebhook(req: Request, res: Response) {
 }
 export async function testWebhook(req: Request, res: Response) {
   ok(res, await integrationService.testWebhook(currentUser(req), idParams.parse(req.params).id))
+}
+
+const daysQuery = z.object({ days: z.coerce.number().int().min(7).max(365).default(30) })
+
+/** Pickup statistics and customer-confirmed pickups to review. */
+export async function integrity(req: Request, res: Response) {
+  ok(res, await integrityService.partnerIntegrity(currentUser(req), daysQuery.parse(req.query).days))
 }

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { Types } from 'mongoose'
+import { Types } from 'mongoose'
 import { env } from '../config/env.js'
 import { getMarket, marketFor } from '../config/markets.js'
 import {
@@ -12,6 +12,7 @@ import {
   effectivePriceMinor,
   type IBusiness,
   type IReservation,
+  type CollectedVia,
   type ReservationDoc,
 } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
@@ -19,11 +20,12 @@ import { serializeReservation } from '../utils/serializers.js'
 import { pickupCode, pickupCodeVariants } from '../utils/text.js'
 import { runAtomically } from '../utils/transaction.js'
 import type { ReservationListQuery } from '../validators/reservation.validators.js'
-import { assertWorksAt, hasPermission, isAdmin, workplaceIds, worksAt, type Actor } from './access.service.js'
+import { assertBusinessAccess, assertWorksAt, hasPermission, isAdmin, workplaceIds, worksAt, type Actor } from './access.service.js'
+import { audit } from './audit.service.js'
 import { notify } from './notification.service.js'
 import { sendReservationTicket } from './ticket.service.js'
 import * as promotions from './promotion.service.js'
-import { rewardPickup } from './loyalty.service.js'
+import { POINTS_PER_BAG, rewardPickup } from './loyalty.service.js'
 import { dispatchReservationEvent } from './integration.service.js'
 import { notifyIfAvailable } from './waitlist.service.js'
 
@@ -288,7 +290,7 @@ export async function cancel(id: string, actor: Actor) {
  * Hand-over at the counter. Status-guarded, so scanning the same code twice
  * can't collect twice. "Pay at pickup" reservations are recorded as paid.
  */
-async function markCollected(reservation: ReservationDoc, actor: Actor) {
+async function markCollected(reservation: ReservationDoc, actor: Actor, via: CollectedVia) {
   // Same default as the monthly statement (statement.service).
   const business = await Business.findById(reservation.business).select('commissionRate address.countryCode').lean()
   const commissionRate = business?.commissionRate ?? marketFor(business?.address.countryCode).commissionRate
@@ -298,6 +300,7 @@ async function markCollected(reservation: ReservationDoc, actor: Actor) {
       $set: {
         status: 'collected',
         collectedAt: new Date(),
+        collectedVia: via,
         commissionRate,
         ...(reservation.payment.method === 'pay_at_pickup' ? { 'payment.status': 'paid' } : {}),
       },
@@ -336,7 +339,7 @@ function collectError(r: IReservation | null) {
 export async function collect(id: string, actor: Actor) {
   const { reservation, isStaff } = await loadAuthorized(id, actor)
   if (!isStaff) throw ApiError.forbidden('Samo partner može potvrditi preuzimanje.')
-  return markCollected(reservation, actor)
+  return markCollected(reservation, actor, 'list')
 }
 
 /**
@@ -344,7 +347,7 @@ export async function collect(id: string, actor: Actor) {
  * typing only the short code is the fallback. Lookups are limited to the
  * caller's own businesses, so a code from another shop is simply "not found".
  */
-export async function collectByCode(input: { code: string; reservationId?: string }, actor: Actor) {
+export async function collectByCode(input: { code: string; reservationId?: string; via?: 'qr' | 'code' }, actor: Actor) {
   const filter: Record<string, unknown> = { code: { $in: pickupCodeVariants(input.code) } }
   if (input.reservationId) filter._id = input.reservationId
   if (!isAdmin(actor)) filter.business = { $in: await workplaceIds(actor) }
@@ -354,7 +357,7 @@ export async function collectByCode(input: { code: string; reservationId?: strin
   const collectable = matches.filter((r) => r.status === 'confirmed')
   if (collectable.length > 1) throw ApiError.conflict('Više rezervacija ima isti kod. Skenirajte QR kod.', 'AMBIGUOUS_CODE')
   if (collectable.length === 0) throw collectError(matches[0])
-  return markCollected(collectable[0], actor)
+  return markCollected(collectable[0], actor, input.via ?? (input.reservationId ? 'qr' : 'code'))
 }
 
 export type ScanVerdict =
@@ -471,6 +474,146 @@ export async function sharedPass(token: string) {
 /** Housekeeping: mark unclaimed reservations as expired. Run periodically. */
 export async function expireStale(now = new Date()) {
   const cutoff = new Date(now.getTime() - market().expiryGraceMinutes * 60_000)
-  const result = await Reservation.updateMany({ status: 'confirmed', pickupEnd: { $lt: cutoff } }, { $set: { status: 'expired' } })
+  const due = await Reservation.find({ status: 'confirmed', pickupEnd: { $lt: cutoff } }).select('_id').lean()
+  if (!due.length) return 0
+  const ids = due.map((r) => r._id)
+  const result = await Reservation.updateMany(
+    { _id: { $in: ids }, status: 'confirmed' },
+    { $set: { status: 'expired', 'pickupCheck.askedAt': now } },
+  )
+  // Ask each customer whether they actually got the bag (see answerPickupCheck).
+  const expired = await Reservation.find({ _id: { $in: ids }, status: 'expired', 'pickupCheck.askedAt': now }).lean()
+  const names = new Map((await Business.find({ _id: { $in: expired.map((r) => r.business) } }).select('name').lean()).map((b) => [b._id.toString(), b.name]))
+  for (const r of expired) {
+    void notify(
+      [r.user],
+      {
+        type: 'pickup_check',
+        title: 'Da li si preuzeo/la kesu?',
+        body: `${r.offerTitle} · ${names.get(r.business.toString()) ?? ''}. Ako jesi, potvrdi i dobij bodove za spašenu kesu.`,
+        link: `/reservations/${r._id.toString()}`,
+      },
+      { email: 'fallback' },
+    )
+  }
   return result.modifiedCount
+}
+
+// ---------------------------------------------------------------------------
+// Pickup integrity: the customer confirms pickups the partner didn't scan.
+
+/** Customers can answer this long after the pickup window ended. */
+const PICKUP_CHECK_DAYS = 7
+/** Partners can dispute a customer-confirmed pickup this long after it. */
+const DISPUTE_DAYS = 14
+
+/**
+ * The customer's answer to "Did you pick it up?" for an expired reservation.
+ * "Yes" turns it into a pickup (commission, points, review) marked as
+ * confirmed by the customer, and tells the partner it should have been scanned.
+ */
+export async function answerPickupCheck(id: string, answer: 'collected' | 'not_collected', actor: Actor) {
+  const reservation = await Reservation.findOne({ _id: id, user: actor.id })
+  if (!reservation) throw ApiError.notFound('Rezervacija nije pronađena.')
+  if (reservation.pickupCheck?.answer) throw ApiError.conflict('Već si odgovorio/la.', 'ALREADY_ANSWERED')
+  if (reservation.status !== 'expired') throw ApiError.conflict('Ova rezervacija nije označena kao nepreuzeta.', 'NOT_EXPIRED')
+  if (Date.now() - reservation.pickupEnd.getTime() > PICKUP_CHECK_DAYS * 86_400_000) throw ApiError.conflict('Rok za potvrdu je istekao.', 'TOO_LATE')
+
+  const now = new Date()
+  if (answer === 'not_collected') {
+    reservation.set({ 'pickupCheck.answer': 'not_collected', 'pickupCheck.answeredAt': now })
+    await reservation.save()
+    const [dto] = await toDto([reservation.toObject()], actor)
+    return dto
+  }
+
+  const business = await Business.findById(reservation.business).select('owner name commissionRate address.countryCode').lean()
+  const commissionRate = business?.commissionRate ?? marketFor(business?.address.countryCode).commissionRate
+  const updated = await Reservation.findOneAndUpdate(
+    { _id: reservation._id, status: 'expired', 'pickupCheck.answer': { $exists: false } },
+    {
+      $set: {
+        status: 'collected',
+        // Counted in the month of the pickup window, not of the answer.
+        collectedAt: reservation.pickupEnd,
+        collectedVia: 'customer',
+        commissionRate,
+        'pickupCheck.answer': 'collected',
+        'pickupCheck.answeredAt': now,
+        ...(reservation.payment.method === 'pay_at_pickup' ? { 'payment.status': 'paid' } : {}),
+      },
+    },
+    { new: true },
+  )
+  if (!updated) throw ApiError.conflict('Već si odgovorio/la.', 'ALREADY_ANSWERED')
+  void rewardPickup(updated.user, updated.quantity)
+  void dispatchReservationEvent('reservation.collected', updated)
+  if (business) {
+    void notify([business.owner], {
+      type: 'pickup_confirmed_by_customer',
+      title: `Kupac je potvrdio preuzimanje · ${updated.code}`,
+      body: `${updated.quantity} × ${updated.offerTitle} (${business.name}) nije skenirano, a kupac kaže da je preuzeto. Uračunato je u obračun – uvek skeniraj QR kod.`,
+      link: '/business/pickups',
+    })
+  }
+  const [dto] = await toDto([updated.toObject()], actor)
+  return dto
+}
+
+/** The partner (owner) says a customer-confirmed pickup didn't happen; the platform team decides. */
+export async function openDispute(id: string, reason: string, actor: Actor) {
+  const reservation = await Reservation.findById(id)
+  if (!reservation) throw ApiError.notFound('Rezervacija nije pronađena.')
+  const business = await assertBusinessAccess(reservation.business, actor)
+  if (reservation.collectedVia !== 'customer' || reservation.status !== 'collected') {
+    throw ApiError.conflict('Osporiti se može samo preuzimanje koje je potvrdio kupac.', 'NOT_DISPUTABLE')
+  }
+  if (reservation.dispute) throw ApiError.conflict('Ovo preuzimanje je već osporeno.', 'ALREADY_DISPUTED')
+  if (Date.now() - (reservation.pickupCheck?.answeredAt ?? reservation.pickupEnd).getTime() > DISPUTE_DAYS * 86_400_000) {
+    throw ApiError.conflict('Rok za osporavanje je istekao.', 'TOO_LATE')
+  }
+  reservation.dispute = { status: 'open', reason, openedAt: new Date(), openedBy: new Types.ObjectId(actor.id) }
+  await reservation.save()
+  const team = await User.find({ role: { $in: ['admin', 'operations'] }, deletedAt: null }).select('_id').lean()
+  void notify(
+    team.map((u) => u._id),
+    { type: 'pickup_dispute', title: `Osporeno preuzimanje · ${reservation.code}`, body: `${business.name}: ${reason}`, link: '/admin?tab=integrity' },
+    { email: false },
+  )
+  const [dto] = await toDto([reservation.toObject()], actor)
+  return dto
+}
+
+/**
+ * Platform decision on a dispute. Upheld → back to "not collected" (no
+ * commission; the customer's points for it are taken back). Rejected → stays
+ * a pickup.
+ */
+export async function resolveDispute(id: string, decision: 'upheld' | 'rejected', note: string | undefined, actor: Actor) {
+  const reservation = await Reservation.findOne({ _id: id, 'dispute.status': 'open' })
+  if (!reservation) throw ApiError.notFound('Otvoren spor nije pronađen.')
+  const now = new Date()
+  reservation.set({ 'dispute.status': decision, 'dispute.resolvedAt': now, 'dispute.resolvedBy': actor.id, 'dispute.note': note })
+  if (decision === 'upheld') {
+    reservation.set({ status: 'expired', collectedAt: undefined, commissionRate: undefined })
+    await User.updateOne({ _id: reservation.user }, [{ $set: { points: { $max: [0, { $subtract: ['$points', reservation.quantity * POINTS_PER_BAG] }] } } }])
+  }
+  await reservation.save()
+  const business = await Business.findById(reservation.business).select('owner name').lean()
+  if (business) {
+    void notify([business.owner], {
+      type: 'pickup_dispute',
+      title: decision === 'upheld' ? `Spor prihvaćen · ${reservation.code}` : `Spor odbijen · ${reservation.code}`,
+      body: decision === 'upheld' ? 'Rezervacija se vodi kao nepreuzeta i ne ulazi u obračun.' : `Preuzimanje ostaje u obračunu.${note ? ` ${note}` : ''}`,
+      link: '/business/pickups',
+    })
+  }
+  void audit(actor, {
+    action: `dispute.${decision}`,
+    targetType: 'business',
+    targetId: reservation.business,
+    summary: `${decision === 'upheld' ? 'Prihvaćen' : 'Odbijen'} spor ${reservation.code}${business ? ` (${business.name})` : ''}`,
+  })
+  const [dto] = await toDto([reservation.toObject()], actor)
+  return dto
 }

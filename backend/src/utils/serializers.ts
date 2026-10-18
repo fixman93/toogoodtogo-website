@@ -110,6 +110,9 @@ export function serializeReservation(r: WithId<IReservation>, business: WithId<I
     ...(customerName ? { customer: { name: customerName } } : {}),
     cancelledAt: r.cancelledAt?.toISOString(),
     collectedAt: r.collectedAt?.toISOString(),
+    collectedVia: r.collectedVia ?? null,
+    pickupCheck: r.pickupCheck?.askedAt ? { askedAt: r.pickupCheck.askedAt.toISOString(), answer: r.pickupCheck.answer ?? null } : null,
+    dispute: r.dispute ? { status: r.dispute.status, reason: r.dispute.reason, openedAt: r.dispute.openedAt.toISOString(), note: r.dispute.note ?? null } : null,
     createdAt: r.createdAt.toISOString(),
   }
 }

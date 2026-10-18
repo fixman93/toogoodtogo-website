@@ -4,6 +4,8 @@
  */
 import { api } from './client'
 import type {
+  PartnerIntegrity,
+  PlatformIntegrity,
   VerifyResult,
   ApiKeyInfo,
   Donation,
@@ -109,9 +111,13 @@ export const reservationsApi = {
   /** Business staff: hand over by id (from the list). */
   collect: (id: string) => unwrap<Reservation>(api.patch(`/reservations/${id}/collect`)),
   /** Business staff: hand over by scanned QR (code + id) or a typed code. */
-  collectByCode: (body: { code: string; reservationId?: string }) => unwrap<Reservation>(api.post('/reservations/collect', body)),
+  collectByCode: (body: { code: string; reservationId?: string; via?: 'qr' | 'code' }) => unwrap<Reservation>(api.post('/reservations/collect', body)),
   /** Check a scanned/typed code without handing the bag over. */
   verify: (body: { code: string; reservationId?: string }) => unwrap<VerifyResult>(api.post('/reservations/verify', body)),
+  /** Customer: "did you pick it up?" for an expired reservation. */
+  pickupCheck: (id: string, answer: 'collected' | 'not_collected') => unwrap<Reservation>(api.post(`/reservations/${id}/pickup-check`, { answer })),
+  /** Partner: dispute a pickup the customer confirmed. */
+  dispute: (id: string, reason: string) => unwrap<Reservation>(api.post(`/reservations/${id}/dispute`, { reason })),
 }
 
 export const favoritesApi = {
@@ -147,6 +153,9 @@ export const adminApi = {
     unwrap<PartnerStanding>(api.patch(`/admin/partners/${id}/status`, body)),
   warnPartner: (id: string, message: string) => unwrap<PartnerNote>(api.post(`/admin/partners/${id}/warnings`, { message })),
   resolveWarning: (noteId: string) => unwrap<PartnerNote>(api.patch(`/admin/partner-notes/${noteId}/resolve`)),
+  integrity: (days = 30) => unwrap<PlatformIntegrity>(api.get('/admin/integrity', { params: { days } })),
+  disputes: () => unwrap<Reservation[]>(api.get('/admin/disputes')),
+  resolveDispute: (id: string, body: { decision: 'upheld' | 'rejected'; note?: string }) => unwrap<Reservation>(api.patch(`/admin/disputes/${id}`, body)),
   deletePartner: (id: string, reason: string) => api.delete(`/admin/partners/${id}`, { data: { reason } }).then(() => undefined),
   setCommission: (businessId: string, rate: number | null) => unwrap<{ businessId: string; commissionRate: number | null }>(api.patch(`/admin/businesses/${businessId}/commission`, { rate })),
   donations: () => unwrap<DonationList>(api.get('/admin/donations')),
@@ -167,6 +176,7 @@ export const partnerApi = {
   statement: (month: string) => unwrap<PartnerStatement>(api.get('/partner/statements', { params: { month } })),
   outstanding: () => unwrap<Outstanding>(api.get('/partner/statements/outstanding')),
   standing: () => unwrap<PartnerStanding>(api.get('/partner/standing')),
+  integrity: (days = 30) => unwrap<PartnerIntegrity>(api.get('/partner/integrity', { params: { days } })),
   apiKeys: () => unwrap<ApiKeyInfo[]>(api.get('/partner/api-keys')),
   createApiKey: (name: string) => unwrap<ApiKeyInfo>(api.post('/partner/api-keys', { name })),
   revokeApiKey: (id: string) => api.delete(`/partner/api-keys/${id}`).then(() => undefined),

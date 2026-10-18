@@ -20,7 +20,7 @@ import { scanFeedback, unlockAudio } from '@/lib/scan-feedback'
 import { scannerPrefs } from '@/lib/scanner-prefs'
 import { cn } from '@/lib/utils'
 
-type CodeInput = { code: string; reservationId?: string } | { id: string }
+type CodeInput = { code: string; reservationId?: string; via?: 'qr' | 'code' } | { id: string }
 
 /** What the answer panel shows. `handedOver` = the bag was just given out. */
 type Result =
@@ -278,13 +278,13 @@ function Scanner() {
   )
 
   const check = useCallback(
-    async (input: { code: string; reservationId?: string }) => {
+    async (input: { code: string; reservationId?: string }, via: 'qr' | 'code') => {
       setHandError(null)
       setResult({ kind: 'checking' })
       try {
         const answer = await verify.mutateAsync(input)
         // Hand over by id from now on: exact, even if the typed code were ambiguous.
-        const exact = answer.reservation ? { code: answer.reservation.code, reservationId: answer.reservation.id } : input
+        const exact = answer.reservation ? { code: answer.reservation.code, reservationId: answer.reservation.id, via } : { ...input, via }
         setResult({ kind: 'verdict', ...answer, input: exact })
         if (answer.verdict === 'valid' && autoCollect) return handOver(exact)
         scanFeedback(toneOf(answer.verdict))
@@ -305,7 +305,7 @@ function Scanner() {
       if (!parsed) {
         setResult({ kind: 'verdict', verdict: 'invalid_qr' })
         scanFeedback('error')
-      } else void check(parsed)
+      } else void check(parsed, 'qr')
     },
     [check],
   )
@@ -313,7 +313,7 @@ function Scanner() {
   const onManual = (e: FormEvent) => {
     e.preventDefault()
     if (!code.trim()) return
-    void check({ code }).then(() => setCode(''))
+    void check({ code }, 'code').then(() => setCode(''))
   }
 
   const verdictInput = result?.kind === 'verdict' ? result.input : undefined

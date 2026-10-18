@@ -2,6 +2,9 @@ import { Schema, model, type Types } from 'mongoose'
 
 export const NOTIFICATION_TYPES = [
   'reservation_new',
+  'pickup_check',
+  'pickup_confirmed_by_customer',
+  'pickup_dispute',
   'partner_status',
   'partner_warning',
   'reservation_confirmed',

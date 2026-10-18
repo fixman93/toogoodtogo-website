@@ -13,6 +13,7 @@ import { DonationsPage } from '@/pages/partner/DonationsPage'
 import { IntegrationsPage } from '@/pages/partner/IntegrationsPage'
 import { PromotionsPage } from '@/pages/partner/PromotionsPage'
 import { StatementPage } from '@/pages/partner/StatementPage'
+import { PickupsPage } from '@/pages/partner/PickupsPage'
 import { SupportPage } from '@/pages/SupportPage'
 import { DiscoverPage } from '@/pages/DiscoverPage'
 import { FavoritesPage } from '@/pages/FavoritesPage'
@@ -54,6 +55,7 @@ const router = createBrowserRouter([
       { path: 'business/promotions', element: <PromotionsPage /> },
       { path: 'business/donations', element: <DonationsPage /> },
       { path: 'business/statements', element: <StatementPage /> },
+      { path: 'business/pickups', element: <PickupsPage /> },
       { path: 'business/integrations', element: <IntegrationsPage /> },
       { path: 'support', element: <SupportPage /> },
       { path: 'support/:id', element: <SupportPage /> },

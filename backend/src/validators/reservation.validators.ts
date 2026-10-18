@@ -27,4 +27,9 @@ export const collectByCodeBody = z.object({
     })
     .pipe(z.string().length(4, 'Kod ima 4 znaka (npr. FN-4F7K).')),
   reservationId: objectId.optional(),
+  /** How the code reached the counter: scanned QR or typed (recorded for pickup statistics). */
+  via: z.enum(['qr', 'code']).optional(),
 })
+
+export const pickupCheckBody = z.object({ answer: z.enum(['collected', 'not_collected']) })
+export const disputeBody = z.object({ reason: z.string().trim().min(5, 'Opiši ukratko šta se desilo.').max(500) })

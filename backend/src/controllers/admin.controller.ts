@@ -6,6 +6,8 @@ import * as auditService from '../services/audit.service.js'
 import * as donationService from '../services/donation.service.js'
 import * as statementService from '../services/statement.service.js'
 import * as moderationService from '../services/partner-moderation.service.js'
+import * as integrityService from '../services/integrity.service.js'
+import * as reservationService from '../services/reservation.service.js'
 import { z } from 'zod'
 import { list, ok } from '../utils/respond.js'
 import {
@@ -126,4 +128,18 @@ export async function setCommission(req: Request, res: Response) {
 
 export async function listDonations(_req: Request, res: Response) {
   ok(res, await donationService.adminList())
+}
+
+export async function integrity(req: Request, res: Response) {
+  const { days } = z.object({ days: z.coerce.number().int().min(7).max(365).default(30) }).parse(req.query)
+  ok(res, await integrityService.platformIntegrity(days))
+}
+
+export async function listDisputes(req: Request, res: Response) {
+  ok(res, await integrityService.openDisputes(currentUser(req)))
+}
+
+export async function resolveDispute(req: Request, res: Response) {
+  const { decision, note } = z.object({ decision: z.enum(['upheld', 'rejected']), note: z.string().trim().max(500).optional() }).parse(req.body)
+  ok(res, await reservationService.resolveDispute(idParams.parse(req.params).id, decision, note, currentUser(req)))
 }

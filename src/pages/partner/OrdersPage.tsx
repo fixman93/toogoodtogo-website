@@ -7,6 +7,7 @@ import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
 import { StatusBadge } from '@/components/reservations/StatusBadge'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -54,7 +55,10 @@ function OrderRow({ r }: { r: Reservation }) {
             {formatPickupWindow(r.pickupStart, r.pickupEnd, r.timezone)} · <strong className="text-foreground">{formatMoney(r.totalMinor, r.currency)}</strong>
           </p>
         </div>
-        <StatusBadge status={r.status} />
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          <StatusBadge status={r.status} />
+          {r.collectedVia === 'customer' && <Badge variant="destructive">{t('pickups.notScanned')}</Badge>}
+        </span>
       </div>
       {active && (
         <div className="flex flex-wrap items-start gap-2">

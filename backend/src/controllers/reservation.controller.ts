@@ -4,7 +4,7 @@ import * as reservationService from '../services/reservation.service.js'
 import { ApiError } from '../utils/ApiError.js'
 import { list, ok } from '../utils/respond.js'
 import { idParams } from '../validators/common.js'
-import { collectByCodeBody, createReservationBody, reservationListQuery } from '../validators/reservation.validators.js'
+import { collectByCodeBody, disputeBody, pickupCheckBody, createReservationBody, reservationListQuery } from '../validators/reservation.validators.js'
 
 export async function listReservations(req: Request, res: Response) {
   const result = await reservationService.list(reservationListQuery.parse(req.query), currentUser(req))
@@ -43,4 +43,14 @@ export async function sharedPass(req: Request, res: Response) {
   const token = String(req.params.token ?? '')
   if (!/^[\w-]{10,64}$/.test(token)) throw ApiError.notFound('Link nije važeći.')
   ok(res, await reservationService.sharedPass(token))
+}
+
+export async function answerPickupCheck(req: Request, res: Response) {
+  const { answer } = pickupCheckBody.parse(req.body)
+  ok(res, await reservationService.answerPickupCheck(idParams.parse(req.params).id, answer, currentUser(req)))
+}
+
+export async function openDispute(req: Request, res: Response) {
+  const { reason } = disputeBody.parse(req.body)
+  ok(res, await reservationService.openDispute(idParams.parse(req.params).id, reason, currentUser(req)))
 }

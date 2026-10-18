@@ -17,4 +17,8 @@ reservationRoutes.post('/collect', requireRole('business', 'staff', 'admin'), c.
 reservationRoutes.post('/verify', requireRole('business', 'staff', 'admin'), c.verifyCode)
 reservationRoutes.patch('/:id/cancel', c.cancelReservation)
 reservationRoutes.post('/:id/share', c.shareReservation)
+// Customer: "did you pick it up?" after an unclaimed reservation expired.
+reservationRoutes.post('/:id/pickup-check', c.answerPickupCheck)
+// Partner disputes a customer-confirmed pickup.
+reservationRoutes.post('/:id/dispute', requireRole('business', 'admin'), c.openDispute)
 reservationRoutes.patch('/:id/collect', requireRole('business', 'staff', 'admin'), c.collectReservation)

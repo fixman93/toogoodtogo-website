@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
-import { AlertTriangle, Ban, CalendarCheck, CheckCircle2, ChevronDown, ClipboardList, History, Leaf, Loader2, MapPin, MessageSquare, PauseCircle, PlayCircle, ReceiptText, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Ban, CalendarCheck, ScanLine, ShieldCheck, CheckCircle2, ChevronDown, ClipboardList, History, Leaf, Loader2, MapPin, MessageSquare, PauseCircle, PlayCircle, ReceiptText, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import { PLATFORM_ROLES, type AdminBusiness, type AdminReview, type AdminUser, type ApplicationStatus, type PartnerApplication, type Permission, type PaymentDirection, type PaymentMethod, type PlatformStatementPartner, type ReservationStatus, type Role, type TicketStatus } from '@/api/types'
+import { PLATFORM_ROLES, type AdminBusiness, type AdminReview, type AdminUser, type ApplicationStatus, type PartnerApplication, type Permission, type PaymentDirection, type PaymentMethod, type PlatformStatementPartner, type Reservation, type ReservationStatus, type Role, type TicketStatus } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
@@ -33,6 +33,9 @@ import {
   useDeletePayment,
   usePartnerStanding,
   usePartnerModeration,
+  usePlatformIntegrity,
+  useDisputes,
+  useResolveDispute,
   useSetCommission,
   useTicket,
   useDecideApplication,
@@ -53,7 +56,7 @@ import { NoteItem } from '@/features/business/StandingNotice'
 import { cn } from '@/lib/utils'
 import { MARKETS } from '@/config/markets'
 
-const TABS = ['overview', 'applications', 'users', 'partners', 'businesses', 'reservations', 'reviews', 'support', 'promotions', 'finance', 'donations', 'audit'] as const
+const TABS = ['overview', 'applications', 'users', 'partners', 'businesses', 'reservations', 'reviews', 'support', 'promotions', 'finance', 'integrity', 'donations', 'audit'] as const
 type Tab = (typeof TABS)[number]
 /** Which permission each tab needs (mirrors the API). */
 const TAB_PERMISSION: Record<Tab, Permission> = {
@@ -67,6 +70,7 @@ const TAB_PERMISSION: Record<Tab, Permission> = {
   support: 'support.manage',
   promotions: 'promotions.manage',
   finance: 'finance.view',
+  integrity: 'integrity.view',
   donations: 'donations.view',
   audit: 'audit.view',
 }
@@ -123,7 +127,7 @@ function Chips<T extends string>({ value, onChange, options }: { value?: T; onCh
 // ---------------------------------------------------------------------------
 // Overview
 
-function StatTile({ icon: Icon, label, value, sub }: { icon: LucideIcon; label: string; value: number; sub?: ReactNode }) {
+function StatTile({ icon: Icon, label, value, sub }: { icon: LucideIcon; label: string; value: number | string; sub?: ReactNode }) {
   return (
     <Card className="p-4">
       <Icon className="mb-2 size-5 text-primary" />
@@ -1237,6 +1241,131 @@ function PartnersTab() {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Pickup integrity: are partners recording hand-overs (scanning)?
+
+const RISK_BADGE = { high: 'destructive', medium: 'accent', low: 'success' } as const
+const pct = (v: number) => `${Math.round(v * 100)}%`
+
+function DisputeRow({ r }: { r: Reservation }) {
+  const resolve = useResolveDispute()
+  const [note, setNote] = useState('')
+  return (
+    <li className="space-y-2 p-4 text-sm">
+      <p className="font-semibold">
+        <span className="font-mono text-primary">{r.code}</span> · {r.business.name} · {r.customer?.name ?? '—'}
+      </p>
+      <p className="text-muted-foreground">
+        {r.quantity} × {r.offer.title} · {formatPickupWindow(r.pickupStart, r.pickupEnd, r.timezone)} · {formatMoney(r.totalMinor, r.currency)}
+      </p>
+      <p className="rounded-lg bg-muted/60 p-2">
+        <span className="font-semibold">{t('integrity.partnerSays')}:</span> {r.dispute?.reason}
+      </p>
+      <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('integrity.notePlaceholder')} maxLength={500} className="h-10 rounded-lg" />
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={resolve.isPending} onClick={() => resolve.mutate({ id: r.id, decision: 'upheld', note: note.trim() || undefined })}>
+          {t('integrity.uphold')}
+        </Button>
+        <Button size="sm" disabled={resolve.isPending} onClick={() => resolve.mutate({ id: r.id, decision: 'rejected', note: note.trim() || undefined })}>
+          {t('integrity.reject')}
+        </Button>
+      </div>
+    </li>
+  )
+}
+
+function IntegrityTab() {
+  const [days, setDays] = useState<'7' | '30' | '90'>('30')
+  const { data, isLoading, isError, refetch } = usePlatformIntegrity(Number(days))
+  const disputes = useDisputes()
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-muted-foreground">{t('integrity.intro')}</p>
+      <Chips<'7' | '30' | '90'> value={days} onChange={(v) => setDays(v ?? '30')} options={(['7', '30', '90'] as const).map((d) => ({ value: d, label: t('pickups.lastDays', { days: d }) }))} />
+
+      {!!disputes.data?.length && (
+        <section className="space-y-2">
+          <h2 className="font-bold">{t('integrity.disputes', { count: disputes.data.length })}</h2>
+          <Card className="overflow-hidden border-accent">
+            <ul className="divide-y">
+              {disputes.data.map((r) => (
+                <DisputeRow key={r.id} r={r} />
+              ))}
+            </ul>
+          </Card>
+        </section>
+      )}
+
+      {isLoading ? (
+        <Skeleton className="h-40 rounded-2xl" />
+      ) : isError || !data ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile icon={CalendarCheck} label={t('integrity.finished')} value={data.platform.total} />
+            <StatTile icon={ScanLine} label={t('pickups.scanned')} value={data.platform.collected ? pct(data.platform.scannedRate) : '—'} />
+            <StatTile icon={Ban} label={t('integrity.avgNoShow')} value={data.platform.total ? pct(data.platform.noShowRate) : '—'} />
+            <StatTile icon={AlertTriangle} label={t('pickups.byCustomer')} value={data.platform.viaCustomer} />
+          </div>
+          {data.partners.length === 0 ? (
+            <EmptyState icon={ShieldCheck} title={t('integrity.empty')} className="py-8" />
+          ) : (
+            <Card className="overflow-hidden">
+              <ul className="divide-y">
+                {data.partners.map((p) => (
+                  <li key={p.ownerId} className="space-y-2 p-4 text-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="flex flex-wrap items-center gap-2 font-semibold">
+                          {p.name}
+                          <Badge variant={RISK_BADGE[p.risk]}>{t(`integrity.risk.${p.risk}`)}</Badge>
+                          {p.openDisputes > 0 && <Badge variant="accent">{t('integrity.openDisputes', { count: p.openDisputes })}</Badge>}
+                        </span>
+                        <span className="block truncate text-muted-foreground">
+                          {p.email} · {p.locations.join(', ')}
+                        </span>
+                      </span>
+                      {p.commissionAtRiskMinor > 0 && (
+                        <span className="text-right text-xs text-muted-foreground">
+                          {t('integrity.atRisk')}
+                          <span className="block text-base font-bold text-foreground tabular-nums">{formatMoney(p.commissionAtRiskMinor, p.currency)}</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
+                      <span>
+                        {t('integrity.noShow')}: <strong className={cn(p.flags.includes('high_no_show') && 'text-destructive')}>{pct(p.noShowRate)}</strong>
+                        <span className="text-muted-foreground"> ({p.expired}/{p.total})</span>
+                      </span>
+                      <span>
+                        {t('pickups.scanned')}: <strong className={cn(p.flags.includes('manual_handover') && 'text-destructive')}>{p.collected ? pct(p.scannedRate) : '—'}</strong>
+                      </span>
+                      <span>
+                        {t('pickups.byCustomer')}: <strong className={cn(p.viaCustomer > 0 && 'text-destructive')}>{p.viaCustomer}</strong>
+                      </span>
+                      <span>
+                        {t('integrity.repeat')}: <strong className={cn(p.repeatNoShowCustomers >= 2 && 'text-destructive')}>{p.repeatNoShowCustomers}</strong>
+                      </span>
+                    </div>
+                    {p.flags.length > 0 && (
+                      <ul className="list-inside list-disc text-xs text-muted-foreground">
+                        {p.flags.map((f) => (
+                          <li key={f}>{t(`integrity.flag.${f}`)}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 function DonationsTab() {
   const { data, isLoading, isError, refetch } = useDonations(true)
   if (isLoading) return <Skeleton className="h-40 rounded-2xl" />
@@ -1284,6 +1413,7 @@ function AdminPanel() {
       {tab === 'support' && <SupportTab />}
       {tab === 'promotions' && <PromotionsManager platform />}
       {tab === 'finance' && <FinanceTab />}
+      {tab === 'integrity' && <IntegrityTab />}
       {tab === 'donations' && <DonationsTab />}
       {tab === 'audit' && <AuditTab />}
     </div>

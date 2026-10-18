@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Clock, Copy, HandHeart, MapPin, Pause, Pencil, Play, Plug, Plus, ReceiptText, ScanLine, Store, TicketPercent, type LucideIcon } from 'lucide-react'
+import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Clock, Copy, HandHeart, MapPin, Pause, Pencil, Play, Plug, Plus, ReceiptText, ScanLine, ShieldCheck, Store, TicketPercent, type LucideIcon } from 'lucide-react'
 import type { Business, Offer } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -261,6 +261,7 @@ function Dashboard() {
         <Tile to="/business/promotions" icon={TicketPercent} label={t('promo.title')} />
         <Tile to="/business/donations" icon={HandHeart} label={t('donations.title')} />
         <Tile to="/business/statements" icon={ReceiptText} label={t('statement.title')} />
+        <Tile to="/business/pickups" icon={ShieldCheck} label={t('pickups.title')} />
         <Tile to="/business/integrations" icon={Plug} label={t('integrations.title')} />
       </div>
 

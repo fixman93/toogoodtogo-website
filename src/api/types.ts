@@ -24,6 +24,7 @@ export type Permission =
   | 'applications.manage'
   | 'businesses.moderate'
   | 'partners.manage'
+  | 'integrity.view'
   | 'reservations.view'
   | 'reviews.moderate'
   | 'support.manage'
@@ -194,6 +195,11 @@ export interface Reservation {
   customer?: { name: string }
   cancelledAt?: string
   collectedAt?: string
+  /** How the hand-over was recorded; "customer" = confirmed by the customer, not scanned. */
+  collectedVia?: 'qr' | 'code' | 'list' | 'customer' | null
+  /** "Did you pick it up?" asked when the reservation expired unclaimed. */
+  pickupCheck?: { askedAt: string; answer: 'collected' | 'not_collected' | null } | null
+  dispute?: { status: 'open' | 'upheld' | 'rejected'; reason: string; openedAt: string; note: string | null } | null
   createdAt: string
 }
 
@@ -659,4 +665,46 @@ export interface VerifyResult {
   reservation?: Reservation
   /** Another location of the same partner. */
   businessName?: string
+}
+
+export interface PickupCounts {
+  total: number
+  collected: number
+  expired: number
+  viaQr: number
+  viaCode: number
+  viaList: number
+  viaCustomer: number
+  customerNo: number
+  expiredGrossMinor: number
+  noShowRate: number
+  scannedRate: number
+}
+
+export interface PartnerIntegrity extends PickupCounts {
+  days: number
+  platformNoShowRate: number
+  customerConfirmed: Reservation[]
+}
+
+export type RiskFlag = 'high_no_show' | 'unscanned_pickups' | 'repeat_no_shows' | 'manual_handover'
+
+export interface PartnerRisk extends PickupCounts {
+  ownerId: string
+  name: string
+  email: string
+  partnerStatus: PartnerStatus
+  locations: string[]
+  currency: string
+  repeatNoShowCustomers: number
+  commissionAtRiskMinor: number
+  openDisputes: number
+  flags: RiskFlag[]
+  risk: 'low' | 'medium' | 'high'
+}
+
+export interface PlatformIntegrity {
+  days: number
+  platform: PickupCounts
+  partners: PartnerRisk[]
 }

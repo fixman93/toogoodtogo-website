@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { useAddReview, useBusiness, useCancelReservation, useReservation, useShareReservation } from '@/hooks/api'
+import { useAddReview, useBusiness, useCancelReservation, usePickupCheck, useReservation, useShareReservation } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney, formatPickupWindow, formatTime } from '@/lib/format'
 import { pickupQrValue } from '@/lib/pickup'
@@ -56,6 +56,8 @@ function Details() {
           {t('offer.reserved')}
         </div>
       )}
+      {/* Asked first: it's why the customer opened this reservation from the notification. */}
+      <PickupCheck reservation={r} />
       {r.status === 'collected' && (
         <div role="status" className="flex items-start gap-4 rounded-2xl bg-success/12 p-5">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-success text-white">
@@ -195,6 +197,40 @@ function Details() {
 }
 
 /** 1–5 stars + optional comment, shown once after pickup. */
+const PICKUP_CHECK_DAYS = 7
+
+/**
+ * Expired without a recorded hand-over: ask the customer. "Yes" counts the
+ * pickup (points, review) — so a bag handed over without scanning isn't lost.
+ */
+function PickupCheck({ reservation: r }: { reservation: Reservation }) {
+  const answer = usePickupCheck()
+  const [now] = useState(() => Date.now())
+  const open = r.status === 'expired' && r.pickupCheck && !r.pickupCheck.answer && now - new Date(r.pickupEnd).getTime() < PICKUP_CHECK_DAYS * 86_400_000
+  if (r.pickupCheck?.answer === 'not_collected') return <p className="text-center text-sm text-muted-foreground">{t('pickupCheck.thanks')}</p>
+  if (!open) return null
+  return (
+    <Card className="space-y-3 border-2 border-primary/30 p-5">
+      <p className="text-lg font-extrabold">{t('pickupCheck.title')}</p>
+      <p className="text-sm text-muted-foreground">{t('pickupCheck.text', { business: r.business.name })}</p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button className="h-12 w-full sm:w-auto sm:flex-1" disabled={answer.isPending} onClick={() => answer.mutate({ id: r.id, answer: 'collected' })}>
+          {answer.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+          {t('pickupCheck.yes')}
+        </Button>
+        <Button variant="outline" className="h-12 w-full sm:w-auto sm:flex-1" disabled={answer.isPending} onClick={() => answer.mutate({ id: r.id, answer: 'not_collected' })}>
+          {t('pickupCheck.no')}
+        </Button>
+      </div>
+      {answer.isError && (
+        <p role="alert" className="text-sm font-semibold text-destructive">
+          {answer.error instanceof ApiError ? answer.error.message : t('common.errorText')}
+        </p>
+      )}
+    </Card>
+  )
+}
+
 function ReviewForm({ reservation }: { reservation: Reservation }) {
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')

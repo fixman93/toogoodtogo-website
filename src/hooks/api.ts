@@ -103,10 +103,48 @@ export function useBusinessReservations(businessId: string) {
 export function useCollectReservation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: { id: string } | { code: string; reservationId?: string }) =>
+    mutationFn: (input: { id: string } | { code: string; reservationId?: string; via?: 'qr' | 'code' }) =>
       'id' in input ? reservationsApi.collect(input.id) : reservationsApi.collectByCode(input),
     onSuccess: (reservation) => patchReservation(queryClient, reservation),
     onSettled: () => refresh(queryClient, RESERVATION_VIEWS),
+  })
+}
+
+/** Customer answers "did you pick it up?" (yes turns it into a pickup). */
+export function usePickupCheck() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: string; answer: 'collected' | 'not_collected' }) => reservationsApi.pickupCheck(v.id, v.answer),
+    onSuccess: (reservation) => patchReservation(queryClient, reservation),
+    onSettled: () => refresh(queryClient, [['reservations'], ['auth', 'me']]),
+  })
+}
+
+export function usePartnerIntegrity(days = 30) {
+  return useQuery({ queryKey: ['partner', 'integrity', days], queryFn: () => partnerApi.integrity(days) })
+}
+
+export function useDisputePickup() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: string; reason: string }) => reservationsApi.dispute(v.id, v.reason),
+    onSettled: () => refresh(queryClient, [['partner', 'integrity'], ['partner', 'orders']]),
+  })
+}
+
+export function usePlatformIntegrity(days = 30) {
+  return useQuery({ queryKey: ['admin', 'integrity', days], queryFn: () => adminApi.integrity(days) })
+}
+
+export function useDisputes(enabled = true) {
+  return useQuery({ queryKey: ['admin', 'disputes'], queryFn: adminApi.disputes, enabled })
+}
+
+export function useResolveDispute() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: string; decision: 'upheld' | 'rejected'; note?: string }) => adminApi.resolveDispute(v.id, v),
+    onSettled: () => refresh(queryClient, [['admin', 'disputes'], ['admin', 'integrity'], ['admin', 'statement']]),
   })
 }
 
