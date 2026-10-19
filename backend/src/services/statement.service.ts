@@ -14,10 +14,11 @@
 import type { Types } from 'mongoose'
 import { env } from '../config/env.js'
 import { marketFor } from '../config/markets.js'
-import { Business, PartnerPayment, Reservation, User, type IPartnerPayment } from '../models/index.js'
+import { Boost, Business, PartnerPayment, Reservation, User, type IPartnerPayment } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { partnerLocale, type Actor } from './access.service.js'
 import { audit } from './audit.service.js'
+import { listForOwner as listBoosts } from './boost.service.js'
 
 const defaultMarket = () => marketFor(env.DEFAULT_MARKET)
 
@@ -44,6 +45,8 @@ interface Line {
   platformDiscountMinor: number
   grossMinor: number
   commissionMinor: number
+  /** Paid promotions ("Istaknuto", push) bought this month. */
+  boostMinor: number
   balanceMinor: number
 }
 
@@ -85,9 +88,20 @@ function aggregate(match: Record<string, unknown>, options: { byMonth?: boolean;
   ])
 }
 
+/** Paid promotions per location (and local month when `byMonth`), restricted to `month` when given. */
+async function boostTotals(businessIds: Types.ObjectId[], options: { byMonth?: boolean; month?: string; start?: Date; end?: Date }) {
+  const localMonth = { $dateToString: { format: '%Y-%m', date: '$createdAt', timezone: { $ifNull: ['$timezone', defaultMarket().timezone] } } }
+  return Boost.aggregate<{ _id: { business: Types.ObjectId; month?: string }; total: number }>([
+    { $match: { business: { $in: businessIds }, ...(options.start ? { createdAt: { $gte: options.start, $lt: options.end } } : {}) } },
+    { $addFields: { localMonth } },
+    ...(options.month ? [{ $match: { localMonth: options.month } }] : []),
+    { $group: { _id: { business: '$business', ...(options.byMonth ? { month: '$localMonth' } : {}) }, total: { $sum: '$priceMinor' } } },
+  ])
+}
+
 type BusinessRow = { _id: Types.ObjectId; name: string; currency: string; commissionRate?: number; address: { countryCode: string } }
 
-function toLine(b: BusinessRow, r?: Agg): Line {
+function toLine(b: BusinessRow, r?: Agg, boostMinor = 0): Line {
   const rate = b.commissionRate ?? marketFor(b.address.countryCode).commissionRate
   const revenue = r?.revenue ?? 0
   const platformDiscount = r?.platformDiscount ?? 0
@@ -103,7 +117,8 @@ function toLine(b: BusinessRow, r?: Agg): Line {
     platformDiscountMinor: platformDiscount,
     grossMinor: revenue + platformDiscount,
     commissionMinor: commission,
-    balanceMinor: commission - platformDiscount,
+    boostMinor,
+    balanceMinor: commission - platformDiscount + boostMinor,
   }
 }
 
@@ -112,11 +127,13 @@ const BUSINESS_FIELDS = 'name currency commissionRate owner deletedAt address.co
 async function lines(businessFilter: Record<string, unknown>, month: string) {
   const { start, end } = monthWindow(month)
   const businesses = await Business.find(businessFilter).select(BUSINESS_FIELDS).lean()
-  const rows = await aggregate({ business: { $in: businesses.map((b) => b._id) }, collectedAt: { $gte: start, $lt: end } }, { month })
+  const ids = businesses.map((b) => b._id)
+  const [rows, boosts] = await Promise.all([aggregate({ business: { $in: ids }, collectedAt: { $gte: start, $lt: end } }, { month }), boostTotals(ids, { month, start, end })])
   const byBusiness = new Map(rows.map((r) => [r._id.business.toString(), r]))
+  const boostBy = new Map(boosts.map((r) => [r._id.business.toString(), r.total]))
   return businesses
-    .map((b) => ({ owner: b.owner.toString(), deleted: !!b.deletedAt, line: toLine(b, byBusiness.get(b._id.toString())) }))
-    .filter((x) => !x.deleted || x.line.orders > 0)
+    .map((b) => ({ owner: b.owner.toString(), deleted: !!b.deletedAt, line: toLine(b, byBusiness.get(b._id.toString()), boostBy.get(b._id.toString()) ?? 0) }))
+    .filter((x) => !x.deleted || x.line.orders > 0 || x.line.boostMinor > 0)
 }
 
 const sum = (items: Line[], key: keyof Line) => items.reduce((s, l) => s + (l[key] as number), 0)
@@ -127,6 +144,7 @@ const totals = (items: Line[]) => ({
   platformDiscountMinor: sum(items, 'platformDiscountMinor'),
   grossMinor: sum(items, 'grossMinor'),
   commissionMinor: sum(items, 'commissionMinor'),
+  boostMinor: sum(items, 'boostMinor'),
   balanceMinor: sum(items, 'balanceMinor'),
 })
 
@@ -174,6 +192,8 @@ export async function partnerStatement(actor: Actor, month: string) {
   const items = (await lines({ owner: actor.id }, month)).map((x) => x.line)
   const payments = await paymentsFor({ owner: actor.id, month })
   const t = totals(items)
+  const { start, end } = monthWindow(month)
+  const boosts = (await listBoosts(actor.id, start, end)).filter((b) => monthOf(new Date(b.createdAt), b.timezone) === month)
   return {
     month,
     currency: items[0]?.currency ?? (await partnerLocale(actor.id)).currency,
@@ -181,6 +201,7 @@ export async function partnerStatement(actor: Actor, month: string) {
     ...settlement(t.balanceMinor, payments.map((p) => p.raw)),
     payments: payments.map((p) => p.dto),
     businesses: items,
+    boosts,
   }
 }
 
@@ -244,6 +265,7 @@ export async function outstanding(ownerFilter?: string) {
   const businessById = new Map(businesses.map((b) => [b._id.toString(), b]))
   const ownerLocale = new Map(businesses.map((b) => [b.owner.toString(), { currency: b.currency, timezone: b.timezone }]))
   const rows = await aggregate({ business: { $in: businesses.map((b) => b._id) } }, { byMonth: true })
+  const boosts = await boostTotals(businesses.map((b) => b._id), { byMonth: true })
   const payments = await PartnerPayment.find(ownerFilter ? { owner: ownerFilter } : {}).lean()
 
   // owner → month → balance
@@ -256,6 +278,10 @@ export async function outstanding(ownerFilter?: string) {
   for (const r of rows) {
     const b = businessById.get(r._id.business.toString())
     if (b && r._id.month) add(b.owner.toString(), r._id.month, toLine(b, r).balanceMinor)
+  }
+  for (const r of boosts) {
+    const b = businessById.get(r._id.business.toString())
+    if (b && r._id.month) add(b.owner.toString(), r._id.month, r.total)
   }
   for (const p of payments) add(p.owner.toString(), p.month, 0)
 

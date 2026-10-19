@@ -11,3 +11,6 @@ offerRoutes.get('/:id', c.getOffer)
 offerRoutes.post('/', authenticate, requireRole('business', 'admin'), c.createOffer)
 offerRoutes.patch('/:id', authenticate, requireRole('business', 'admin'), c.updateOffer)
 offerRoutes.delete('/:id', authenticate, requireRole('business', 'admin'), c.deleteOffer)
+// Paid promotion ("Istakni"): prices + buy; charged on the monthly statement.
+offerRoutes.get('/:id/boost', authenticate, requireRole('business', 'admin'), c.boostOptions)
+offerRoutes.post('/:id/boost', authenticate, requireRole('business', 'admin'), c.buyBoost)

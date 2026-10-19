@@ -15,6 +15,9 @@ import { assertNotSuspended } from './partner-moderation.service.js'
 
 type OfferWithBusiness = IOffer & { _id: Types.ObjectId; distanceMeters?: number; businessDoc: IBusiness & { _id: Types.ObjectId } }
 
+/** Boosted offers jump the queue only within this distance of the customer. */
+const BOOST_RADIUS_M = 10_000
+
 /** Local-hour ranges (in the offer's own timezone). */
 const TIME_OF_DAY = { morning: [0, 12], afternoon: [12, 17], evening: [17, 24] } as const
 
@@ -67,6 +70,8 @@ export async function list(query: OfferListQuery) {
 
   const sort = query.sort ?? (hasOrigin ? 'distance' : 'pickup')
   const sortStage: Record<string, 1 | -1> = { soldOut: 1 }
+  // Paid "Istaknuto" offers come first (not when sorting by price), and only nearby ones (≤ 10 km) when the customer's position is known.
+  if (sort !== 'price') sortStage.boosted = -1
   if (sort === 'distance' && hasOrigin) sortStage.distanceMeters = 1
   else if (sort === 'price') sortStage.effectivePrice = 1
   else if (sort === 'popularity') sortStage.reservedCount = -1
@@ -89,7 +94,14 @@ export async function list(query: OfferListQuery) {
   }
 
   pipeline.push(
-    { $addFields: { soldOut: { $eq: ['$quantityAvailable', 0] } } },
+    {
+      $addFields: {
+        soldOut: { $eq: ['$quantityAvailable', 0] },
+        boosted: {
+          $and: [{ $gt: [{ $ifNull: ['$boostedUntil', null] }, new Date()] }, ...(hasOrigin ? [{ $lte: ['$distanceMeters', BOOST_RADIUS_M] }] : [])],
+        },
+      },
+    },
     { $sort: sortStage },
     {
       $facet: {

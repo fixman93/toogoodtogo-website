@@ -1,5 +1,5 @@
 import { Schema, model, type HydratedDocument, type Types } from 'mongoose'
-import { moneyMinor } from './common.js'
+import { moneyMinor, pointSchema, type GeoPoint } from './common.js'
 
 /**
  * pending_payment — reserved stock awaiting online payment (future use)
@@ -17,6 +17,44 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
 
 export const COLLECTED_VIA = ['qr', 'code', 'list', 'customer'] as const
 export type CollectedVia = (typeof COLLECTED_VIA)[number]
+
+export const FULFILLMENTS = ['pickup', 'delivery'] as const
+export type Fulfillment = (typeof FULFILLMENTS)[number]
+
+/**
+ * preparing  — ordered for delivery, not on the way yet
+ * on_the_way — a courier (partner staff) started it; their phone sends its position
+ * delivered  — handed over at the door (the reservation is then `collected`)
+ */
+export const DELIVERY_STAGES = ['preparing', 'on_the_way', 'delivered'] as const
+export type DeliveryStage = (typeof DELIVERY_STAGES)[number]
+
+export interface ReservationDelivery {
+  /** Address as the customer typed it, plus the point it was found at. */
+  address: string
+  location: GeoPoint
+  /** Floor, entrance, bell… */
+  note?: string
+  /** Fee snapshot; paid with the order at the door. Not part of totalMinor (no commission on it). */
+  feeMinor: number
+  /** Straight-line distance from the location when ordered. */
+  distanceMeters: number
+  stage: DeliveryStage
+  courier?: Types.ObjectId
+  courierName?: string
+  startedAt?: Date
+  deliveredAt?: Date
+  /** Latest position sent by the courier's phone; removed once delivered (privacy). */
+  courierLocation?: { lat: number; lng: number; heading?: number; at: Date }
+  /** Courier tapped "Stigao sam". */
+  arrivedAt?: Date
+  /** Quick messages between courier and customer ("Silazim", "Kasnim 10 min"…). */
+  messages: { from: 'courier' | 'customer'; key: DeliveryMessageKey; at: Date }[]
+}
+
+export const COURIER_MESSAGES = ['late_10', 'cant_find', 'calling'] as const
+export const CUSTOMER_MESSAGES = ['coming_down', 'wait_5', 'call_me'] as const
+export type DeliveryMessageKey = (typeof COURIER_MESSAGES)[number] | (typeof CUSTOMER_MESSAGES)[number]
 
 export interface IReservation {
   user: Types.ObjectId
@@ -61,6 +99,9 @@ export interface IReservation {
    * order list, or confirmed by the customer after the partner didn't record it.
    */
   collectedVia?: CollectedVia
+  /** Picked up in the shop (default) or delivered by the partner's own courier. */
+  fulfillment: Fulfillment
+  delivery?: ReservationDelivery
   /** "Did you pick it up?" asked to the customer when the reservation expired unclaimed. */
   pickupCheck?: { askedAt?: Date; answer?: 'collected' | 'not_collected'; answeredAt?: Date }
   /** Partner disputes a customer-confirmed pickup; the platform team decides. */
@@ -110,6 +151,31 @@ const reservationSchema = new Schema<IReservation>(
     collectedAt: Date,
     commissionRate: { type: Number, min: 0, max: 0.5 },
     collectedVia: { type: String, enum: COLLECTED_VIA },
+    fulfillment: { type: String, enum: FULFILLMENTS, default: 'pickup' },
+    delivery: {
+      type: new Schema<ReservationDelivery>(
+        {
+          address: { type: String, required: true, maxlength: 300 },
+          location: { type: pointSchema, required: true },
+          note: { type: String, maxlength: 300 },
+          feeMinor: { type: Number, required: true, min: 0 },
+          distanceMeters: { type: Number, required: true, min: 0 },
+          stage: { type: String, enum: DELIVERY_STAGES, default: 'preparing' },
+          courier: { type: Schema.Types.ObjectId, ref: 'User' },
+          courierName: String,
+          startedAt: Date,
+          deliveredAt: Date,
+          courierLocation: { lat: Number, lng: Number, heading: Number, at: Date },
+          arrivedAt: Date,
+          messages: {
+            type: [new Schema({ from: { type: String, enum: ['courier', 'customer'], required: true }, key: { type: String, required: true }, at: { type: Date, required: true } }, { _id: false })],
+            default: [],
+          },
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
     pickupCheck: {
       askedAt: Date,
       answer: { type: String, enum: ['collected', 'not_collected'] },

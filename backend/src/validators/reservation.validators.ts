@@ -5,6 +5,23 @@ export const createReservationBody = z.object({
   offerId: objectId,
   quantity: z.number().int().min(1).max(20).default(1),
   promoCode: z.string().trim().min(2).max(30).optional(),
+  fulfillment: z.enum(['pickup', 'delivery']).default('pickup'),
+  /** Required for delivery: where to bring it. */
+  delivery: z
+    .object({
+      address: z.string().trim().min(3, 'Upiši adresu za dostavu.').max(300),
+      lat: z.number().min(-90).max(90),
+      lng: z.number().min(-180).max(180),
+      note: z.string().trim().max(300).optional(),
+    })
+    .optional(),
+})
+
+/** Courier's phone position while delivering. */
+export const courierLocationBody = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  heading: z.number().min(0).max(360).nullable().optional(),
 })
 
 export const reservationListQuery = z.object({
@@ -15,6 +32,7 @@ export const reservationListQuery = z.object({
 })
 
 export type ReservationListQuery = z.infer<typeof reservationListQuery>
+export type CreateReservationInput = z.infer<typeof createReservationBody>
 
 /** Accepts "FN-4F7K", "fn4f7k", "4F7K" (and old "ZL-4F7K") and normalizes to the 4-character code "4F7K". */
 export const collectByCodeBody = z.object({

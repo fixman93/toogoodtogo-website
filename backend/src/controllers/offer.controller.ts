@@ -1,3 +1,6 @@
+import { z } from 'zod'
+import * as boostService from '../services/boost.service.js'
+import { BOOST_KINDS } from '../models/index.js'
 import type { Request, Response } from 'express'
 import { currentUser } from '../middleware/auth.js'
 import * as offerService from '../services/offer.service.js'
@@ -29,4 +32,13 @@ export async function updateOffer(req: Request, res: Response) {
 export async function deleteOffer(req: Request, res: Response) {
   await offerService.remove(idParams.parse(req.params).id, currentUser(req))
   res.status(204).end()
+}
+
+export async function boostOptions(req: Request, res: Response) {
+  ok(res, await boostService.options(idParams.parse(req.params).id, currentUser(req)))
+}
+
+export async function buyBoost(req: Request, res: Response) {
+  const { kind } = z.object({ kind: z.enum(BOOST_KINDS) }).parse(req.body)
+  ok(res, await boostService.buy(idParams.parse(req.params).id, kind, currentUser(req)), 201)
 }

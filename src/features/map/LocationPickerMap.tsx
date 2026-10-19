@@ -4,7 +4,7 @@
  * Lazy-loaded like the offers map.
  */
 import { useEffect, useRef, useState } from 'react'
-import type { Map as MlMap, Marker as MlMarker } from 'maplibre-gl'
+import type { GeoJSONSource, Map as MlMap, Marker as MlMarker } from 'maplibre-gl'
 import type { GeoPoint } from '@/api/types'
 import { t } from '@/i18n'
 import { collapseAttribution, dropPinElement, loadEngine, localizeLabels, type Gl } from './engine'
@@ -15,7 +15,34 @@ const CITY_ZOOM = 13
 const round = (n: number) => Math.round(n * 1e6) / 1e6
 const same = (a: GeoPoint | null, b: GeoPoint | null) => a?.lat === b?.lat && a?.lng === b?.lng
 
-export default function LocationPickerMap({ value, fallbackCenter, onChange }: { value: GeoPoint | null; fallbackCenter: GeoPoint; onChange: (point: GeoPoint) => void }) {
+/** Circle around `center` as a GeoJSON polygon (the delivery zone). */
+function circle(center: GeoPoint, radiusKm: number) {
+  const points: [number, number][] = []
+  const dLat = radiusKm / 111.32
+  const dLng = radiusKm / (111.32 * Math.cos((center.lat * Math.PI) / 180))
+  for (let i = 0; i <= 64; i++) {
+    const a = (i / 64) * 2 * Math.PI
+    points.push([center.lng + dLng * Math.cos(a), center.lat + dLat * Math.sin(a)])
+  }
+  return { type: 'Feature' as const, properties: {}, geometry: { type: 'Polygon' as const, coordinates: [points] } }
+}
+
+const EMPTY = { type: 'FeatureCollection' as const, features: [] }
+/** --primary in sRGB (paint properties don't read CSS variables). */
+const ZONE_COLOR = '#0f5541'
+
+export default function LocationPickerMap({
+  value,
+  fallbackCenter,
+  onChange,
+  radiusKm,
+}: {
+  value: GeoPoint | null
+  fallbackCenter: GeoPoint
+  onChange: (point: GeoPoint) => void
+  /** Delivery zone drawn around the pin. */
+  radiusKm?: number | null
+}) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MlMap | null>(null)
   const glRef = useRef<Gl | null>(null)
@@ -72,6 +99,9 @@ export default function LocationPickerMap({ value, fallbackCenter, onChange }: {
       map.on('load', () => {
         localizeLabels(map, kind)
         if (container.current) collapseAttribution(container.current)
+        map.addSource('zone', { type: 'geojson', data: EMPTY })
+        map.addLayer({ id: 'zone-fill', type: 'fill', source: 'zone', paint: { 'fill-color': ZONE_COLOR, 'fill-opacity': 0.08 } })
+        map.addLayer({ id: 'zone-line', type: 'line', source: 'zone', paint: { 'line-color': ZONE_COLOR, 'line-width': 2, 'line-dasharray': [2, 2] } })
         setReady(true)
       })
       map.on('click', (e) => {
@@ -107,6 +137,25 @@ export default function LocationPickerMap({ value, fallbackCenter, onChange }: {
     mapRef.current?.jumpTo({ center: [fallbackCenter.lng, fallbackCenter.lat], zoom: CITY_ZOOM })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, fallbackCenter.lat, fallbackCenter.lng])
+
+  // Delivery zone around the pin; zoomed out once so the whole zone shows when it's switched on or resized.
+  const zoneKey = radiusKm && value ? radiusKm : null
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return
+    ;(map.getSource('zone') as GeoJSONSource | undefined)?.setData(zoneKey && value ? circle(value, zoneKey) : EMPTY)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, zoneKey, value?.lat, value?.lng])
+  useEffect(() => {
+    const map = mapRef.current
+    const gl = glRef.current
+    if (!map || !gl || !ready || !zoneKey || !value) return
+    const [ring] = circle(value, zoneKey).geometry.coordinates
+    const bounds = new gl.LngLatBounds(ring[0], ring[0])
+    for (const p of ring) bounds.extend(p)
+    map.fitBounds(bounds, { padding: 24, duration: 600 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, zoneKey])
 
   // A cleared point (e.g. the country changed) removes the pin.
   useEffect(() => {

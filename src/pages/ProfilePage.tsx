@@ -252,10 +252,16 @@ function Rewards() {
       <p className="text-xs text-muted-foreground">
         {level.nextAt ? t('profile.nextLevel', { points: level.nextAt - points, level: localize(level.nextName ?? '') }) : t('profile.maxLevel')} · {t('profile.pointsHint')}
       </p>
+      <Button asChild variant="secondary" className="w-full">
+        <Link to="/impact">
+          <Leaf />
+          {t('impact.open')}
+        </Link>
+      </Button>
       {inviteUrl && (
         <div className="space-y-2 border-t pt-3">
           <p className="font-semibold">{t('profile.invite')}</p>
-          <p className="text-sm text-muted-foreground">{t('profile.inviteText')}</p>
+          <p className="text-sm text-muted-foreground">{t('profile.inviteTextDiscount', { percent: user.referralDiscountPercent ?? 30 })}</p>
           <Button variant="outline" size="sm" onClick={share}>
             <Gift />
             {t('profile.inviteShare')}

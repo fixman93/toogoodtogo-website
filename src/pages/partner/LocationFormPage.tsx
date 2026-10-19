@@ -19,6 +19,7 @@ import { useBusiness, useDeleteBusiness, useSaveBusiness } from '@/hooks/api'
 import { t } from '@/i18n'
 import { geocodeAddress } from '@/lib/geocode'
 import { lazyWithReload } from '@/lib/chunks'
+import { fromMinor, toMinor } from '@/lib/format'
 
 const LocationPickerMap = lazyWithReload(() => import('@/features/map/LocationPickerMap'))
 
@@ -37,7 +38,15 @@ interface FormState {
   coverUrl: string
   isActive: boolean
   location: GeoPoint | null
+  deliveryEnabled: boolean
+  /** Major units as typed ("150", "2,50"). */
+  deliveryFee: string
+  deliveryRadius: string
+  deliveryFreeFrom: string
 }
+
+/** "2,50" → 2.5 (NaN when not a number). */
+const num = (value: string) => (value.trim() === '' ? NaN : Number(value.replace(',', '.')))
 
 const isUrl = (value: string) => !value || /^https?:\/\/\S+$/i.test(value)
 
@@ -57,6 +66,10 @@ function initialState(business?: Business): FormState {
     coverUrl: business?.coverUrl ?? '',
     isActive: business?.isActive ?? true,
     location: business?.location ?? null,
+    deliveryEnabled: business?.delivery?.enabled ?? false,
+    deliveryFee: business?.delivery ? String(fromMinor(business.delivery.feeMinor, business.currency)) : '',
+    deliveryRadius: business?.delivery ? String(business.delivery.radiusKm) : '3',
+    deliveryFreeFrom: business?.delivery?.freeFromMinor != null ? String(fromMinor(business.delivery.freeFromMinor, business.currency)) : '',
   }
 }
 
@@ -79,7 +92,9 @@ function LocationForm({ business }: { business?: Business }) {
     // A field's error disappears as soon as the user edits it.
     setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e))
   }
-  const text = (key: 'name' | 'description' | 'phone' | 'street' | 'city' | 'postalCode' | 'collectionInstructions' | 'openingHours') => ({
+  const text = (
+    key: 'name' | 'description' | 'phone' | 'street' | 'city' | 'postalCode' | 'collectionInstructions' | 'openingHours' | 'deliveryFee' | 'deliveryRadius' | 'deliveryFreeFrom',
+  ) => ({
     id: key,
     value: form[key],
     'aria-invalid': !!errors[key] || undefined,
@@ -125,6 +140,12 @@ function LocationForm({ business }: { business?: Business }) {
     if (!form.location) next.location = t('partner.field.locationMissing')
     if (!isUrl(form.logoUrl)) next.logoUrl = t('partner.error.url')
     if (!isUrl(form.coverUrl)) next.coverUrl = t('partner.error.url')
+    if (form.deliveryEnabled) {
+      if (!(num(form.deliveryFee) >= 0)) next.deliveryFee = t('partner.error.required')
+      const radius = num(form.deliveryRadius)
+      if (!(radius >= 0.5 && radius <= 50)) next.deliveryRadius = t('delivery.radiusRange')
+      if (form.deliveryFreeFrom.trim() && !(num(form.deliveryFreeFrom) > 0)) next.deliveryFreeFrom = t('partner.error.required')
+    }
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -144,6 +165,17 @@ function LocationForm({ business }: { business?: Business }) {
       logoUrl: form.logoUrl.trim(),
       coverUrl: form.coverUrl.trim(),
       ...(business ? { isActive: form.isActive } : {}),
+      // Kept (switched off) when disabled, so the prices are there next time.
+      ...(form.deliveryEnabled || business?.delivery
+        ? {
+            delivery: {
+              enabled: form.deliveryEnabled,
+              feeMinor: toMinor(num(form.deliveryFee) || 0, country.currency),
+              radiusKm: Math.min(50, Math.max(0.5, num(form.deliveryRadius) || 3)),
+              freeFromMinor: num(form.deliveryFreeFrom) > 0 ? toMinor(num(form.deliveryFreeFrom), country.currency) : null,
+            },
+          }
+        : {}),
     }
     save.mutate({ id: business?.id, body }, { onSuccess: () => navigate('/business') })
   }
@@ -238,7 +270,12 @@ function LocationForm({ business }: { business?: Business }) {
           <div className="overflow-hidden rounded-xl border">
             <div className="relative isolate h-72 bg-muted sm:h-80">
               <Suspense fallback={<Skeleton className="absolute inset-0 rounded-none" />}>
-                <LocationPickerMap value={form.location} fallbackCenter={cityCenter} onChange={(point) => set('location', point)} />
+                <LocationPickerMap
+                  value={form.location}
+                  fallbackCenter={cityCenter}
+                  onChange={(point) => set('location', point)}
+                  radiusKm={form.deliveryEnabled && num(form.deliveryRadius) >= 0.5 ? Math.min(50, num(form.deliveryRadius)) : null}
+                />
               </Suspense>
             </div>
             <p className="flex items-center gap-1.5 bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
@@ -247,6 +284,36 @@ function LocationForm({ business }: { business?: Business }) {
             </p>
           </div>
         </FormField>
+      </FormSection>
+
+      <FormSection title={t('delivery.section')}>
+        <label className="flex min-h-11 items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={form.deliveryEnabled}
+            onChange={(e) => set('deliveryEnabled', e.target.checked)}
+            className="mt-0.5 size-5 shrink-0 accent-[var(--primary)]"
+          />
+          <span>
+            <span className="block font-semibold">{t('delivery.enable')}</span>
+            <span className="text-muted-foreground">{t('delivery.enableHint')}</span>
+          </span>
+        </label>
+        {form.deliveryEnabled && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label={t('delivery.fee', { currency: country.currency })} htmlFor="deliveryFee" error={errors.deliveryFee} hint={t('delivery.feeHint')}>
+                <Input {...text('deliveryFee')} inputMode="decimal" placeholder={country.currency === 'RSD' ? '150' : '2,50'} />
+              </FormField>
+              <FormField label={t('delivery.radius')} htmlFor="deliveryRadius" error={errors.deliveryRadius} hint={t('delivery.radiusHint')}>
+                <Input {...text('deliveryRadius')} inputMode="decimal" placeholder="3" />
+              </FormField>
+            </div>
+            <FormField label={t('delivery.freeFrom', { currency: country.currency })} htmlFor="deliveryFreeFrom" error={errors.deliveryFreeFrom} hint={t('delivery.freeFromHint')}>
+              <Input {...text('deliveryFreeFrom')} inputMode="decimal" placeholder={t('delivery.freeFromPlaceholder')} />
+            </FormField>
+          </>
+        )}
       </FormSection>
 
       <FormSection title={t('partner.section.pickup')}>

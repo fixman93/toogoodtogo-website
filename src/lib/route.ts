@@ -48,3 +48,36 @@ export function formatDuration(seconds: number): string {
   if (minutes < 60) return `${minutes} min`
   return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`
 }
+
+const CYR_TO_LAT: Record<string, string> = Object.fromEntries(
+  'а a б b в v г g д d ђ đ е e ж ž з z и i ј j к k л l љ lj м m н n њ nj о o п p р r с s т t ћ ć у u ф f х h ц c ч č џ dž ш š'
+    .split(' ')
+    .reduce<[string, string][]>((pairs, v, i, all) => (i % 2 ? pairs : [...pairs, [v, all[i + 1]]]), []),
+)
+/** Mapbox returns Serbian names in Cyrillic; the app writes Latin. */
+const toLatin = (text: string) =>
+  text.replace(/[\u0400-\u04FF]/g, (c) => {
+    const lower = CYR_TO_LAT[c.toLowerCase()]
+    if (lower == null) return c
+    return c === c.toLowerCase() ? lower : lower[0].toUpperCase() + lower.slice(1)
+  })
+
+/** Point → short street address ("Cara Dušana 45, Beograd"); null when unknown. */
+export async function reverseGeocode(point: GeoPoint): Promise<string | null> {
+  if (MAPBOX_TOKEN) {
+    const params = new URLSearchParams({ access_token: MAPBOX_TOKEN, limit: '1', types: 'address', language: 'sr' })
+    const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${point.lng},${point.lat}.json?${params}`)
+    if (!res.ok) return null
+    const [hit] = ((await res.json()) as { features?: { address?: string; text: string; context?: { id: string; text: string }[] }[] }).features ?? []
+    if (!hit) return null
+    const city = hit.context?.find((c) => c.id.startsWith('place'))?.text
+    return toLatin([[hit.text, hit.address].filter(Boolean).join(' '), city].filter(Boolean).join(', '))
+  }
+  const params = new URLSearchParams({ format: 'jsonv2', lat: String(point.lat), lon: String(point.lng), zoom: '18', addressdetails: '1' })
+  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, { headers: { Accept: 'application/json' } })
+  if (!res.ok) return null
+  const a = ((await res.json()) as { address?: Record<string, string> }).address
+  if (!a) return null
+  const city = a.city ?? a.town ?? a.village
+  return toLatin([[a.road, a.house_number].filter(Boolean).join(' '), city].filter(Boolean).join(', ')) || null
+}

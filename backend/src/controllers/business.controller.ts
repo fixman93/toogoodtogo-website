@@ -39,6 +39,10 @@ export async function listReviews(req: Request, res: Response) {
   list(res, result.items, result.meta)
 }
 
+export async function reviewPhotos(req: Request, res: Response) {
+  ok(res, await reviewService.photos(idParams.parse(req.params).id))
+}
+
 export async function createReview(req: Request, res: Response) {
   ok(res, await reviewService.create(idParams.parse(req.params).id, createReviewBody.parse(req.body), currentUser(req)), 201)
 }

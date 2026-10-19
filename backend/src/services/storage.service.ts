@@ -10,7 +10,7 @@ import sharp from 'sharp'
 import { env } from '../config/env.js'
 import { ApiError } from '../utils/ApiError.js'
 
-export const IMAGE_KINDS = ['avatar', 'business-logo', 'business-cover', 'offer'] as const
+export const IMAGE_KINDS = ['avatar', 'business-logo', 'business-cover', 'offer', 'review'] as const
 export type ImageKind = (typeof IMAGE_KINDS)[number]
 
 const configured = Boolean(env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET && env.R2_PUBLIC_URL)
@@ -30,6 +30,7 @@ const PRESETS: Record<ImageKind, { folder: string; width: number; height?: numbe
   'business-logo': { folder: 'businesses/logos', width: 400, height: 400, fit: 'cover' },
   'business-cover': { folder: 'businesses/covers', width: 1600, fit: 'inside' },
   offer: { folder: 'offers', width: 1600, fit: 'inside' },
+  review: { folder: 'reviews', width: 1200, fit: 'inside' },
 }
 
 const publicBase = () => `${env.R2_PUBLIC_URL!.replace(/\/$/, '')}/`

@@ -23,10 +23,22 @@ export interface IBusiness {
   suspended?: boolean
   /** Commission override for this location (0–0.5); market default when unset. */
   commissionRate?: number
+  /** The partner's own delivery (couriers are its staff). Off when unset. */
+  delivery?: BusinessDelivery
   /** Set when a location with history (reservations/reviews) is deleted; hidden everywhere. */
   deletedAt?: Date
   createdAt: Date
   updatedAt: Date
+}
+
+export interface BusinessDelivery {
+  enabled: boolean
+  /** Price of one delivery, in the location's currency (minor units). */
+  feeMinor: number
+  /** Delivers to addresses within this distance of the location (straight line). */
+  radiusKm: number
+  /** Free delivery from this order total (bags only); none when unset. */
+  freeFromMinor?: number
 }
 
 /**
@@ -61,6 +73,18 @@ const businessSchema = new Schema<IBusiness>(
     isActive: { type: Boolean, default: true },
     commissionRate: { type: Number, min: 0, max: 0.5 },
     suspended: { type: Boolean, default: false },
+    delivery: {
+      type: new Schema<BusinessDelivery>(
+        {
+          enabled: { type: Boolean, default: false },
+          feeMinor: { type: Number, default: 0, min: 0, validate: Number.isInteger },
+          radiusKm: { type: Number, default: 3, min: 0.5, max: 50 },
+          freeFromMinor: { type: Number, min: 0, validate: Number.isInteger },
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
     deletedAt: { type: Date, index: true },
   },
   { timestamps: true },

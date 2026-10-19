@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { ReceiptText } from 'lucide-react'
+import { Megaphone, ReceiptText } from 'lucide-react'
 import type { OutstandingMonth, PartnerPayment, Settlement, SettlementStatus, StatementTotals } from '@/api/types'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +22,8 @@ export function StatementSummary({ s, rate, currency }: { s: StatementTotals; ra
     [t('statement.platformDiscount'), s.platformDiscountMinor],
     [t('statement.gross'), s.grossMinor, 'font-semibold'],
     [t('statement.commission', { rate: rate != null ? pct(rate) : '' }).replace(' ()', ''), s.commissionMinor],
+    // Paid promotions are added to what the partner owes.
+    ...(s.boostMinor ? ([[t('statement.boosts'), s.boostMinor]] as [string, number][]) : []),
   ]
   const owes = s.balanceMinor >= 0
   return (
@@ -162,7 +164,7 @@ function Statement() {
         <Skeleton className="h-48 rounded-2xl" />
       ) : isError || !data ? (
         <ErrorState onRetry={() => refetch()} />
-      ) : data.orders === 0 && data.payments.length === 0 ? (
+      ) : data.orders === 0 && data.payments.length === 0 && !data.boostMinor ? (
         <EmptyState icon={ReceiptText} title={t('statement.empty')} className="py-8" />
       ) : (
         <>
@@ -171,6 +173,27 @@ function Statement() {
             <SettlementInfo s={data} payments={data.payments} currency={data.currency} />
           </Card>
           <div className="grid gap-3 lg:grid-cols-2">
+            {!!data.boosts?.length && (
+              <Card className="space-y-2 p-4 lg:col-span-2">
+                <p className="flex items-center gap-2 font-bold">
+                  <Megaphone className="size-4 text-primary" />
+                  {t('statement.boosts')}
+                </p>
+                <ul className="divide-y text-sm">
+                  {data.boosts.map((b) => (
+                    <li key={b.id} className="flex items-start justify-between gap-3 py-2">
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">{b.offerTitle}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {b.kind === 'top' ? t('boost.top') : t('boost.pushDone', { count: b.recipients ?? 0 })} · {b.businessName} · {formatDate(b.createdAt)}
+                        </span>
+                      </span>
+                      <span className="shrink-0 font-semibold tabular-nums">{formatMoney(b.priceMinor, b.currency)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
             {data.businesses
               .filter((b) => b.orders > 0)
               .map((b) => (

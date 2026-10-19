@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Clock, Copy, HandHeart, MapPin, Pause, Pencil, Play, Plug, Plus, ReceiptText, ScanLine, ShieldCheck, Store, TicketPercent, Users, type LucideIcon } from 'lucide-react'
+import { BarChart3, ChevronDown, ChevronRight, ClipboardList, Clock, Copy, HandHeart, MapPin, Megaphone, MonitorSmartphone, Pause, Pencil, Play, Plug, Plus, ReceiptText, Repeat, ScanLine, ShieldCheck, Store, TicketPercent, Users, type LucideIcon } from 'lucide-react'
 import type { Business, Offer } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { StaffGuard } from '@/features/business/PartnerGuard'
 import { StaffSection } from '@/features/business/StaffSection'
 import { StandingNotice } from '@/features/business/StandingNotice'
+import { BoostPanel } from '@/features/business/BoostPanel'
 import { PushPrompt } from '@/features/notifications/PushPrompt'
 import { useAuth } from '@/features/auth/auth-context'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
@@ -33,7 +34,9 @@ function OfferStatus({ offer }: { offer: Offer }) {
 function OfferRow({ offer }: { offer: Offer }) {
   const save = useSaveOffer()
   const remove = useDeleteOffer()
+  const [boosting, setBoosting] = useState(false)
   const past = isPast(offer)
+  const canBoost = !past && offer.status === 'active' && offer.quantityAvailable > 0
   const reserved = offer.quantityTotal - offer.quantityAvailable
   return (
     <li className={cn('space-y-2.5 px-4 py-3.5', past && 'opacity-75')}>
@@ -45,7 +48,16 @@ function OfferRow({ offer }: { offer: Offer }) {
             {formatPickupWindow(offer.pickupStart, offer.pickupEnd, offer.timezone)}
           </p>
         </div>
-        <OfferStatus offer={offer} />
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          <OfferStatus offer={offer} />
+          {offer.boosted && !past && <Badge variant="accent">{t('boost.badge')}</Badge>}
+          {offer.scheduleId && (
+            <Link to="/business/schedules" className="flex items-center gap-1 text-xs font-semibold text-primary">
+              <Repeat className="size-3" />
+              {t('repeat.badge')}
+            </Link>
+          )}
+        </span>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <span>
@@ -76,6 +88,12 @@ function OfferRow({ offer }: { offer: Offer }) {
             {offer.status === 'paused' ? t('partner.activate') : t('partner.pause')}
           </Button>
         )}
+        {canBoost && (
+          <Button size="sm" variant={boosting ? 'secondary' : 'outline'} aria-expanded={boosting} onClick={() => setBoosting((v) => !v)}>
+            <Megaphone />
+            {t('boost.open')}
+          </Button>
+        )}
         <Button asChild size="sm" variant={past ? 'secondary' : 'ghost'}>
           <Link to={`/business/offers/new?copy=${offer.id}`}>
             <Copy />
@@ -91,6 +109,7 @@ function OfferRow({ offer }: { offer: Offer }) {
           className="basis-full sm:basis-auto"
         />
       </div>
+      {boosting && canBoost && <BoostPanel offerId={offer.id} />}
     </li>
   )
 }
@@ -207,6 +226,7 @@ function StaffPortal() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile to="/business/scan" icon={ScanLine} label={t('business.scan')} primary />
         <Tile to="/business/orders" icon={ClipboardList} label={t('orders.title')} />
+        <Tile to="/business/counter" icon={MonitorSmartphone} label={t('counter.title')} />
       </div>
       <section className="space-y-2">
         <h2 className="font-bold">{t('staff.workplaces')}</h2>
@@ -264,6 +284,8 @@ function Dashboard() {
         <Tile to="/business/orders" icon={ClipboardList} label={t('orders.title')} />
         <Tile to="/business/sales" icon={BarChart3} label={t('sales.link')} />
         <Tile to="/business/locations/new" icon={Plus} label={t('partner.addLocation')} />
+        <Tile to="/business/schedules" icon={Repeat} label={t('repeat.title')} />
+        <Tile to="/business/counter" icon={MonitorSmartphone} label={t('counter.title')} />
         <Tile to="/business/promotions" icon={TicketPercent} label={t('promo.title')} />
         <Tile to="/business/donations" icon={HandHeart} label={t('donations.title')} />
         <Tile to="/business/statements" icon={ReceiptText} label={t('statement.title')} />

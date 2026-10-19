@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Star } from 'lucide-react'
+import { PhotoViewer } from '@/components/offers/BagPhotos'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useBusinessReviews } from '@/hooks/api'
 import { t } from '@/i18n'
@@ -16,6 +18,7 @@ export function Stars({ value, size = 'size-3.5' }: { value: number; size?: stri
 
 export function ReviewList({ businessId }: { businessId: string }) {
   const { data, isLoading } = useBusinessReviews(businessId)
+  const [photo, setPhoto] = useState<string | null>(null)
   if (isLoading) return <Skeleton className="h-24" />
   if (!data?.data.length) return <p className="text-sm text-muted-foreground">{t('offer.noReviews')}</p>
   return (
@@ -27,9 +30,19 @@ export function ReviewList({ businessId }: { businessId: string }) {
             <Stars value={review.rating} />
           </div>
           {review.comment && <p className="text-sm text-muted-foreground">{review.comment}</p>}
+          {!!review.photos?.length && (
+            <div className="flex gap-2 pt-1">
+              {review.photos.map((url) => (
+                <button key={url} type="button" onClick={() => setPhoto(url)} className="overflow-hidden rounded-lg" aria-label={t('photos.openOne')}>
+                  <img src={url} alt="" loading="lazy" className="size-16 object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
           <p className="text-xs text-muted-foreground/80">{formatDate(review.createdAt)}</p>
         </li>
       ))}
+      {photo && <PhotoViewer url={photo} onClose={() => setPhoto(null)} />}
     </ul>
   )
 }

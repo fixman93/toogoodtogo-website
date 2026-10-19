@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { Clock, MapPin, Star } from 'lucide-react'
+import { Clock, MapPin, Sparkles, Star } from 'lucide-react'
 import type { Offer } from '@/api/types'
 import { SafeImage } from '@/components/common/SafeImage'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +39,12 @@ export function OfferCard({ offer, className }: { offer: Offer; className?: stri
             <Badge variant="accent">{t('offer.left', { count: offer.quantityAvailable })}</Badge>
           )}
           {!soldOut && <PriceDropBadge offer={offer} className="ml-1.5" />}
+          {!soldOut && offer.boosted && (
+            <Badge variant="glass" className="ml-1.5">
+              <Sparkles className="size-3" />
+              {t('boost.badge')}
+            </Badge>
+          )}
         </div>
         {/* Saves only this offer; following the whole location is on the location page. */}
         <FavoriteButton targetType="offer" targetId={offer.id} className="absolute top-2.5 right-2.5" />

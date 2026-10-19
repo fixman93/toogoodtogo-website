@@ -31,6 +31,10 @@ export interface IOffer {
   status: OfferStatus
   /** Paused by the platform when the partner was suspended; re-activated on reactivation. */
   pausedByAdmin?: boolean
+  /** Published by a repeating offer (OfferSchedule). */
+  schedule?: Types.ObjectId
+  /** Paid "Istaknuto": listed first until then. */
+  boostedUntil?: Date
   reservedCount: number
   // Denormalized from Business for geo queries and search.
   location: GeoPoint
@@ -66,6 +70,8 @@ const offerSchema = new Schema<IOffer>(
     timezone: { type: String, required: true },
     status: { type: String, enum: OFFER_STATUSES, default: 'active' },
     pausedByAdmin: Boolean,
+    schedule: { type: Schema.Types.ObjectId, ref: 'OfferSchedule', index: true, sparse: true },
+    boostedUntil: Date,
     reservedCount: { type: Number, default: 0, min: 0 },
     location: { type: pointSchema, required: true },
     businessName: { type: String, required: true },

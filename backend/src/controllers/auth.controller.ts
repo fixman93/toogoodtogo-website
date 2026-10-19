@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { impact } from '../services/loyalty.service.js'
 import type { Request, Response } from 'express'
 import { currentUser } from '../middleware/auth.js'
 import * as authService from '../services/auth.service.js'
@@ -44,4 +46,9 @@ export async function exportMyData(req: Request, res: Response) {
   const data = await authService.exportMyData(currentUser(req).id)
   res.setHeader('Content-Disposition', `attachment; filename="foodnesi-moji-podaci-${new Date().toISOString().slice(0, 10)}.json"`)
   res.json({ data })
+}
+
+export async function myImpact(req: Request, res: Response) {
+  const { year } = z.object({ year: z.coerce.number().int().min(2024).max(2100).optional() }).parse(req.query)
+  ok(res, await impact(currentUser(req).id, year))
 }

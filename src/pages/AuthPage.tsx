@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation as useRouterLocation, useNavigate, useSearchParams } from 'react-router'
-import { Loader2 } from 'lucide-react'
+import { Gift, Loader2 } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { LogoMark } from '@/components/common/Logo'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,12 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         <LogoMark className="mb-5 size-12" />
         <h1 className="text-2xl font-extrabold tracking-tight">{t(isLogin ? 'auth.loginTitle' : 'auth.registerTitle')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t(isLogin ? 'auth.loginSubtitle' : 'auth.registerSubtitle')}</p>
+        {!isLogin && referralCode && (
+          <p role="status" className="mt-4 flex items-start gap-2 rounded-xl bg-accent/25 p-3 text-sm font-semibold">
+            <Gift className="mt-0.5 size-4 shrink-0" />
+            {t('referral.registerBanner')}
+          </p>
+        )}
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4" noValidate>
           {!isLogin && (

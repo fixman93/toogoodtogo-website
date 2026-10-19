@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
 import { Link, useLocation as useRouterLocation, useParams } from 'react-router'
-import { ArrowLeft, CalendarClock, CheckCircle2, ExternalLink, Info, Leaf, Loader2, MapPin, ReceiptText, Send, Star } from 'lucide-react'
+import { ArrowLeft, CalendarClock, CheckCircle2, ExternalLink, Info, Leaf, Loader2, MapPin, ReceiptText, Send, Star, Truck, Camera, X } from 'lucide-react'
 import type { Reservation } from '@/api/types'
 import { ApiError } from '@/api/client'
 import { RequireAuth } from '@/components/common/RequireAuth'
@@ -13,11 +13,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { useAddReview, useBusiness, useCancelReservation, usePickupCheck, useReservation, useShareReservation } from '@/hooks/api'
+import { useAddReview, useUploadImage, useBusiness, useCancelReservation, usePickupCheck, useReservation, useShareReservation } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatMoney, formatPickupWindow, formatTime } from '@/lib/format'
 import { pickupQrValue } from '@/lib/pickup'
 import { directionsUrl } from '@/lib/geo'
+import { DeliveryTracker } from '@/features/delivery/DeliveryTracker'
 
 function Details() {
   const { id } = useParams()
@@ -58,13 +59,14 @@ function Details() {
       )}
       {/* Asked first: it's why the customer opened this reservation from the notification. */}
       <PickupCheck reservation={r} />
+      {r.delivery && active && <DeliveryTracker reservation={r} />}
       {r.status === 'collected' && (
         <div role="status" className="flex items-start gap-4 rounded-2xl bg-success/12 p-5">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-success text-white">
             <CheckCircle2 className="size-7" />
           </span>
           <div>
-            <p className="text-lg font-extrabold text-success">{t('reservations.collectedTitle')}</p>
+            <p className="text-lg font-extrabold text-success">{r.delivery ? t('track.delivered') : t('reservations.collectedTitle')}</p>
             <p className="mt-0.5 flex items-center gap-1.5 text-sm text-foreground/80">
               <Leaf className="size-4 shrink-0 text-success" />
               {t('reservations.collectedText', {
@@ -103,7 +105,7 @@ function Details() {
             </div>
             <p className="mt-4 text-xs font-semibold tracking-wider text-muted-foreground uppercase">{t('reservations.code')}</p>
             <p className="mt-1 font-mono text-3xl font-extrabold tracking-widest text-primary">{r.code}</p>
-            <p className="mt-2 text-sm text-muted-foreground">{t('reservations.qrHint')}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{r.delivery ? t('track.qrHint') : t('reservations.qrHint')}</p>
           </div>
         )}
 
@@ -113,17 +115,28 @@ function Details() {
             <dt className="sr-only">{t('offer.pickup')}</dt>
             <dd className="font-semibold">{formatPickupWindow(r.pickupStart, r.pickupEnd, r.timezone)}</dd>
           </div>
-          <div className="flex items-center gap-3 px-5 py-4">
-            <MapPin className="size-5 shrink-0 text-primary" />
-            <dt className="sr-only">{t('offer.address')}</dt>
-            <dd className="flex-1">
-              {r.business.address.street}, {r.business.address.city}
-            </dd>
-            <a href={directionsUrl(r.business.location)} target="_blank" rel="noreferrer" className="flex items-center gap-1 font-semibold text-primary">
-              {t('offer.directions')}
-              <ExternalLink className="size-3.5" />
-            </a>
-          </div>
+          {r.delivery ? (
+            <div className="flex items-start gap-3 px-5 py-4">
+              <Truck className="size-5 shrink-0 text-primary" />
+              <dt className="sr-only">{t('delivery.address')}</dt>
+              <dd className="flex-1">
+                <span className="font-semibold">{r.delivery.address}</span>
+                {r.delivery.note && <span className="block text-muted-foreground">{r.delivery.note}</span>}
+              </dd>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 px-5 py-4">
+              <MapPin className="size-5 shrink-0 text-primary" />
+              <dt className="sr-only">{t('offer.address')}</dt>
+              <dd className="flex-1">
+                {r.business.address.street}, {r.business.address.city}
+              </dd>
+              <a href={directionsUrl(r.business.location)} target="_blank" rel="noreferrer" className="flex items-center gap-1 font-semibold text-primary">
+                {t('offer.directions')}
+                <ExternalLink className="size-3.5" />
+              </a>
+            </div>
+          )}
           <div className="flex items-center justify-between px-5 py-4">
             <dt className="text-muted-foreground">{t(`reservations.payment.${r.payment.status}`)}</dt>
             <dd className="text-right">
@@ -133,8 +146,13 @@ function Details() {
                   {t('reservations.discount', { code: r.promoCode ?? '' })}: −{formatMoney(r.discountMinor, r.currency)}
                 </span>
               )}
+              {r.delivery && (
+                <span className="block text-xs text-muted-foreground">
+                  {t('track.fee')}: {r.delivery.feeMinor ? formatMoney(r.delivery.feeMinor, r.currency) : t('delivery.free')}
+                </span>
+              )}
               <span className="text-lg font-extrabold">
-                {t('reservations.total')}: {formatMoney(r.totalMinor, r.currency)}
+                {t('reservations.total')}: {formatMoney(r.amountDueMinor ?? r.totalMinor, r.currency)}
               </span>
             </dd>
           </div>
@@ -147,7 +165,7 @@ function Details() {
         {t('profile.support')}
       </Link>
 
-      {business?.collectionInstructions && active && (
+      {business?.collectionInstructions && active && !r.delivery && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -234,7 +252,10 @@ function PickupCheck({ reservation: r }: { reservation: Reservation }) {
 function ReviewForm({ reservation }: { reservation: Reservation }) {
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
+  const [photos, setPhotos] = useState<string[]>([])
   const add = useAddReview(reservation.business.id)
+  const upload = useUploadImage('review')
+  const fileInput = useRef<HTMLInputElement>(null)
   // Keep the thank-you visible even after the refetch marks it as reviewed.
   if (!add.isSuccess && reservation.reviewed) return null
   if (add.isSuccess) {
@@ -267,6 +288,52 @@ function ReviewForm({ reservation }: { reservation: Reservation }) {
         ))}
       </div>
       <Textarea value={comment} onChange={(e) => setComment(e.target.value)} maxLength={1000} placeholder={t('reservations.ratePlaceholder')} className="min-h-20" />
+      {/* "Šta je bilo u kesi" — photos help others decide. */}
+      <div className="space-y-2">
+        <p className="text-sm font-semibold">{t('photos.add')}</p>
+        <div className="flex flex-wrap gap-2">
+          {photos.map((url) => (
+            <span key={url} className="relative">
+              <img src={url} alt="" className="size-20 rounded-xl object-cover" />
+              <button
+                type="button"
+                aria-label={t('photos.remove')}
+                onClick={() => setPhotos((p) => p.filter((x) => x !== url))}
+                className="absolute -top-2 -right-2 rounded-full bg-foreground p-1 text-background"
+              >
+                <X className="size-3.5" />
+              </button>
+            </span>
+          ))}
+          {photos.length < 3 && (
+            <button
+              type="button"
+              onClick={() => fileInput.current?.click()}
+              disabled={upload.isPending}
+              className="flex size-20 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-xs text-muted-foreground"
+            >
+              {upload.isPending ? <Loader2 className="size-5 animate-spin" /> : <Camera className="size-5" />}
+              {t('photos.addShort')}
+            </button>
+          )}
+        </div>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            if (file) upload.mutate(file, { onSuccess: ({ url }) => setPhotos((p) => [...p, url].slice(0, 3)) })
+          }}
+        />
+        {upload.isError && (
+          <p role="alert" className="text-xs text-destructive">
+            {upload.error instanceof ApiError ? upload.error.message : t('common.errorText')}
+          </p>
+        )}
+      </div>
       {add.isError && (
         <p role="alert" className="text-sm text-destructive">
           {add.error instanceof ApiError ? add.error.message : t('common.errorText')}
@@ -274,7 +341,7 @@ function ReviewForm({ reservation }: { reservation: Reservation }) {
       )}
       <Button
         disabled={!rating || add.isPending}
-        onClick={() => add.mutate({ reservationId: reservation.id, rating, comment: comment.trim() || undefined })}
+        onClick={() => add.mutate({ reservationId: reservation.id, rating, comment: comment.trim() || undefined, photos: photos.length ? photos : undefined })}
       >
         {add.isPending && <Loader2 className="animate-spin" />}
         {t('reservations.rateSubmit')}

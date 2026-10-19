@@ -23,7 +23,7 @@ function pickupWindow(start: Date, end: Date, timeZone: string) {
   return `${day.charAt(0).toUpperCase()}${day.slice(1)}, ${time(start)}–${time(end)}`
 }
 
-type Ticket = Pick<IReservation, 'code' | 'quantity' | 'offerTitle' | 'totalMinor' | 'discountMinor' | 'currency' | 'pickupStart' | 'pickupEnd' | 'timezone' | 'shareToken'> & { id: string }
+type Ticket = Pick<IReservation, 'code' | 'quantity' | 'offerTitle' | 'totalMinor' | 'discountMinor' | 'currency' | 'pickupStart' | 'pickupEnd' | 'timezone' | 'shareToken' | 'delivery'> & { id: string }
 type Shop = Pick<IBusiness, 'name' | 'address' | 'collectionInstructions'>
 
 /** Never throws (sendMail doesn't, and QR generation failures are logged). */
@@ -37,17 +37,30 @@ export async function sendReservationTicket(to: string, reservation: Ticket, bus
       color: { dark: '#0f3d2e', light: '#ffffff' },
     })
     const address = [business.address.street, business.address.city].filter(Boolean).join(', ')
-    const details: [string, string][] = [
-      ['Lokal', business.name],
-      ['Adresa', address],
-      ['Preuzimanje', pickupWindow(reservation.pickupStart, reservation.pickupEnd, reservation.timezone)],
-      ['Ponuda', `${reservation.quantity} × ${reservation.offerTitle}`],
-      ['Plaćaš u lokalu', money(reservation.totalMinor, reservation.currency)],
-    ]
+    const delivery = reservation.delivery
+    const window = pickupWindow(reservation.pickupStart, reservation.pickupEnd, reservation.timezone)
+    const details: [string, string][] = delivery
+      ? [
+          ['Lokal', business.name],
+          ['Dostava na adresu', delivery.address],
+          ['Dostava', window],
+          ['Ponuda', `${reservation.quantity} × ${reservation.offerTitle}`],
+          ['Cena dostave', money(delivery.feeMinor, reservation.currency)],
+          ['Plaćaš dostavljaču', money(reservation.totalMinor + delivery.feeMinor, reservation.currency)],
+        ]
+      : [
+          ['Lokal', business.name],
+          ['Adresa', address],
+          ['Preuzimanje', window],
+          ['Ponuda', `${reservation.quantity} × ${reservation.offerTitle}`],
+          ['Plaćaš u lokalu', money(reservation.totalMinor, reservation.currency)],
+        ]
     if (reservation.discountMinor > 0) details.push(['Popust (promo kod)', `−${money(reservation.discountMinor, reservation.currency)}`])
     const body = [
-      'Tvoja kesa je rezervisana. Kada dođeš u lokal, pokaži ovaj QR kod na kasi (može direktno iz mejla) ili reci kod ispod.',
-      ...(business.collectionInstructions ? [business.collectionInstructions] : []),
+      delivery
+        ? 'Tvoja kesa je rezervisana i stiže na tvoju adresu. Kada dostavljač stigne, pokaži mu ovaj QR kod. Dostavljača možeš da pratiš na mapi u aplikaciji.'
+        : 'Tvoja kesa je rezervisana. Kada dođeš u lokal, pokaži ovaj QR kod na kasi (može direktno iz mejla) ili reci kod ispod.',
+      ...(business.collectionInstructions && !delivery ? [business.collectionInstructions] : []),
     ].join('\n')
     await sendMail(
       to,

@@ -14,18 +14,25 @@ import {
   type IReservation,
   type CollectedVia,
   type ReservationDoc,
+  type DeliveryMessageKey,
+  COURIER_MESSAGES,
+  CUSTOMER_MESSAGES,
 } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { serializeReservation } from '../utils/serializers.js'
 import { pickupCode, pickupCodeVariants } from '../utils/text.js'
 import { runAtomically } from '../utils/transaction.js'
-import type { ReservationListQuery } from '../validators/reservation.validators.js'
+import type { CreateReservationInput, ReservationListQuery } from '../validators/reservation.validators.js'
+import { distanceMeters, fromPoint } from '../utils/geo.js'
 import { assertBusinessAccess, assertWorksAt, hasPermission, isAdmin, workplaceIds, worksAt, type Actor } from './access.service.js'
 import { audit } from './audit.service.js'
 import { notify } from './notification.service.js'
 import { sendReservationTicket } from './ticket.service.js'
 import * as promotions from './promotion.service.js'
-import { POINTS_PER_BAG, rewardPickup } from './loyalty.service.js'
+import { POINTS_PER_BAG, rewardPickup, welcomeDiscountPercent } from './loyalty.service.js'
+
+/** Shown as the "promo code" of an invited friend's first bag. */
+const WELCOME_CODE = 'PREPORUKA'
 import { dispatchReservationEvent } from './integration.service.js'
 import { notifyIfAvailable } from './waitlist.service.js'
 
@@ -40,6 +47,8 @@ function canCancel(r: IReservation, actor: Actor, business: BusinessWithId) {
   if (!isActive(r)) return false
   const isStaff = worksAt(business, actor)
   if (isStaff) return true
+  // The courier is already on the way.
+  if (r.delivery?.stage === 'on_the_way') return false
   return Date.now() < r.pickupStart.getTime() - market().cancellationCutoffMinutes * 60_000
 }
 
@@ -50,8 +59,9 @@ export async function toDto(reservations: ReservationWithId[], actor: Actor) {
 
   // Staff need the customer's name at the counter; customers never see other users.
   const staffUserIds = reservations.filter((r) => isStaffFor(businesses.get(r.business.toString())!)).map((r) => r.user)
+  // Phone too: couriers call the customer at the door.
   const customers = new Map(
-    (staffUserIds.length ? await User.find({ _id: { $in: staffUserIds } }).select('name').lean() : []).map((u) => [u._id.toString(), u.name]),
+    (staffUserIds.length ? await User.find({ _id: { $in: staffUserIds } }).select('name phone').lean() : []).map((u) => [u._id.toString(), { name: u.name, phone: u.phone }]),
   )
   const collectedIds = reservations.filter((r) => r.status === 'collected').map((r) => r._id)
   const reviewed = new Set(
@@ -60,8 +70,8 @@ export async function toDto(reservations: ReservationWithId[], actor: Actor) {
 
   return reservations.map((r) => {
     const business = businesses.get(r.business.toString())!
-    const customerName = isStaffFor(business) ? customers.get(r.user.toString()) : undefined
-    return { ...serializeReservation(r, business, canCancel(r, actor, business), customerName), reviewed: reviewed.has(r._id.toString()) }
+    const customer = isStaffFor(business) ? customers.get(r.user.toString()) : undefined
+    return { ...serializeReservation(r, business, canCancel(r, actor, business), customer), reviewed: reviewed.has(r._id.toString()) }
   })
 }
 
@@ -97,8 +107,34 @@ async function unavailableReason(offerId: string, quantity: number) {
  * reservation insert commits together with the decrement; without them, a
  * failed insert triggers a compensating increment.
  */
-export async function create(input: { offerId: string; quantity: number; promoCode?: string }, actor: Actor) {
+/** Delivery details for a new reservation, or an error when this location can't deliver there. */
+async function deliveryFor(offerId: string, input: CreateReservationInput['delivery']) {
+  if (!input) throw ApiError.badRequest('Upiši adresu za dostavu.', 'DELIVERY_ADDRESS_REQUIRED')
+  const offer = await Offer.findById(offerId).select('business').lean()
+  const business = offer && (await Business.findById(offer.business).select('delivery location').lean())
+  if (!business?.delivery?.enabled) throw ApiError.badRequest('Ovaj lokal trenutno ne dostavlja.', 'DELIVERY_UNAVAILABLE')
+  const to = { lat: input.lat, lng: input.lng }
+  const meters = distanceMeters(fromPoint(business.location), to)
+  if (meters > business.delivery.radiusKm * 1000) {
+    throw ApiError.badRequest(`Adresa je van zone dostave (do ${business.delivery.radiusKm} km od lokala).`, 'OUT_OF_DELIVERY_AREA')
+  }
+  return {
+    address: input.address,
+    location: { type: 'Point' as const, coordinates: [to.lng, to.lat] as [number, number] },
+    note: input.note || undefined,
+    feeMinor: business.delivery.feeMinor,
+    freeFromMinor: business.delivery.freeFromMinor,
+    distanceMeters: meters,
+    stage: 'preparing' as const,
+  }
+}
+
+export async function create(input: CreateReservationInput, actor: Actor) {
   const { offerId, quantity } = input
+  // Checked before touching stock: zone and fee come from the location.
+  const delivery = input.fulfillment === 'delivery' ? await deliveryFor(offerId, input.delivery) : null
+  // Invited by a friend: first bag discounted by the platform (unless a promo code is used).
+  const welcomePercent = input.promoCode ? null : await welcomeDiscountPercent(actor.id)
 
   const reservation = await runAtomically(async (session, onRollback) => {
     const offer = await Offer.findOneAndUpdate(
@@ -123,7 +159,11 @@ export async function create(input: { offerId: string; quantity: number; promoCo
       await promotions.consume(promo, session)
       onRollback(() => promotions.release(promo._id))
     }
-    const discountMinor = promo ? promotions.discountFor(promo, subtotal) : 0
+    const discountMinor = promo
+      ? promotions.discountFor(promo, subtotal)
+      : welcomePercent
+        ? promotions.discountFor({ discountType: 'percent', value: welcomePercent }, subtotal)
+        : 0
 
     const [created] = await Reservation.create(
       [
@@ -137,7 +177,22 @@ export async function create(input: { offerId: string; quantity: number; promoCo
           originalUnitPriceMinor: offer.originalPriceMinor,
           totalMinor: subtotal - discountMinor,
           discountMinor,
+          fulfillment: delivery ? 'delivery' : 'pickup',
+          ...(delivery
+            ? {
+                delivery: {
+                  address: delivery.address,
+                  location: delivery.location,
+                  note: delivery.note,
+                  // Free from a threshold (on the bags' price after discount).
+                  feeMinor: delivery.freeFromMinor != null && subtotal - discountMinor >= delivery.freeFromMinor ? 0 : delivery.feeMinor,
+                  distanceMeters: delivery.distanceMeters,
+                  stage: delivery.stage,
+                },
+              }
+            : {}),
           ...(promo ? { promotion: promo._id, promoCode: promo.code, discountFundedBy: promo.owner ? 'partner' : 'platform' } : {}),
+          ...(!promo && discountMinor > 0 ? { promoCode: WELCOME_CODE, discountFundedBy: 'platform' } : {}),
           currency: offer.currency,
           offerTitle: offer.title,
           offerImageUrl: offer.imageUrl,
@@ -166,7 +221,7 @@ export async function create(input: { offerId: string; quantity: number; promoCo
     {
       type: 'reservation_confirmed',
       title: `Rezervisano · ${reservation.code}`,
-      body: `${reservation.quantity} × ${reservation.offerTitle}${business ? ` (${business.name})` : ''}. Pokaži QR kod na kasi.`,
+      body: `${reservation.quantity} × ${reservation.offerTitle}${business ? ` (${business.name})` : ''}. ${reservation.delivery ? 'Dostava na tvoju adresu – pokaži QR kod dostavljaču.' : 'Pokaži QR kod na kasi.'}`,
       link: `/reservations/${reservation.id}`,
     },
     { email: false },
@@ -181,8 +236,8 @@ export async function create(input: { offerId: string; quantity: number; promoCo
       [business.owner, ...staff.map((s) => s._id)],
       {
         type: 'reservation_new',
-        title: `Nova rezervacija · ${reservation.code}`,
-        body: `${reservation.quantity} × ${reservation.offerTitle} (${business.name})`,
+        title: `${reservation.delivery ? 'Nova dostava' : 'Nova rezervacija'} · ${reservation.code}`,
+        body: `${reservation.quantity} × ${reservation.offerTitle} (${business.name})${reservation.delivery ? ` → ${reservation.delivery.address}` : ''}`,
         link: '/business/orders',
       },
       { email: 'fallback' },
@@ -303,7 +358,10 @@ async function markCollected(reservation: ReservationDoc, actor: Actor, via: Col
         collectedVia: via,
         commissionRate,
         ...(reservation.payment.method === 'pay_at_pickup' ? { 'payment.status': 'paid' } : {}),
+        // Delivered at the door: the courier's position is no longer shared.
+        ...(reservation.delivery ? { 'delivery.stage': 'delivered', 'delivery.deliveredAt': new Date() } : {}),
       },
+      ...(reservation.delivery ? { $unset: { 'delivery.courierLocation': 1 } } : {}),
     },
     { new: true },
   )
@@ -312,7 +370,7 @@ async function markCollected(reservation: ReservationDoc, actor: Actor, via: Col
   void dispatchReservationEvent('reservation.collected', updated)
   void notify([updated.user], {
     type: 'reservation_collected',
-    title: 'Preuzeto – prijatno!',
+    title: updated.delivery ? 'Dostavljeno – prijatno!' : 'Preuzeto – prijatno!',
     body: `${updated.offerTitle}. Kako ti se dopalo? Ostavi ocenu.`,
     link: `/reservations/${updated.id}`,
   })
@@ -429,6 +487,105 @@ export async function listForPartner(actor: Actor, query: { start: Date; end: Da
 }
 
 // ---------------------------------------------------------------------------
+// Own delivery: a staff member takes the order, their phone shares its position.
+
+async function loadDelivery(id: string, actor: Actor) {
+  const { reservation, isStaff } = await loadAuthorized(id, actor)
+  if (!isStaff) throw ApiError.forbidden('Samo osoblje lokala može da dostavlja.')
+  if (!reservation.delivery) throw ApiError.badRequest('Ova rezervacija nije za dostavu.', 'NOT_DELIVERY')
+  if (reservation.status !== 'confirmed') throw collectError(reservation)
+  return reservation
+}
+
+/** "Krećem": this staff member becomes the courier; the customer gets a push with the tracking link. */
+export async function startDelivery(id: string, actor: Actor) {
+  const reservation = await loadDelivery(id, actor)
+  const courier = await User.findById(actor.id).select('name').lean()
+  const firstStart = reservation.delivery!.stage !== 'on_the_way'
+  reservation.set({
+    'delivery.stage': 'on_the_way',
+    'delivery.courier': actor.id,
+    'delivery.courierName': courier?.name.split(/\s+/)[0],
+    'delivery.startedAt': reservation.delivery!.startedAt ?? new Date(),
+  })
+  await reservation.save()
+  if (firstStart) {
+    const business = await Business.findById(reservation.business).select('name').lean()
+    void notify([reservation.user], {
+      type: 'delivery_started',
+      title: 'Dostava je krenula',
+      body: `${reservation.offerTitle}${business ? ` (${business.name})` : ''} stiže. Prati dostavljača na mapi.`,
+      link: `/reservations/${reservation.id}`,
+    })
+  }
+  const [dto] = await toDto([reservation.toObject()], actor)
+  return dto
+}
+
+/** Courier: "Stigao sam" — the customer gets a push to come to the door. */
+export async function courierArrived(id: string, actor: Actor) {
+  const reservation = await loadDelivery(id, actor)
+  if (reservation.delivery!.stage !== 'on_the_way') throw ApiError.conflict('Prvo pokreni dostavu.', 'DELIVERY_NOT_STARTED')
+  const first = !reservation.delivery!.arrivedAt
+  reservation.set('delivery.arrivedAt', new Date())
+  await reservation.save()
+  if (first) {
+    void notify([reservation.user], {
+      type: 'delivery_arrived',
+      title: 'Dostavljač je stigao',
+      body: `${reservation.delivery!.courierName ?? 'Dostavljač'} je ispred. Pripremi QR kod ${reservation.code}.`,
+      link: `/reservations/${reservation.id}`,
+    })
+  }
+  const [dto] = await toDto([reservation.toObject()], actor)
+  return dto
+}
+
+const MESSAGE_TEXT: Record<DeliveryMessageKey, string> = {
+  late_10: 'Kasnim oko 10 minuta.',
+  cant_find: 'Ne mogu da nađem ulaz – izađi ili me pozovi.',
+  calling: 'Zovem te.',
+  coming_down: 'Silazim!',
+  wait_5: 'Sačekaj me 5 minuta, molim te.',
+  call_me: 'Pozovi me kad stigneš.',
+}
+
+/** Quick message between courier and customer (preset texts only). */
+export async function deliveryMessage(id: string, key: DeliveryMessageKey, actor: Actor) {
+  const { reservation, isStaff } = await loadAuthorized(id, actor)
+  const d = reservation.delivery
+  if (!d || reservation.status !== 'confirmed' || d.stage !== 'on_the_way') throw ApiError.conflict('Dostava nije u toku.', 'DELIVERY_NOT_ACTIVE')
+  const fromCustomer = reservation.user.toString() === actor.id
+  const allowed: readonly string[] = fromCustomer ? CUSTOMER_MESSAGES : COURIER_MESSAGES
+  if (!allowed.includes(key) || (!fromCustomer && !isStaff)) throw ApiError.badRequest('Ova poruka nije dostupna.', 'INVALID_MESSAGE')
+  if (d.messages.length >= 30) throw ApiError.conflict('Previše poruka – pozovi telefonom.', 'TOO_MANY_MESSAGES')
+  reservation.delivery!.messages.push({ from: fromCustomer ? 'customer' : 'courier', key, at: new Date() })
+  await reservation.save()
+  const to = fromCustomer ? (d.courier ? [d.courier] : []) : [reservation.user]
+  void notify(to, {
+    type: 'delivery_message',
+    title: fromCustomer ? `Kupac · ${reservation.code}` : `${d.courierName ?? 'Dostavljač'} · dostava`,
+    body: MESSAGE_TEXT[key],
+    link: fromCustomer ? `/business/deliveries/${reservation.id}` : `/reservations/${reservation.id}`,
+  }, { email: false })
+  const [dto] = await toDto([reservation.toObject()], actor)
+  return dto
+}
+
+/** Courier's phone reports where it is (every few seconds while delivering). */
+export async function updateCourierLocation(id: string, point: { lat: number; lng: number; heading?: number | null }, actor: Actor) {
+  const updated = await Reservation.updateOne(
+    { _id: id, status: 'confirmed', 'delivery.stage': 'on_the_way', 'delivery.courier': actor.id },
+    { $set: { 'delivery.courierLocation': { lat: point.lat, lng: point.lng, heading: point.heading ?? undefined, at: new Date() } } },
+  )
+  if (!updated.matchedCount) {
+    // Delivered, cancelled, or another staff member took over: the phone stops sending.
+    throw ApiError.conflict('Dostava više nije aktivna za tebe.', 'DELIVERY_NOT_ACTIVE')
+  }
+  return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
 // "Send to a friend": a secret link with the pickup pass (QR + code).
 
 /** Create (or return) the share link token for the customer's reservation. */
@@ -474,7 +631,8 @@ export async function sharedPass(token: string) {
 /** Housekeeping: mark unclaimed reservations as expired. Run periodically. */
 export async function expireStale(now = new Date()) {
   const cutoff = new Date(now.getTime() - market().expiryGraceMinutes * 60_000)
-  const due = await Reservation.find({ status: 'confirmed', pickupEnd: { $lt: cutoff } }).select('_id').lean()
+  // A delivery that is on its way is not "unclaimed".
+  const due = await Reservation.find({ status: 'confirmed', pickupEnd: { $lt: cutoff }, 'delivery.stage': { $ne: 'on_the_way' } }).select('_id').lean()
   if (!due.length) return 0
   const ids = due.map((r) => r._id)
   const result = await Reservation.updateMany(

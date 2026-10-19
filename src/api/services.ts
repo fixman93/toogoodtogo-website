@@ -58,6 +58,14 @@ import type {
   Role,
   SalesReport,
   User,
+  BagSuggestion,
+  BoostKind,
+  BoostOptions,
+  DeliveryMessageKey,
+  Impact,
+  OfferSchedule,
+  OfferScheduleInput,
+  ReviewPhoto,
 } from './types'
 
 const unwrap = <T>(promise: Promise<{ data: ApiSuccess<T> }>) => promise.then((res) => res.data.data)
@@ -74,6 +82,17 @@ export const authApi = {
   deleteAccount: (password: string) => api.delete('/auth/me', { data: { password } }).then(() => undefined),
   updatePreferences: (prefs: { push?: boolean; email?: boolean }) => unwrap<User>(api.patch('/auth/me/preferences', prefs)),
   updateProfile: (body: { name?: string; avatarUrl?: string; countryCode?: string; phone?: string }) => unwrap<User>(api.patch('/auth/me', body)),
+  /** "Moj uticaj": totals, weekly challenge, streak, badges, yearly recap. */
+  impact: (year?: number) => unwrap<Impact>(api.get('/auth/me/impact', { params: { year } })),
+}
+
+export const schedulesApi = {
+  list: () => unwrap<OfferSchedule[]>(api.get('/offer-schedules')),
+  create: (body: OfferScheduleInput) => unwrap<OfferSchedule>(api.post('/offer-schedules', body)),
+  update: (id: string, body: Partial<OfferScheduleInput> & { isActive?: boolean }) => unwrap<OfferSchedule>(api.patch(`/offer-schedules/${id}`, body)),
+  remove: (id: string) => api.delete(`/offer-schedules/${id}`).then(() => undefined),
+  /** How many bags to offer per weekday (from the last weeks' sales). */
+  suggestion: (businessId: string) => unwrap<BagSuggestion>(api.get('/offer-schedules/recommendation', { params: { businessId } })),
 }
 
 export const offersApi = {
@@ -84,6 +103,9 @@ export const offersApi = {
   create: (body: OfferInput) => unwrap<Offer>(api.post('/offers', body)),
   update: (id: string, body: OfferPatch) => unwrap<Offer>(api.patch(`/offers/${id}`, body)),
   remove: (id: string) => api.delete(`/offers/${id}`).then(() => undefined),
+  boostOptions: (id: string) => unwrap<BoostOptions>(api.get(`/offers/${id}/boost`)),
+  /** Paid promotion; added to the monthly statement. */
+  boost: (id: string, kind: BoostKind) => unwrap<{ id: string; kind: BoostKind; priceMinor: number; currency: string; recipients: number | null }>(api.post(`/offers/${id}/boost`, { kind })),
 }
 
 export const businessesApi = {
@@ -99,15 +121,33 @@ export const businessesApi = {
   addStaff: (id: string, email: string) => unwrap<StaffMember>(api.post(`/businesses/${id}/staff`, { email })),
   removeStaff: (id: string, userId: string) => api.delete(`/businesses/${id}/staff/${userId}`).then(() => undefined),
   reviews: (id: string) => api.get<ApiList<Review>>(`/businesses/${id}/reviews`).then((res) => res.data),
-  addReview: (id: string, body: { reservationId: string; rating: number; comment?: string }) =>
+  addReview: (id: string, body: { reservationId: string; rating: number; comment?: string; photos?: string[] }) =>
     unwrap<Review>(api.post(`/businesses/${id}/reviews`, body)),
+  /** "Šta je bilo u kesi": latest customer photos. */
+  photos: (id: string) => unwrap<ReviewPhoto[]>(api.get(`/businesses/${id}/photos`)),
+}
+
+export interface CreateReservationBody {
+  offerId: string
+  quantity: number
+  promoCode?: string
+  fulfillment?: 'pickup' | 'delivery'
+  delivery?: { address: string; lat: number; lng: number; note?: string }
 }
 
 export const reservationsApi = {
   list: (params: { scope?: 'upcoming' | 'history'; businessId?: string; limit?: number } = {}) =>
     api.get<ApiList<Reservation>>('/reservations', { params }).then((res) => res.data),
   get: (id: string) => unwrap<Reservation>(api.get(`/reservations/${id}`)),
-  create: (body: { offerId: string; quantity: number; promoCode?: string }) => unwrap<Reservation>(api.post('/reservations', body)),
+  create: (body: CreateReservationBody) => unwrap<Reservation>(api.post('/reservations', body)),
+  /** Staff: "Krećem" — become the courier of a delivery. */
+  startDelivery: (id: string) => unwrap<Reservation>(api.post(`/reservations/${id}/delivery/start`)),
+  /** Courier's phone position while delivering. */
+  /** Courier: "Stigao sam". */
+  courierArrived: (id: string) => unwrap<Reservation>(api.post(`/reservations/${id}/delivery/arrived`)),
+  /** Preset quick message (customer ↔ courier). */
+  deliveryMessage: (id: string, key: DeliveryMessageKey) => unwrap<Reservation>(api.post(`/reservations/${id}/delivery/message`, { key })),
+  courierLocation: (id: string, body: { lat: number; lng: number; heading?: number | null }) => api.post(`/reservations/${id}/delivery/location`, body).then(() => undefined),
   cancel: (id: string) => unwrap<Reservation>(api.patch(`/reservations/${id}/cancel`)),
   /** Secret link a friend can use to pick the bag up. */
   share: (id: string) => unwrap<{ token: string }>(api.post(`/reservations/${id}/share`)),
@@ -170,7 +210,7 @@ export const adminApi = {
 export const partnerApi = {
   /** Sales and stock for one local day (YYYY-MM-DD, default today). */
   sales: (params: { date?: string; businessId?: string }) => unwrap<SalesReport>(api.get('/partner/sales', { params })),
-  orders: (params: { date?: string; status?: 'active' | 'collected' | 'cancelled' | 'expired' }) =>
+  orders: (params: { date?: string; status?: 'active' | 'collected' | 'cancelled' | 'expired'; businessId?: string }) =>
     api.get<{ data: Reservation[]; meta: { date: string; total: number } }>('/partner/orders', { params }).then((res) => res.data),
   apply: (body: PartnerApplicationInput) => unwrap<PartnerApplication>(api.post('/partner-applications', body)),
   myApplication: () => unwrap<PartnerApplication | null>(api.get('/partner-applications/me')),
@@ -230,7 +270,7 @@ export const waitlistApi = {
   leave: (offerId: string) => api.delete(`/waitlist/${offerId}`).then(() => undefined),
 }
 
-export type ImageKind = 'avatar' | 'business-logo' | 'business-cover' | 'offer'
+export type ImageKind = 'avatar' | 'business-logo' | 'business-cover' | 'offer' | 'review'
 
 export const uploadsApi = {
   /** Sends the image to the API, which resizes it and stores it on R2. */

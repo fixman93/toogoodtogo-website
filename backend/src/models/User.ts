@@ -42,6 +42,10 @@ export interface IUser {
   referralCode?: string
   referredBy?: Types.ObjectId
   referralRewarded: boolean
+  /** Weekly challenge already rewarded for this ISO week ("2026-W42"). */
+  challengeWeek?: string
+  /** Longest weekly streak already rewarded (every 4 weeks). */
+  streakRewarded?: number
   /** Set when the user deleted their account (personal data is anonymized). */
   deletedAt?: Date
   createdAt: Date
@@ -70,6 +74,8 @@ const userSchema = new Schema<IUser>(
     referralCode: { type: String, unique: true, sparse: true, uppercase: true },
     referredBy: { type: Schema.Types.ObjectId, ref: 'User' },
     referralRewarded: { type: Boolean, default: false },
+    challengeWeek: String,
+    streakRewarded: { type: Number, default: 0 },
     notificationPrefs: {
       push: { type: Boolean, default: true },
       email: { type: Boolean, default: true },

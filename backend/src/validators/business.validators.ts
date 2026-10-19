@@ -33,6 +33,15 @@ export const createBusinessBody = z.object({
   currency: z.string().length(3).toUpperCase().optional(),
   collectionInstructions: z.string().max(1000).optional(),
   openingHours: z.string().trim().max(300).optional(),
+  /** Own delivery: price (minor units, location currency) and how far it delivers. */
+  delivery: z
+    .object({
+      enabled: z.boolean(),
+      feeMinor: z.number().int().min(0).max(10_000_000),
+      radiusKm: z.number().min(0.5, 'Najmanje 0,5 km.').max(50, 'Najviše 50 km.'),
+      freeFromMinor: z.number().int().min(0).max(100_000_000).nullable().optional(),
+    })
+    .optional(),
 })
 
 export const updateBusinessBody = createBusinessBody.partial().extend({ isActive: z.boolean().optional() })

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowLeft, ClipboardList, Clock, Loader2, ScanLine } from 'lucide-react'
+import { ArrowLeft, ClipboardList, Clock, Loader2, MapPin, ScanLine, Truck } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import type { Reservation } from '@/api/types'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
@@ -52,20 +52,44 @@ function OrderRow({ r }: { r: Reservation }) {
           </p>
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Clock className="size-3.5" />
-            {formatPickupWindow(r.pickupStart, r.pickupEnd, r.timezone)} · <strong className="text-foreground">{formatMoney(r.totalMinor, r.currency)}</strong>
+            {formatPickupWindow(r.pickupStart, r.pickupEnd, r.timezone)} · <strong className="text-foreground">{formatMoney(r.amountDueMinor ?? r.totalMinor, r.currency)}</strong>
           </p>
+          {r.delivery && (
+            <p className="flex items-start gap-1.5 text-sm">
+              <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary" />
+              <span className="min-w-0">
+                {r.delivery.address}
+                {r.delivery.note && <span className="block text-xs text-muted-foreground">{r.delivery.note}</span>}
+              </span>
+            </p>
+          )}
         </div>
         <span className="flex shrink-0 flex-col items-end gap-1">
           <StatusBadge status={r.status} />
+          {r.delivery && (
+            <Badge variant={r.delivery.stage === 'on_the_way' ? 'accent' : 'secondary'}>
+              <Truck className="size-3" />
+              {t(`orders.delivery.${r.delivery.stage}`)}
+            </Badge>
+          )}
           {r.collectedVia === 'customer' && <Badge variant="destructive">{t('pickups.notScanned')}</Badge>}
         </span>
       </div>
       {active && (
         <div className="flex flex-wrap items-start gap-2">
-          <Button size="sm" disabled={collect.isPending} onClick={() => collect.mutate({ id: r.id })}>
-            {collect.isPending && <Loader2 className="animate-spin" />}
-            {t('orders.giveOut')}
-          </Button>
+          {r.delivery ? (
+            <Button size="sm" asChild>
+              <Link to={`/business/deliveries/${r.id}`}>
+                <Truck />
+                {r.delivery.stage === 'on_the_way' ? t('orders.deliveryOpen') : t('orders.deliveryStart')}
+              </Link>
+            </Button>
+          ) : (
+            <Button size="sm" disabled={collect.isPending} onClick={() => collect.mutate({ id: r.id })}>
+              {collect.isPending && <Loader2 className="animate-spin" />}
+              {t('orders.giveOut')}
+            </Button>
+          )}
           <ConfirmDelete
             label={t('orders.cancel')}
             question={t('orders.cancelConfirm', { code: r.code })}

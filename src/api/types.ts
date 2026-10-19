@@ -70,6 +70,10 @@ export interface User {
   points?: number
   level?: { key: string; name: string; nextAt: number | null; nextName: string | null }
   referralCode?: string | null
+  /** Discount on the first bag when invited by a friend (until used); null otherwise. */
+  welcomeDiscountPercent?: number | null
+  /** What an invited friend gets (shown on the invite card). */
+  referralDiscountPercent?: number
   createdAt: string
 }
 
@@ -100,6 +104,42 @@ export interface BusinessSummary {
   location: GeoPoint
   timezone: string
   rating: { average: number; count: number }
+  /** The partner's own delivery; null when it doesn't deliver (customers only see it when on). */
+  delivery?: DeliverySettings | null
+}
+
+export interface DeliverySettings {
+  enabled: boolean
+  /** Minor units, location currency. */
+  feeMinor: number
+  /** Delivers within this distance of the location. */
+  radiusKm: number
+  /** Free delivery from this bags total; null = always paid. */
+  freeFromMinor: number | null
+}
+
+export type Fulfillment = 'pickup' | 'delivery'
+export const COURIER_MESSAGES = ['late_10', 'cant_find', 'calling'] as const
+export const CUSTOMER_MESSAGES = ['coming_down', 'wait_5', 'call_me'] as const
+export type DeliveryMessageKey = (typeof COURIER_MESSAGES)[number] | (typeof CUSTOMER_MESSAGES)[number]
+export type DeliveryStage = 'preparing' | 'on_the_way' | 'delivered'
+
+export interface ReservationDelivery {
+  address: string
+  location: GeoPoint
+  note: string | null
+  feeMinor: number
+  distanceMeters: number
+  stage: DeliveryStage
+  courierName: string | null
+  startedAt: string | null
+  deliveredAt: string | null
+  /** Courier tapped "Stigao sam". */
+  arrivedAt?: string | null
+  /** Quick preset messages, oldest first. */
+  messages?: { from: 'courier' | 'customer'; key: DeliveryMessageKey; at: string }[]
+  /** Live courier position while on the way (sent by the courier's phone). */
+  courierLocation: { lat: number; lng: number; heading: number | null; at: string } | null
 }
 
 export interface Business extends BusinessSummary {
@@ -143,6 +183,10 @@ export interface Offer {
   timezone: string
   status: OfferStatus
   reservedCount: number
+  /** Paid "Istaknuto": listed first with a badge. */
+  boosted?: boolean
+  /** Published by a repeating offer. */
+  scheduleId?: string
   /** Present when the request included lat/lng. */
   distanceMeters?: number
 }
@@ -191,8 +235,12 @@ export interface Reservation {
   canCancel: boolean
   /** Collected and already reviewed by the customer. */
   reviewed?: boolean
-  /** Only included for the business's own staff. */
-  customer?: { name: string }
+  /** Only included for the business's own staff (phone: for the courier). */
+  customer?: { name: string; phone?: string }
+  fulfillment: Fulfillment
+  delivery: ReservationDelivery | null
+  /** Paid at the counter / to the courier: bags + delivery fee. */
+  amountDueMinor: number
   cancelledAt?: string
   collectedAt?: string
   /** How the hand-over was recorded; "customer" = confirmed by the customer, not scanned. */
@@ -218,7 +266,17 @@ export interface Review {
   id: string
   rating: number
   comment?: string
+  /** Customer photos of the bag. */
+  photos?: string[]
   user: { id: string; name: string }
+  createdAt: string
+}
+
+export interface ReviewPhoto {
+  url: string
+  reviewId: string
+  rating: number
+  user: string
   createdAt: string
 }
 
@@ -235,6 +293,7 @@ export interface BusinessInput {
   location: GeoPoint
   collectionInstructions?: string
   isActive?: boolean
+  delivery?: DeliverySettings
 }
 
 /** Body for POST/PATCH /offers (PATCH omits businessId). */
@@ -363,6 +422,11 @@ export type NotificationType =
   | 'reservation_new'
   | 'reservation_cancelled'
   | 'reservation_collected'
+  | 'delivery_started'
+  | 'delivery_arrived'
+  | 'delivery_message'
+  | 'offer_boost'
+  | 'challenge'
   | 'offer_new'
   | 'waitlist_available'
   | 'reservation_confirmed'
@@ -531,6 +595,8 @@ export interface StatementTotals {
   platformDiscountMinor: number
   grossMinor: number
   commissionMinor: number
+  /** Paid promotions bought in the month. */
+  boostMinor?: number
   balanceMinor: number
 }
 
@@ -570,6 +636,105 @@ export interface PartnerStatement extends StatementTotals, Settlement {
   currency: string
   payments: PartnerPayment[]
   businesses: StatementLine[]
+  boosts?: BoostCharge[]
+}
+
+export type BoostKind = 'top' | 'push'
+
+export interface BoostCharge {
+  id: string
+  kind: BoostKind
+  priceMinor: number
+  currency: string
+  offerTitle: string
+  businessName: string
+  recipients: number | null
+  createdAt: string
+  timezone: string
+}
+
+export interface BoostOptions {
+  currency: string
+  top: { priceMinor: number; bought: boolean }
+  push: { priceMinor: number; bought: boolean; recipients: number | null; audience: number }
+}
+
+export interface OfferSchedule {
+  id: string
+  businessId: string
+  businessName?: string
+  title: string
+  description: string
+  category: Category
+  imageUrl?: string
+  tags: string[]
+  contentType: 'surprise' | 'known'
+  contents: string[]
+  allergens: Allergen[]
+  priceMinor: number
+  originalPriceMinor: number
+  priceDrop: { time: string; priceMinor: number } | null
+  quantity: number
+  maxPerReservation: number | null
+  startTime: string
+  endTime: string
+  /** 1 = Monday … 7 = Sunday. */
+  weekdays: number[]
+  isActive: boolean
+  lastDate: string | null
+  createdAt: string
+}
+
+export interface OfferScheduleInput {
+  businessId: string
+  title: string
+  description: string
+  category?: Category
+  imageUrl?: string
+  priceMinor: number
+  originalPriceMinor: number
+  priceDrop?: { time: string; priceMinor: number } | null
+  quantity: number
+  startTime: string
+  endTime: string
+  weekdays: number[]
+}
+
+export interface BagSuggestion {
+  weeks: number
+  days: {
+    weekday: number
+    days: number
+    avgOffered: number | null
+    avgSold: number | null
+    sellThrough: number | null
+    soldOutDays: number
+    suggested: number | null
+  }[]
+}
+
+export interface Impact {
+  bags: number
+  kgFood: number
+  co2Kg: number
+  savings: { currency: string; minor: number }[]
+  places: number
+  week: { bags: number; goal: number; bonus: number; done: boolean }
+  streak: { weeks: number; step: number; bonus: number; nextAt: number }
+  badges: { key: 'first' | 'ten' | 'fifty' | 'explorer' | 'early' | 'night' | 'streak'; earned: boolean }[]
+  recap: {
+    year: number
+    bags: number
+    kgFood: number
+    co2Kg: number
+    savings: { currency: string; minor: number }[]
+    places: number
+    topPlace: { id: string; name: string; logoUrl: string | null; bags: number } | null
+    topCategory: Category | null
+    perMonth: number[]
+    bestMonth: number | null
+    firstPickup: string | null
+  }
 }
 
 export interface PlatformStatementPartner extends StatementTotals, Settlement {

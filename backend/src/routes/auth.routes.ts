@@ -17,6 +17,7 @@ export const authRoutes = Router()
 authRoutes.post('/register', authLimiter, c.register)
 authRoutes.post('/login', authLimiter, c.login)
 authRoutes.get('/me', authenticate, c.me)
+authRoutes.get('/me/impact', authenticate, c.myImpact)
 // "Preuzmi moje podatke" (GDPR: access + portability). Rate-limited like other account actions.
 authRoutes.get('/me/export', authLimiter, authenticate, c.exportMyData)
 authRoutes.post('/forgot-password', authLimiter, c.forgotPassword)

@@ -21,4 +21,10 @@ reservationRoutes.post('/:id/share', c.shareReservation)
 reservationRoutes.post('/:id/pickup-check', c.answerPickupCheck)
 // Partner disputes a customer-confirmed pickup.
 reservationRoutes.post('/:id/dispute', requireRole('business', 'admin'), c.openDispute)
+// Own delivery: start it, then the courier's phone posts its position.
+reservationRoutes.post('/:id/delivery/start', requireRole('business', 'staff', 'admin'), c.startDelivery)
+reservationRoutes.post('/:id/delivery/location', requireRole('business', 'staff', 'admin'), c.courierLocation)
+reservationRoutes.post('/:id/delivery/arrived', requireRole('business', 'staff', 'admin'), c.courierArrived)
+// Quick preset messages (customer ↔ courier).
+reservationRoutes.post('/:id/delivery/message', c.deliveryMessage)
 reservationRoutes.patch('/:id/collect', requireRole('business', 'staff', 'admin'), c.collectReservation)

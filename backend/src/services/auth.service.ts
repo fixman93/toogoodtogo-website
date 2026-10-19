@@ -2,7 +2,8 @@ import bcrypt from 'bcryptjs'
 import { env } from '../config/env.js'
 import { signToken } from '../middleware/auth.js'
 import { isPhoneDuplicate, normalizePhone, phoneTaken } from '../utils/phone.js'
-import { ensureReferralCode, findReferrer, levelFor } from './loyalty.service.js'
+import { ensureReferralCode, findReferrer, levelFor, welcomeDiscountPercent } from './loyalty.service.js'
+import { marketFor } from '../config/markets.js'
 import { deleteIfOwned } from './storage.service.js'
 import { sendMail } from './mail.service.js'
 import { createHash, randomBytes } from 'node:crypto'
@@ -64,7 +65,15 @@ export async function me(userId: string) {
   const user = await User.findById(userId)
   if (!user) throw ApiError.unauthorized('Nalog više ne postoji.', 'USER_NOT_FOUND')
   const referralCode = await ensureReferralCode(user._id)
-  return { ...serializeUser(user), points: user.points ?? 0, level: levelFor(user.points ?? 0), referralCode }
+  return {
+    ...serializeUser(user),
+    points: user.points ?? 0,
+    level: levelFor(user.points ?? 0),
+    referralCode,
+    /** Discount on the first bag when invited by a friend (until it's used). */
+    welcomeDiscountPercent: await welcomeDiscountPercent(user._id),
+    referralDiscountPercent: marketFor(user.countryCode).referralDiscountPercent,
+  }
 }
 
 /**

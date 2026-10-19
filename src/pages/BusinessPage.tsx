@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, OfferCardSkeleton } from '@/components/common/S
 import { FavoriteButton } from '@/components/offers/FavoriteButton'
 import { OfferCard } from '@/components/offers/OfferCard'
 import { ReviewList } from '@/components/offers/ReviewList'
+import { BagPhotos } from '@/components/offers/BagPhotos'
 import { CATEGORY_ICONS } from '@/components/offers/categories'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -109,6 +110,8 @@ export function BusinessPage() {
 
         <DirectionsCard name={business.name} address={business.address} point={business.location} />
       </div>
+
+      <BagPhotos businessId={business.id} />
 
       <Card>
         <CardHeader>

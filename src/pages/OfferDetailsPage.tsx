@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { AlertTriangle, ArrowLeft, Bell, BellRing, Clock, CalendarClock, Info, Loader2, MapPin, Minus, PackageOpen, Plus, ShoppingBag, Star } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Bell, BellRing, Clock, CalendarClock, Gift, Info, Loader2, MapPin, Minus, PackageOpen, Plus, ShoppingBag, Star } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import type { Offer } from '@/api/types'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -15,8 +15,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/features/auth/auth-context'
 import { useLocation } from '@/features/location/location-context'
 import { DirectionsCard } from '@/features/map/DirectionsCard'
+import { FulfillmentPicker } from '@/features/delivery/FulfillmentPicker'
+import { deliveryFee, rememberTarget, type DeliveryTarget } from '@/features/delivery/delivery'
 import { PriceDropBadge } from '@/components/offers/PriceDropBadge'
 import { ReviewList } from '@/components/offers/ReviewList'
+import { BagPhotos } from '@/components/offers/BagPhotos'
 import { Input } from '@/components/ui/input'
 import { useBusiness, useCheckPromotion, useCreateReservation, useOffer, useToggleWaitlist, useWaitlist } from '@/hooks/api'
 import { t } from '@/i18n'
@@ -36,15 +39,38 @@ function ReservePanel({ offer }: { offer: Offer }) {
   const applyPromo = (code: string) =>
     check.mutate({ code, offerId: offer.id, quantity }, { onSuccess: (r) => setPromo({ code: r.code, discountMinor: r.discountMinor, quantity }) })
   const reserve = useCreateReservation()
+  const delivery = offer.business.delivery?.enabled ? offer.business.delivery : null
+  const [mode, setMode] = useState<'pickup' | 'delivery'>('pickup')
+  const [target, setTarget] = useState<DeliveryTarget | null>(null)
+  // Invited by a friend: the first bag is discounted by the platform (same rule as the server: at least 1 unit left to pay).
+  const welcome = !applied && user?.welcomeDiscountPercent ? user.welcomeDiscountPercent : null
+  const gross = offer.priceMinor * quantity
+  const welcomeMinor = welcome ? Math.max(0, Math.min(Math.round((gross * welcome) / 100), gross - 100)) : 0
+  const subtotal = gross - (applied?.discountMinor ?? 0) - welcomeMinor
+  const fee = delivery && mode === 'delivery' ? deliveryFee(delivery, subtotal) : 0
+  const needsAddress = mode === 'delivery' && !target
   const max = Math.min(offer.maxPerReservation, offer.quantityAvailable)
   const soldOut = offer.quantityAvailable === 0
   const error = reserve.error instanceof ApiError ? reserve.error.message : reserve.error ? t('common.errorText') : null
 
   const submit = () => {
     if (!user) return navigate('/login', { state: { from: `/offers/${offer.id}` } })
+    if (needsAddress) return
     reserve.mutate(
-      { offerId: offer.id, quantity, promoCode: applied?.code },
-      { onSuccess: (reservation) => navigate(`/reservations/${reservation.id}`, { state: { justReserved: true } }) },
+      {
+        offerId: offer.id,
+        quantity,
+        promoCode: applied?.code,
+        ...(mode === 'delivery' && target
+          ? { fulfillment: 'delivery' as const, delivery: { address: target.address, lat: target.point.lat, lng: target.point.lng, note: target.note || undefined } }
+          : {}),
+      },
+      {
+        onSuccess: (reservation) => {
+          if (mode === 'delivery' && target) rememberTarget(target)
+          navigate(`/reservations/${reservation.id}`, { state: { justReserved: true } })
+        },
+      },
     )
   }
 
@@ -67,14 +93,32 @@ function ReservePanel({ offer }: { offer: Offer }) {
         </div>
       )}
       {soldOut && <WaitlistButton offerId={offer.id} />}
-      <Button size="lg" className="w-full" disabled={soldOut || reserve.isPending} onClick={submit}>
+      {delivery && !soldOut && (
+        <FulfillmentPicker
+          business={offer.business}
+          delivery={delivery}
+          currency={offer.currency}
+          subtotalMinor={subtotal}
+          mode={mode}
+          onModeChange={setMode}
+          target={target}
+          onTargetChange={setTarget}
+        />
+      )}
+      <Button size="lg" className="w-full" disabled={soldOut || reserve.isPending || (!!user && needsAddress)} onClick={submit}>
         {reserve.isPending && <Loader2 className="animate-spin" />}
         {soldOut
           ? t('offer.soldOut')
           : user
-            ? t('offer.reserveFor', { price: formatMoney(offer.priceMinor * quantity - (applied?.discountMinor ?? 0), offer.currency) })
+            ? t(mode === 'delivery' ? 'delivery.orderFor' : 'offer.reserveFor', { price: formatMoney(subtotal + fee, offer.currency) })
             : t('offer.loginToReserve')}
       </Button>
+      {welcomeMinor > 0 && (
+        <p className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-success">
+          <Gift className="size-4" />
+          {t('referral.applied', { percent: welcome!, amount: formatMoney(welcomeMinor, offer.currency) })}
+        </p>
+      )}
       {error && (
         <p role="alert" className="text-center text-sm font-medium text-destructive">
           {error}
@@ -114,7 +158,7 @@ function ReservePanel({ offer }: { offer: Offer }) {
           )}
         </div>
       )}
-      <p className="text-center text-xs text-muted-foreground">{t('offer.payAtPickup')}</p>
+      <p className="text-center text-xs text-muted-foreground">{mode === 'delivery' ? t('delivery.payToCourier') : t('offer.payAtPickup')}</p>
     </div>
   )
 }
@@ -291,6 +335,8 @@ export function OfferDetailsPage() {
           </Card>
 
           <DirectionsCard name={business.name} address={business.address} point={business.location} />
+
+          <BagPhotos businessId={business.id} />
 
           <InstructionsCard businessId={business.id} />
 

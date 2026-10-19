@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router'
-import { CheckCircle2, Loader2, Minus, Plus, Settings2, ShoppingBag, Sparkles } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router'
+import { CheckCircle2, Loader2, Minus, Plus, Repeat, Settings2, ShoppingBag, Sparkles } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import type { Business, Offer, OfferInput } from '@/api/types'
+import type { Business, Offer, OfferInput, OfferSchedule } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState } from '@/components/common/StateViews'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,9 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { currencyInfo } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
-import { useBusinessOffers, useMyBusinesses, useSaveOffer } from '@/hooks/api'
+import { useBusinessOffers, useMyBusinesses, useSaveOffer, useSaveSchedule } from '@/hooks/api'
+import { SuggestionHint } from '@/features/business/BagSuggestion'
+import { isoWeekday, weekdayShort } from '@/features/business/weekdays'
 import { t } from '@/i18n'
 import { formatMoney, fromMinor, toMinor } from '@/lib/format'
 import { addDays, toZonedInput, zonedDateTimeToUtc } from '@/lib/time'
@@ -96,9 +98,36 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   )
 }
 
-function OfferBuilder({ business, onPublished }: { business: Business; onPublished: (o: Offer) => void }) {
+/** Mon–Sun chips for a repeating offer. */
+export function WeekdayPicker({ value, onChange }: { value: number[]; onChange: (days: number[]) => void }) {
+  return (
+    <div className="flex gap-1.5" role="group" aria-label={t('repeat.days')}>
+      {[1, 2, 3, 4, 5, 6, 7].map((d) => {
+        const on = value.includes(d)
+        return (
+          <button
+            key={d}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? value.filter((x) => x !== d) : [...value, d].sort())}
+            className={cn('h-10 flex-1 rounded-full border text-xs font-bold', on ? 'border-primary bg-primary text-primary-foreground' : 'bg-card')}
+          >
+            {weekdayShort(d)}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function OfferBuilder({ business, onPublished }: { business: Business; onPublished: (o: Offer | OfferSchedule) => void }) {
   const offers = useBusinessOffers(business.id)
   const save = useSaveOffer()
+  const saveSchedule = useSaveSchedule()
+  // Repeat on chosen weekdays (Mon–Sat by default when switched on).
+  const [params] = useSearchParams()
+  const [repeat, setRepeat] = useState(() => params.get('repeat') === '1')
+  const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5, 6])
   const recent = useMemo(() => recentTemplates(offers.data?.data ?? []), [offers.data])
   const fresh = useMemo(() => freshTemplate(business, recent), [business, recent])
   const templates = [...recent, fresh]
@@ -121,7 +150,8 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
     !(price > 0) && t('quick.errorPrice'),
     original > 0 && price >= original && t('partner.error.priceLower'),
     form.to <= form.from && t('quick.errorTime'),
-    day === 'today' && zonedDateTimeToUtc(date, form.to, tz) <= new Date() && t('quick.errorPast'),
+    !repeat && day === 'today' && zonedDateTimeToUtc(date, form.to, tz) <= new Date() && t('quick.errorPast'),
+    repeat && weekdays.length === 0 && t('repeat.errorDays'),
   ].filter(Boolean) as string[]
 
   const pick = (key: string) => {
@@ -148,8 +178,31 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
       pickupStart: zonedDateTimeToUtc(date, form.from, tz).toISOString(),
       pickupEnd: zonedDateTimeToUtc(date, form.to, tz).toISOString(),
     }
+    if (repeat) {
+      // The schedule publishes today's/tomorrow's offers itself.
+      saveSchedule.mutate(
+        {
+          body: {
+            businessId: business.id,
+            title: body.title,
+            description: body.description,
+            category: body.category,
+            priceMinor: body.priceMinor,
+            originalPriceMinor: body.originalPriceMinor,
+            quantity: form.quantity,
+            startTime: form.from,
+            endTime: form.to,
+            weekdays,
+          },
+        },
+        { onSuccess: onPublished },
+      )
+      return
+    }
     save.mutate({ body }, { onSuccess: onPublished })
   }
+  const pending = save.isPending || saveSchedule.isPending
+  const error = save.error ?? saveSchedule.error
 
   if (offers.isLoading) return <Skeleton className="h-64 rounded-2xl" />
 
@@ -191,6 +244,7 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
             <span className="text-sm font-semibold">{t('partner.field.quantity')}</span>
             <Stepper value={form.quantity} onChange={(quantity) => set({ quantity })} />
           </div>
+          <SuggestionHint businessId={business.id} weekdays={repeat ? weekdays : [isoWeekday(date)]} quantity={form.quantity} onApply={(quantity) => set({ quantity })} />
 
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1 text-sm font-semibold">
@@ -221,6 +275,19 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
 
           <div className="space-y-2">
             <span className="text-sm font-semibold">{t('quick.when')}</span>
+            <label className="flex min-h-11 items-center gap-3 rounded-xl border bg-card px-3 text-sm">
+              <input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} className="size-5 accent-[var(--primary)]" />
+              <span>
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <Repeat className="size-4 text-primary" />
+                  {t('repeat.toggle')}
+                </span>
+                <span className="block text-xs text-muted-foreground">{t('repeat.toggleHint')}</span>
+              </span>
+            </label>
+            {repeat ? (
+              <WeekdayPicker value={weekdays} onChange={setWeekdays} />
+            ) : (
             <div className="flex gap-2">
               {(['today', 'tomorrow'] as const).map((d) => (
                 <button
@@ -233,6 +300,7 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
                 </button>
               ))}
             </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <label className="space-y-1 text-xs font-semibold text-muted-foreground">
                 {t('quick.from')}
@@ -254,14 +322,14 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
           ))}
         </ul>
       )}
-      {save.isError && (
+      {error && (
         <p role="alert" className="text-sm font-semibold text-destructive">
-          {save.error instanceof ApiError ? save.error.message : t('common.errorText')}
+          {error instanceof ApiError ? error.message : t('common.errorText')}
         </p>
       )}
-      <Button size="lg" className="h-14 w-full text-lg" disabled={problems.length > 0 || save.isPending} onClick={publish}>
-        {save.isPending ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-        {t('quick.publish', { count: form.quantity })}
+      <Button size="lg" className="h-14 w-full text-lg" disabled={problems.length > 0 || pending} onClick={publish}>
+        {pending ? <Loader2 className="animate-spin" /> : repeat ? <Repeat /> : <CheckCircle2 />}
+        {repeat ? t('repeat.publish', { count: form.quantity }) : t('quick.publish', { count: form.quantity })}
       </Button>
       <Link
         to={`/business/offers/new?businessId=${business.id}${form.source ? `&copy=${form.source.id}` : ''}`}
@@ -278,7 +346,7 @@ function QuickOffer() {
   const { data, isLoading } = useMyBusinesses()
   const businesses = (data?.data ?? []).filter((b) => b.isActive)
   const [businessId, setBusinessId] = useState<string | null>(readLastLocation)
-  const [published, setPublished] = useState<Offer | null>(null)
+  const [published, setPublished] = useState<Offer | OfferSchedule | null>(null)
   const business = businesses.find((b) => b.id === businessId) ?? businesses[0]
 
   if (isLoading) return <Skeleton className="h-64 rounded-2xl" />
@@ -300,18 +368,25 @@ function QuickOffer() {
     return (
       <Card className="space-y-4 border-2 border-success bg-success/10 p-6 text-center">
         <CheckCircle2 className="mx-auto size-12 text-success" />
-        <p className="text-xl font-extrabold">{t('quick.done')}</p>
-        <p className="text-sm">
-          {published.quantityTotal} × {published.title} · {formatMoney(published.priceMinor, published.currency)} · {toZonedInput(published.pickupStart, published.timezone).time}–
-          {toZonedInput(published.pickupEnd, published.timezone).time}
-        </p>
+        <p className="text-xl font-extrabold">{'weekdays' in published ? t('repeat.done') : t('quick.done')}</p>
+        {'weekdays' in published ? (
+          <p className="text-sm">
+            {published.quantity} × {published.title} · {formatMoney(published.priceMinor, business.currency)} · {published.startTime}–{published.endTime} ·{' '}
+            {published.weekdays.map(weekdayShort).join(', ')}
+          </p>
+        ) : (
+          <p className="text-sm">
+            {published.quantityTotal} × {published.title} · {formatMoney(published.priceMinor, published.currency)} · {toZonedInput(published.pickupStart, published.timezone).time}–
+            {toZonedInput(published.pickupEnd, published.timezone).time}
+          </p>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
           <Button size="lg" onClick={() => setPublished(null)}>
             <Plus />
             {t('quick.another')}
           </Button>
           <Button asChild size="lg" variant="outline">
-            <Link to="/business">{t('business.title')}</Link>
+            <Link to={'weekdays' in published ? '/business/schedules' : '/business'}>{'weekdays' in published ? t('repeat.title') : t('business.title')}</Link>
           </Button>
         </div>
       </Card>

@@ -7,6 +7,10 @@ import { BusinessPage } from '@/pages/BusinessPage'
 import { BusinessDashboardPage } from '@/pages/BusinessDashboardPage'
 import { BusinessScanPage } from '@/pages/BusinessScanPage'
 import { LocationFormPage } from '@/pages/partner/LocationFormPage'
+import { DeliveryPage } from '@/pages/partner/DeliveryPage'
+import { SchedulesPage } from '@/pages/partner/SchedulesPage'
+import { CounterPage } from '@/pages/partner/CounterPage'
+import { ImpactPage } from '@/pages/ImpactPage'
 import { OfferFormPage } from '@/pages/partner/OfferFormPage'
 import { SalesPage } from '@/pages/partner/SalesPage'
 import { DonationsPage } from '@/pages/partner/DonationsPage'
@@ -55,6 +59,10 @@ const router = createBrowserRouter([
       { path: 'business/scan', element: <BusinessScanPage /> },
       { path: 'business/sales', element: <SalesPage /> },
       { path: 'business/orders', element: <OrdersPage /> },
+      { path: 'business/deliveries/:id', element: <DeliveryPage /> },
+      { path: 'business/schedules', element: <SchedulesPage /> },
+      { path: 'business/counter', element: <CounterPage /> },
+      { path: 'impact', element: <ImpactPage /> },
       { path: 'business/promotions', element: <PromotionsPage /> },
       { path: 'business/donations', element: <DonationsPage /> },
       { path: 'business/statements', element: <StatementPage /> },

@@ -1,10 +1,12 @@
+import { z } from 'zod'
+import { COURIER_MESSAGES, CUSTOMER_MESSAGES } from '../models/index.js'
 import type { Request, Response } from 'express'
 import { currentUser } from '../middleware/auth.js'
 import * as reservationService from '../services/reservation.service.js'
 import { ApiError } from '../utils/ApiError.js'
 import { list, ok } from '../utils/respond.js'
 import { idParams } from '../validators/common.js'
-import { collectByCodeBody, disputeBody, pickupCheckBody, createReservationBody, reservationListQuery } from '../validators/reservation.validators.js'
+import { collectByCodeBody, courierLocationBody, disputeBody, pickupCheckBody, createReservationBody, reservationListQuery } from '../validators/reservation.validators.js'
 
 export async function listReservations(req: Request, res: Response) {
   const result = await reservationService.list(reservationListQuery.parse(req.query), currentUser(req))
@@ -53,4 +55,21 @@ export async function answerPickupCheck(req: Request, res: Response) {
 export async function openDispute(req: Request, res: Response) {
   const { reason } = disputeBody.parse(req.body)
   ok(res, await reservationService.openDispute(idParams.parse(req.params).id, reason, currentUser(req)))
+}
+
+export async function startDelivery(req: Request, res: Response) {
+  ok(res, await reservationService.startDelivery(idParams.parse(req.params).id, currentUser(req)))
+}
+
+export async function courierLocation(req: Request, res: Response) {
+  ok(res, await reservationService.updateCourierLocation(idParams.parse(req.params).id, courierLocationBody.parse(req.body), currentUser(req)))
+}
+
+export async function courierArrived(req: Request, res: Response) {
+  ok(res, await reservationService.courierArrived(idParams.parse(req.params).id, currentUser(req)))
+}
+
+export async function deliveryMessage(req: Request, res: Response) {
+  const { key } = z.object({ key: z.enum([...COURIER_MESSAGES, ...CUSTOMER_MESSAGES]) }).parse(req.body)
+  ok(res, await reservationService.deliveryMessage(idParams.parse(req.params).id, key, currentUser(req)))
 }

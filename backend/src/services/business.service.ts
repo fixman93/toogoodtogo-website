@@ -9,6 +9,8 @@ import { assertBusinessAccess, hasPermission, isAdmin, type Actor } from './acce
 import { audit } from './audit.service.js'
 import { deleteIfOwned } from './storage.service.js'
 
+/** "No free-delivery threshold" arrives as null; store it as missing. */
+const normalizeDelivery = (d: CreateBusinessInput['delivery']) => (d ? { ...d, freeFromMinor: d.freeFromMinor ?? undefined } : undefined)
 const toPoint = ({ lat, lng }: { lat: number; lng: number }) => ({ type: 'Point' as const, coordinates: [lng, lat] as [number, number] })
 
 export async function list(
@@ -64,6 +66,7 @@ export async function create(input: CreateBusinessInput, actor: Actor) {
     owner: actor.id,
     slug: `${slugify(input.name)}-${randomBytes(3).toString('hex')}`,
     location: toPoint(input.location),
+    delivery: normalizeDelivery(input.delivery),
     timezone: market.timezone,
     currency: market.currency,
   })
@@ -75,7 +78,7 @@ export async function update(id: string, input: UpdateBusinessInput, actor: Acto
   const moderationOnly = Object.keys(input).every((k) => k === 'isActive') && hasPermission(actor, 'businesses.moderate')
   const business = moderationOnly ? await Business.findOne({ _id: id, deletedAt: null }) : await assertBusinessAccess(id, actor)
   if (!business) throw ApiError.notFound('Lokal nije pronađen.')
-  const { location, address, ...rest } = input
+  const { location, address, delivery: _delivery, ...rest } = input
   // Currency/timezone follow the country; existing prices, reservations and
   // statements are in the old currency, so the country can't change later.
   if (address && address.countryCode !== business.address.countryCode) {
@@ -87,6 +90,7 @@ export async function update(id: string, input: UpdateBusinessInput, actor: Acto
   business.set(rest)
   if (address) business.set('address', address)
   if (location) business.location = toPoint(location)
+  if (input.delivery) business.set('delivery', normalizeDelivery(input.delivery))
   await business.save()
   // Offers that stored a copy of the old cover follow the new one (they fall back to the cover).
   if (input.coverUrl !== undefined && oldImages.coverUrl && oldImages.coverUrl !== business.coverUrl) {

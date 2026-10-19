@@ -29,7 +29,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Foodnesi koristi kameru za skeniranje QR koda kupca pri preuzimanju kese i za fotografije ponuda.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Foodnesi koristi tvoju lokaciju da pokaže ponude u blizini.</string>
+	<string>Foodnesi koristi tvoju lokaciju da pokaže ponude u blizini, a dostavljačima da kupac vidi gde je dostava.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Foodnesi pristupa fotografijama kada dodaješ sliku profila, lokala ili ponude.</string>
 	<key>UIApplicationSceneManifest</key>

@@ -1,8 +1,8 @@
 /** TanStack Query hooks — the only way screens read or mutate server state. */
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { uploadsApi, type ImageKind } from '@/api/services'
-import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, promotionsApi, reservationsApi, supportApi, waitlistApi } from '@/api/services'
-import type { Donation, PromotionInput, TicketCategory, TicketStatus, WebhookEvent, ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
+import { uploadsApi, type CreateReservationBody, type ImageKind } from '@/api/services'
+import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, promotionsApi, reservationsApi, schedulesApi, supportApi, waitlistApi } from '@/api/services'
+import type { BoostKind, DeliveryMessageKey, OfferScheduleInput, Donation, PromotionInput, TicketCategory, TicketStatus, WebhookEvent, ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
 import { useAuth } from '@/features/auth/auth-context'
 
 export function useOffers(query: OfferQuery, options: { enabled?: boolean } = {}) {
@@ -110,6 +110,16 @@ export function useCollectReservation() {
   })
 }
 
+/** Staff: start a delivery (this person becomes the courier). */
+export function useStartDelivery() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: reservationsApi.startDelivery,
+    onSuccess: (reservation) => patchReservation(queryClient, reservation),
+    onSettled: () => refresh(queryClient, [['partner', 'orders']]),
+  })
+}
+
 /** Customer answers "did you pick it up?" (yes turns it into a pickup). */
 export function usePickupCheck() {
   const queryClient = useQueryClient()
@@ -182,7 +192,7 @@ export function useVerifyCode() {
 export function useCreateReservation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: { offerId: string; quantity: number; promoCode?: string }) => reservationsApi.create(body),
+    mutationFn: (body: CreateReservationBody) => reservationsApi.create(body),
     // Availability changed for everyone: refresh offers, reservations and stock.
     onSettled: () => refresh(queryClient, RESERVATION_VIEWS),
   })
@@ -380,7 +390,7 @@ export function usePickupPass(token: string | undefined) {
 export function useAddReview(businessId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: { reservationId: string; rating: number; comment?: string }) => businessesApi.addReview(businessId, body),
+    mutationFn: (body: { reservationId: string; rating: number; comment?: string; photos?: string[] }) => businessesApi.addReview(businessId, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservations'] })
       queryClient.invalidateQueries({ queryKey: ['businesses'] })
@@ -676,5 +686,65 @@ export function useUpdateProfile() {
   return useMutation({
     mutationFn: authApi.updateProfile,
     onSuccess: (user) => queryClient.setQueryData(['auth', 'me'], user),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Growth: impact & challenges, repeating offers, paid promotion, photos, delivery chat.
+
+export function useImpact(year?: number) {
+  const { user } = useAuth()
+  return useQuery({ queryKey: ['impact', year ?? 'current'], queryFn: () => authApi.impact(year), enabled: !!user })
+}
+
+export function useSchedules() {
+  return useQuery({ queryKey: ['schedules'], queryFn: schedulesApi.list })
+}
+
+export function useSaveSchedule() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string; body: Partial<OfferScheduleInput> & { isActive?: boolean } }) =>
+      id ? schedulesApi.update(id, body) : schedulesApi.create(body as OfferScheduleInput),
+    // A new/changed schedule may publish offers right away.
+    onSettled: () => refresh(queryClient, [['schedules'], ['businesses'], ['offers']]),
+  })
+}
+
+export function useDeleteSchedule() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: schedulesApi.remove, onSettled: () => refresh(queryClient, [['schedules']]) })
+}
+
+export function useBagSuggestion(businessId: string | undefined) {
+  return useQuery({ queryKey: ['schedules', 'suggestion', businessId], queryFn: () => schedulesApi.suggestion(businessId!), enabled: !!businessId, staleTime: 10 * 60_000 })
+}
+
+export function useBoostOptions(offerId: string | undefined) {
+  return useQuery({ queryKey: ['boost', offerId], queryFn: () => offersApi.boostOptions(offerId!), enabled: !!offerId })
+}
+
+export function useBuyBoost() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ offerId, kind }: { offerId: string; kind: BoostKind }) => offersApi.boost(offerId, kind),
+    onSettled: (_r, _e, v) => refresh(queryClient, [['boost', v.offerId], ['businesses'], ['offers'], ['partner', 'statement']]),
+  })
+}
+
+export function useBusinessPhotos(businessId: string | undefined) {
+  return useQuery({ queryKey: ['businesses', businessId, 'photos'], queryFn: () => businessesApi.photos(businessId!), enabled: !!businessId, staleTime: 5 * 60_000 })
+}
+
+export function useCourierArrived() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: reservationsApi.courierArrived, onSuccess: (r) => patchReservation(queryClient, r) })
+}
+
+export function useDeliveryMessage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, key }: { id: string; key: DeliveryMessageKey }) => reservationsApi.deliveryMessage(id, key),
+    onSuccess: (r) => patchReservation(queryClient, r),
   })
 }
