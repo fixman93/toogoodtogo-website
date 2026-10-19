@@ -84,14 +84,14 @@ export async function decide(id: string, decision: { status: 'approved' | 'rejec
       title: 'Dobro došao među partnere!',
       body: 'Tvoja prijava je odobrena. Dodaj prvu lokaciju i ponudu u portalu za partnere.',
       link: '/business',
-    })
+    }, { email: true })
   } else {
     void notify([application.user], {
       type: 'application_rejected',
       title: 'Prijava za partnera nije odobrena',
       body: decision.note || 'Javi nam se ako imaš pitanja.',
       link: '/partner/apply',
-    })
+    }, { email: true })
   }
   void audit(actor, {
     action: `application.${decision.status}`,

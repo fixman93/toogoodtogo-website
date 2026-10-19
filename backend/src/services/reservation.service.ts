@@ -322,7 +322,7 @@ export async function cancel(id: string, actor: Actor) {
       title: `${business.name} je otkazao rezervaciju`,
       body: `${cancelled.quantity} × ${cancelled.offerTitle}. Izvini zbog neprijatnosti.`,
       link: `/reservations/${cancelled.id}`,
-    })
+    }, { email: 'fallback' })
   } else {
     void notify(
       [business.owner],
@@ -781,7 +781,7 @@ export async function answerPickupCheck(id: string, answer: 'collected' | 'not_c
       title: `Kupac je potvrdio preuzimanje · ${updated.code}`,
       body: `${updated.quantity} × ${updated.offerTitle} (${business.name}) nije skenirano, a kupac kaže da je preuzeto. Uračunato je u obračun – uvek skeniraj QR kod.`,
       link: '/business/pickups',
-    })
+    }, { email: 'fallback' })
   }
   const [dto] = await toDto([updated.toObject()], actor)
   return dto
@@ -833,7 +833,7 @@ export async function resolveDispute(id: string, decision: 'upheld' | 'rejected'
       title: decision === 'upheld' ? `Spor prihvaćen · ${reservation.code}` : `Spor odbijen · ${reservation.code}`,
       body: decision === 'upheld' ? 'Rezervacija se vodi kao nepreuzeta i ne ulazi u obračun.' : `Preuzimanje ostaje u obračunu.${note ? ` ${note}` : ''}`,
       link: '/business/pickups',
-    })
+    }, { email: 'fallback' })
   }
   void audit(actor, {
     action: `dispute.${decision}`,

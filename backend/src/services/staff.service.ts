@@ -29,7 +29,7 @@ export async function add(businessId: string, email: string, actor: Actor) {
     title: `Dodat si kao zaposleni: ${business.name}`,
     body: 'Možeš da skeniraš kodove i vidiš narudžbine ove lokacije.',
     link: '/business/scan',
-  })
+  }, { email: 'fallback' })
   return { id: user.id as string, name: user.name, email: user.email }
 }
 
@@ -89,7 +89,7 @@ async function applyAccess(user: UserDoc, businesses: { _id: unknown; name: stri
       title: `Dodat si kao zaposleni: ${added.map((b) => b.name).join(', ')}`,
       body: 'Možeš da skeniraš kodove i vidiš narudžbine ovih lokacija.',
       link: '/business/scan',
-    })
+    }, { email: 'fallback' })
   }
 }
 

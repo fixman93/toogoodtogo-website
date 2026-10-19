@@ -81,7 +81,7 @@ export async function reply(id: string, body: string, actor: Actor) {
   ticket.lastMessageAt = new Date()
   await ticket.save()
   if (isTeam) {
-    void notify([ticket.user], { type: 'support_reply', title: `Odgovor podrške: ${ticket.subject}`, body: body.slice(0, 140), link: `/support/${ticket.id}` })
+    void notify([ticket.user], { type: 'support_reply', title: `Odgovor podrške: ${ticket.subject}`, body: body.slice(0, 140), link: `/support/${ticket.id}` }, { email: 'fallback' })
   } else {
     void notify(await supportTeam(), { type: 'support_new', title: `Nova poruka: ${ticket.subject}`, body: body.slice(0, 140), link: `/admin?tab=support` })
   }

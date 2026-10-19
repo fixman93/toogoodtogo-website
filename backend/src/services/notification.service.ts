@@ -17,9 +17,11 @@ export interface NotificationInput {
 }
 
 /**
+ * In-app + push always. E-mail only when the caller asks — keep e-mails to what is essential:
+ * `email: true`: also e-mail (respects the user's e-mail setting);
+ * `email: 'fallback'`: e-mail only users the push didn't reach (important, but push is enough when it works);
  * `force`: account notices (warnings, pause/block) are e-mailed regardless of preferences or a block.
- * `email: false`: the caller sends its own, richer e-mail (e.g. the reservation ticket with QR).
- * `email: 'fallback'`: e-mail only users the push didn't reach (partner order alerts — saves the mail quota).
+ * Default: no e-mail.
  */
 export async function notify(
   userIds: (string | Types.ObjectId)[],
@@ -35,9 +37,10 @@ export async function notify(
       .select('email notificationPrefs')
       .lean()
     const pushTo = users.filter((u) => u.notificationPrefs?.push !== false).map((u) => u._id)
-    const wantsMail = options.email === false ? [] : users.filter((u) => options.force || u.notificationPrefs?.email !== false)
+    const mode = options.email ?? (options.force ? true : false)
+    const wantsMail = mode === false ? [] : users.filter((u) => options.force || u.notificationPrefs?.email !== false)
     const reached = await sendToUsers(pushTo, input)
-    const mailTo = options.email === 'fallback' ? wantsMail.filter((u) => !reached.has(u._id.toString())) : wantsMail
+    const mailTo = mode === 'fallback' ? wantsMail.filter((u) => !reached.has(u._id.toString())) : wantsMail
     await Promise.all(mailTo.map((u) => sendMail(u.email, input.title, input.body ?? '', input.link)))
   } catch (error) {
     console.error('Failed to deliver notifications', error)

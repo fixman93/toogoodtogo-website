@@ -43,13 +43,6 @@ export async function register(input: { name: string; email: string; password: s
   }).catch((error: unknown) => {
     throw isPhoneDuplicate(error) ? phoneTaken() : error
   })
-  void sendMail(
-    user.email,
-    `Dobro došao/la, ${user.name.split(' ')[0]}!`,
-    'Hvala što spašavaš hranu sa nama.\nPronađi kesu iznenađenja u blizini, rezerviši je i preuzmi u lokalu po trećini cene.',
-    '/',
-    'Pronađi ponude',
-  )
   return { user: serializeUser(user), token: signToken(user.id, user.role) }
 }
 
