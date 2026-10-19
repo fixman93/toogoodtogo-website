@@ -195,7 +195,7 @@ function Statement() {
               </Card>
             )}
             {data.businesses
-              .filter((b) => b.orders > 0)
+              .filter((b) => b.orders > 0 || !!b.boostMinor)
               .map((b) => (
                 <Card key={b.businessId} className="p-4">
                   <p className="mb-1 font-bold">{b.name}</p>

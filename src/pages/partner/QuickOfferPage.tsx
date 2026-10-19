@@ -13,6 +13,7 @@ import { currencyInfo } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
 import { useBusinessOffers, useMyBusinesses, useSaveOffer, useSaveSchedule } from '@/hooks/api'
 import { SuggestionHint } from '@/features/business/BagSuggestion'
+import { PickupTimePicker } from '@/features/business/PickupTimePicker'
 import { isoWeekday, weekdayShort } from '@/features/business/weekdays'
 import { t } from '@/i18n'
 import { formatMoney, fromMinor, toMinor } from '@/lib/format'
@@ -143,6 +144,9 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
   const day = edits.day ?? autoDay
   const date = day === 'today' ? today : addDays(today, 1)
   const { displayDecimals } = currencyInfo(business.currency)
+  // Fast time entry: start times this location used before, and "now" for today's offers.
+  const recentStarts = useMemo(() => [...new Set(recent.map((x) => x.from))], [recent])
+  const nowLocal = toZonedInput(new Date(), tz).time
   const price = Number(form.price.replace(',', '.'))
   const original = Number(form.original.replace(',', '.'))
 
@@ -301,16 +305,13 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
               ))}
             </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <label className="space-y-1 text-xs font-semibold text-muted-foreground">
-                {t('quick.from')}
-                <Input type="time" step={900} value={form.from} onChange={(e) => set({ from: e.target.value })} />
-              </label>
-              <label className="space-y-1 text-xs font-semibold text-muted-foreground">
-                {t('quick.to')}
-                <Input type="time" step={900} value={form.to} onChange={(e) => set({ to: e.target.value })} />
-              </label>
-            </div>
+            <PickupTimePicker
+              from={form.from}
+              to={form.to}
+              onChange={({ from, to }) => set({ from, to })}
+              recent={recentStarts}
+              now={!repeat && day === 'today' ? nowLocal : undefined}
+            />
           </div>
         </Card>
       </Step>

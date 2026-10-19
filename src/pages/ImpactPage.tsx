@@ -1,3 +1,4 @@
+import logoLight from '@/assets/images/web/foodnesi-logo-full-light.png'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowLeft, Award, CalendarHeart, Cloud, Compass, Flame, Leaf, Loader2, Moon, PiggyBank, Share2, ShoppingBag, Sparkles, Sunrise, Target, Trophy, type LucideIcon } from 'lucide-react'
@@ -54,7 +55,7 @@ async function recapImage(impact: Impact, name: string): Promise<Blob> {
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, 1080, 1920)
   // Soft accent circles.
-  ctx.fillStyle = 'rgba(245, 190, 90, 0.18)'
+  ctx.fillStyle = 'rgba(253, 142, 22, 0.16)'
   ctx.beginPath()
   ctx.arc(980, 260, 260, 0, Math.PI * 2)
   ctx.fill()
@@ -68,9 +69,17 @@ async function recapImage(impact: Impact, name: string): Promise<Blob> {
     ctx.textAlign = align
     ctx.fillText(s, x, y)
   }
-  text('Foodnesi', 90, 170, 64, 800, '#f5be5a')
-  text(t('impact.storyTitle', { year: r.year }), 90, 330, 84, 800)
-  text(name, 90, 410, 44, 600, 'rgba(255,255,255,0.75)')
+  // Brand logo (cream letters for the green background); falls back to text if it can't load.
+  const logo = await new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = logoLight
+  })
+  if (logo) ctx.drawImage(logo, 90, 90, 440, (440 * logo.height) / logo.width)
+  else text('Foodnesi', 90, 170, 64, 800, '#fd8e16')
+  text(t('impact.storyTitle', { year: r.year }), 90, 380, 84, 800)
+  text(name, 90, 460, 44, 600, 'rgba(255,255,255,0.75)')
 
   const savings = r.savings[0]
   const rows: [string, string][] = [
@@ -86,7 +95,7 @@ async function recapImage(impact: Impact, name: string): Promise<Blob> {
   })
   if (r.topPlace) {
     text(t('impact.storyTop'), 90, 1580, 36, 500, 'rgba(255,255,255,0.7)')
-    text(r.topPlace.name, 90, 1640, 52, 800, '#f5be5a')
+    text(r.topPlace.name, 90, 1640, 52, 800, '#fd8e16')
   }
   text(t('impact.storyFooter'), 90, 1820, 36, 600, 'rgba(255,255,255,0.75)')
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('canvas'))), 'image/png'))

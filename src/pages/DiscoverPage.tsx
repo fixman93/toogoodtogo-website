@@ -1,3 +1,5 @@
+import heroBanner from '@/assets/images/web/hero.webp'
+import heroMobile from '@/assets/images/web/hero-mobile.webp'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { Leaf, Map as MapIcon, Search } from 'lucide-react'
@@ -27,7 +29,13 @@ export function DiscoverPage() {
 
   return (
     <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-3xl bg-primary px-5 py-7 text-primary-foreground sm:px-10 sm:py-12">
+      <section className="overflow-hidden rounded-3xl bg-primary text-primary-foreground">
+        {/* Brand banner: the bag with groceries on phones, the full banner from 640 px. */}
+        <picture>
+          <source media="(min-width: 640px)" srcSet={heroBanner} />
+          <img src={heroMobile} alt={t('discover.heroAlt')} width={763} height={365} className="block h-auto w-full bg-[#f6efe2]" />
+        </picture>
+        <div className="relative overflow-hidden px-5 py-6 sm:px-10 sm:py-8">
         <div className="absolute -top-16 -right-16 size-56 rounded-full bg-accent/25 blur-2xl" aria-hidden />
         <div className="absolute -bottom-24 left-1/3 size-56 rounded-full bg-white/10 blur-3xl" aria-hidden />
         <div className="relative max-w-xl">
@@ -50,6 +58,7 @@ export function DiscoverPage() {
               className="h-13 rounded-full border-0 pl-12 text-foreground shadow-lg"
             />
           </form>
+        </div>
         </div>
       </section>
 

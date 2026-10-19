@@ -43,7 +43,7 @@ function html(subject: string, body: string, url: string, button: string, extras
     .join('')
   return `<!doctype html><html lang="sr"><body style="margin:0;font-family:Arial,Helvetica,sans-serif;background:#f7f5ef;padding:24px">
   <div style="max-width:520px;margin:auto;background:#ffffff;border-radius:16px;padding:28px">
-    <img src="${escape(new URL('/brand/foodnesi-logo.png', env.APP_URL).toString())}" alt="Foodnesi" width="120" style="display:block;width:120px;height:auto;margin:0 0 16px;border:0;font-size:22px;font-weight:bold;color:#0f4c3a" />
+    <img src="${escape(new URL('/brand/foodnesi-logo.png', env.APP_URL).toString())}" alt="Foodnesi – dobra hrana, manje otpada" width="170" style="display:block;width:170px;height:auto;margin:0 0 16px;border:0;font-size:22px;font-weight:bold;color:#0f4c3a" />
     <p style="font-size:17px;font-weight:bold;color:#1d2b25;margin:0 0 12px">${escape(subject)}</p>
     ${paragraphs}
     ${image}

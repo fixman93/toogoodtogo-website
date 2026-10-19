@@ -860,6 +860,33 @@ export interface PartnerIntegrity extends PickupCounts {
   customerConfirmed: Reservation[]
 }
 
+export interface PartnerStatsRow {
+  total: number
+  collected: number
+  /** Collected by scanning the QR or typing the code. */
+  scanned: number
+  /** Collected with "Izdaj" in the order list (no code). */
+  manual: number
+  /** Confirmed by the customer, not recorded by the partner. */
+  byCustomer: number
+  expired: number
+  cancelledByCustomer: number
+  cancelledByPartner: number
+  active: number
+  deliveries: number
+  bagsCollected: number
+  revenueMinor: number
+  expiredValueMinor: number
+  arrivalWarnings: number
+}
+
+export interface PartnerStats {
+  days: number
+  currency: string | null
+  totals: PartnerStatsRow
+  locations: (PartnerStatsRow & { businessId: string; name: string; deleted: boolean })[]
+}
+
 export type RiskFlag = 'high_no_show' | 'unscanned_pickups' | 'repeat_no_shows' | 'manual_handover' | 'arrived_not_scanned'
 
 export interface PartnerRisk extends PickupCounts {

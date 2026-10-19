@@ -100,6 +100,11 @@ export async function deletePayment(req: Request, res: Response) {
   res.status(204).end()
 }
 
+export async function partnerStats(req: Request, res: Response) {
+  const { days } = z.object({ days: z.coerce.number().int().min(0).max(3650).default(30) }).parse(req.query)
+  ok(res, await integrityService.partnerStats(idParams.parse(req.params).id, days))
+}
+
 export async function partnerStanding(req: Request, res: Response) {
   ok(res, await moderationService.standing(idParams.parse(req.params).id))
 }

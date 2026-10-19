@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useLocation as useRouterLocation, useNavigate, useSearchParams } from 'react-router'
 import { Gift, Loader2 } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import { LogoMark } from '@/components/common/Logo'
+import { LogoFull } from '@/components/common/Logo'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { PasswordInput } from '@/components/ui/password-input'
@@ -50,7 +50,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   return (
     <div className="mx-auto max-w-md py-4 sm:py-10">
       <Card className="p-6 sm:p-8">
-        <LogoMark className="mb-5 size-12" />
+        <LogoFull className="mb-6 h-14" />
         <h1 className="text-2xl font-extrabold tracking-tight">{t(isLogin ? 'auth.loginTitle' : 'auth.registerTitle')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t(isLogin ? 'auth.loginSubtitle' : 'auth.registerSubtitle')}</p>
         {!isLogin && referralCode && (

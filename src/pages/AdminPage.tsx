@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PartnerStats } from '@/features/admin/PartnerStats'
 import { useAuth } from '@/features/auth/auth-context'
 import { RoleGuard } from '@/features/business/PartnerGuard'
 import { Stars } from '@/components/offers/ReviewList'
@@ -918,7 +919,9 @@ function FinancePartnerRow({ p, month }: { p: PlatformStatementPartner; month: s
           {p.businesses.map((b) => (
             <li key={b.businessId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
               <span>
-                {b.name} · {b.orders} · {formatMoney(b.grossMinor, currency)} · {formatMoney(b.commissionMinor, currency)}
+                <span className="font-semibold">{b.name}</span> · {t('finance.lineOrders', { count: b.orders })} · {t('finance.lineSales')} {formatMoney(b.grossMinor, currency)} ·{' '}
+                {t('finance.lineCommission')} {formatMoney(b.commissionMinor, currency)}
+                {!!b.boostMinor && ` · ${t('statement.boosts')} ${formatMoney(b.boostMinor, currency)}`}
               </span>
               <CommissionEditor businessId={b.businessId} rate={b.rate} />
             </li>
@@ -954,11 +957,12 @@ function MonthFinance({ month, setMonth }: { month: string; setMonth: (m: string
         <ErrorState onRetry={() => refetch()} />
       ) : (
         <>
+          {data.currencies.length > 1 && <p className="text-sm text-muted-foreground">{t('finance.currenciesNote', { list: data.currencies.map((c) => c.currency).join(', ') })}</p>}
           {data.currencies.map((c) => (
             <section key={c.currency} className="space-y-3" aria-label={c.currency}>
               {data.currencies.length > 1 && <h3 className="font-bold">{t('finance.inCurrency', { currency: c.currency })}</h3>}
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <MoneyTile label={t('finance.earned')} value={c.commissionMinor} currency={c.currency} tone="good" />
+                <MoneyTile label={c.boostMinor ? t('finance.earnedWithBoosts') : t('finance.earned')} value={c.commissionMinor + (c.boostMinor ?? 0)} currency={c.currency} tone="good" />
                 <MoneyTile label={t('finance.settled')} value={c.settledMinor} currency={c.currency} />
                 <MoneyTile label={t('finance.owedToUs')} value={c.owedToPlatformMinor} currency={c.currency} tone="bad" />
                 <MoneyTile label={t('finance.owedByUs')} value={c.owedToPartnersMinor} currency={c.currency} tone="bad" />
@@ -1087,6 +1091,7 @@ function PartnerPanel({ partner }: { partner: AdminUser }) {
   if (isLoading) return <Skeleton className="h-32 rounded-xl" />
   return (
     <div className="space-y-4 rounded-xl border bg-muted/30 p-3 text-sm">
+      <PartnerStats ownerId={partner.id} />
       {data?.reason && status !== 'active' && <p className="font-medium">{t('standing.reason', { reason: data.reason })}</p>}
 
       {/* Status */}

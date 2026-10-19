@@ -210,3 +210,74 @@ export async function openDisputes(actor: Actor) {
   const rows = await Reservation.find({ 'dispute.status': 'open' }).sort({ 'dispute.openedAt': 1 }).limit(100).lean()
   return toDto(rows, actor)
 }
+
+/**
+ * One partner at a glance (admin → Partneri): every reservation at their
+ * locations whose pickup window started in the period, by outcome, with
+ * revenue and a row per location. `days = 0` = all time.
+ */
+export async function partnerStats(ownerId: string, days: number) {
+  const businesses = await Business.find({ owner: ownerId }).select('name currency deletedAt').lean()
+  if (!businesses.length) return { days, currency: null, totals: emptyStats(), locations: [] }
+  const match: Record<string, unknown> = { business: { $in: businesses.map((b) => b._id) } }
+  if (days > 0) match.pickupStart = { $gte: since(days) }
+  const is = (status: string) => ({ $eq: ['$status', status] })
+  const sumIf = (cond: unknown, value: unknown = 1) => ({ $sum: { $cond: [cond, value, 0] } })
+  const rows = await Reservation.aggregate<StatsRow & { _id: Types.ObjectId }>([
+    { $match: match },
+    {
+      $group: {
+        _id: '$business',
+        total: { $sum: 1 },
+        collected: sumIf(is('collected')),
+        scanned: sumIf({ $and: [is('collected'), { $in: ['$collectedVia', ['qr', 'code']] }] }),
+        manual: sumIf({ $and: [is('collected'), { $eq: ['$collectedVia', 'list'] }] }),
+        byCustomer: sumIf({ $and: [is('collected'), { $eq: ['$collectedVia', 'customer'] }] }),
+        expired: sumIf(is('expired')),
+        cancelledByCustomer: sumIf({ $and: [is('cancelled'), { $ne: ['$cancelledBy', 'business'] }] }),
+        cancelledByPartner: sumIf({ $and: [is('cancelled'), { $eq: ['$cancelledBy', 'business'] }] }),
+        active: sumIf({ $in: ['$status', ['confirmed', 'pending_payment']] }),
+        deliveries: sumIf({ $eq: ['$fulfillment', 'delivery'] }),
+        bagsCollected: sumIf(is('collected'), '$quantity'),
+        revenueMinor: sumIf(is('collected'), '$totalMinor'),
+        expiredValueMinor: sumIf(is('expired'), '$totalMinor'),
+        arrivalWarnings: sumIf({ $ne: [{ $ifNull: ['$integrityAlert', null] }, null] }),
+      },
+    },
+  ])
+  const byId = new Map(rows.map((r) => [r._id.toString(), r]))
+  const locations = businesses
+    .map((b) => ({ businessId: b._id.toString(), name: b.name, deleted: !!b.deletedAt, ...emptyStats(), ...strip(byId.get(b._id.toString())) }))
+    .filter((l) => !l.deleted || l.total > 0)
+    .sort((a, b) => b.total - a.total)
+  const totals = emptyStats()
+  for (const l of locations) for (const k of Object.keys(totals) as (keyof StatsRow)[]) totals[k] += l[k]
+  return { days, currency: businesses[0].currency, totals, locations }
+}
+
+type StatsRow = {
+  total: number
+  collected: number
+  scanned: number
+  manual: number
+  byCustomer: number
+  expired: number
+  cancelledByCustomer: number
+  cancelledByPartner: number
+  active: number
+  deliveries: number
+  bagsCollected: number
+  revenueMinor: number
+  expiredValueMinor: number
+  arrivalWarnings: number
+}
+
+function emptyStats(): StatsRow {
+  return { total: 0, collected: 0, scanned: 0, manual: 0, byCustomer: 0, expired: 0, cancelledByCustomer: 0, cancelledByPartner: 0, active: 0, deliveries: 0, bagsCollected: 0, revenueMinor: 0, expiredValueMinor: 0, arrivalWarnings: 0 }
+}
+
+function strip(row?: StatsRow & { _id: Types.ObjectId }): Partial<StatsRow> {
+  if (!row) return {}
+  const { _id: _ignored, ...rest } = row
+  return rest
+}

@@ -66,6 +66,7 @@ import type {
   OfferSchedule,
   OfferScheduleInput,
   ReviewPhoto,
+  PartnerStats,
 } from './types'
 
 const unwrap = <T>(promise: Promise<{ data: ApiSuccess<T> }>) => promise.then((res) => res.data.data)
@@ -204,6 +205,8 @@ export const adminApi = {
   staffAccess: (userId: string) => unwrap<StaffAccess>(api.get(`/admin/users/${userId}/staff-access`)),
   setStaffAccess: (userId: string, businessIds: string[]) => unwrap<StaffAccess>(api.put(`/admin/users/${userId}/staff-access`, { businessIds })),
   disputes: () => unwrap<Reservation[]>(api.get('/admin/disputes')),
+  /** One partner's reservations by outcome (days = 0 → all time). */
+  partnerStats: (ownerId: string, days: number) => unwrap<PartnerStats>(api.get(`/admin/partners/${ownerId}/stats`, { params: { days } })),
   /** Arrival warnings: customer at the shop, nothing recorded. */
   integrityAlerts: () => unwrap<Reservation[]>(api.get('/admin/integrity/alerts')),
   resolveDispute: (id: string, body: { decision: 'upheld' | 'rejected'; note?: string }) => unwrap<Reservation>(api.patch(`/admin/disputes/${id}`, body)),
