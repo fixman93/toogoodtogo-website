@@ -6,7 +6,7 @@ import * as reservationService from '../services/reservation.service.js'
 import { ApiError } from '../utils/ApiError.js'
 import { list, ok } from '../utils/respond.js'
 import { idParams } from '../validators/common.js'
-import { collectByCodeBody, courierLocationBody, disputeBody, pickupCheckBody, createReservationBody, reservationListQuery } from '../validators/reservation.validators.js'
+import { collectByCodeBody, courierLocationBody, presenceBody, disputeBody, pickupCheckBody, createReservationBody, reservationListQuery } from '../validators/reservation.validators.js'
 
 export async function listReservations(req: Request, res: Response) {
   const result = await reservationService.list(reservationListQuery.parse(req.query), currentUser(req))
@@ -72,4 +72,8 @@ export async function courierArrived(req: Request, res: Response) {
 export async function deliveryMessage(req: Request, res: Response) {
   const { key } = z.object({ key: z.enum([...COURIER_MESSAGES, ...CUSTOMER_MESSAGES]) }).parse(req.body)
   ok(res, await reservationService.deliveryMessage(idParams.parse(req.params).id, key, currentUser(req)))
+}
+
+export async function presence(req: Request, res: Response) {
+  ok(res, await reservationService.recordPresence(idParams.parse(req.params).id, presenceBody.parse(req.body), currentUser(req)))
 }

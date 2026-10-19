@@ -131,6 +131,10 @@ export async function listDonations(_req: Request, res: Response) {
   ok(res, await donationService.adminList())
 }
 
+export async function integrityAlerts(req: Request, res: Response) {
+  ok(res, await reservationService.integrityAlerts(currentUser(req)))
+}
+
 export async function integrity(req: Request, res: Response) {
   const { days } = z.object({ days: z.coerce.number().int().min(7).max(365).default(30) }).parse(req.query)
   ok(res, await integrityService.platformIntegrity(days))

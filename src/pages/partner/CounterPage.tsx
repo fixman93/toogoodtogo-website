@@ -8,6 +8,7 @@ import type { Reservation } from '@/api/types'
 import { ErrorState } from '@/components/common/StateViews'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { arrivedRecently } from '@/features/reservations/arrival'
 import { StaffGuard } from '@/features/business/PartnerGuard'
 import { useCollectReservation, useWorkplaces } from '@/hooks/api'
 import { t } from '@/i18n'
@@ -88,6 +89,8 @@ function OrderTile({ r, fresh }: { r: Reservation; fresh: boolean }) {
             <Truck className="size-3.5" />
             {t(`orders.delivery.${r.delivery.stage}`)}
           </span>
+        ) : arrivedRecently(r) ? (
+          <span className="rounded-full bg-success px-2.5 py-1 text-xs font-bold text-white">{t('arrival.partnerBadge')}</span>
         ) : (
           fresh && <span className="rounded-full bg-accent px-2.5 py-1 text-xs font-bold text-accent-foreground">{t('counter.new')}</span>
         )}

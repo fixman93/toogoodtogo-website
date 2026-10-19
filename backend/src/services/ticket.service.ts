@@ -17,7 +17,7 @@ const money = (minor: number, currency: string) => {
   return new Intl.NumberFormat(LOCALE, { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits }).format(minor / 100)
 }
 
-function pickupWindow(start: Date, end: Date, timeZone: string) {
+export function pickupWindow(start: Date, end: Date, timeZone: string) {
   const day = new Intl.DateTimeFormat(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', timeZone }).format(start)
   const time = (d: Date) => new Intl.DateTimeFormat(LOCALE, { hour: '2-digit', minute: '2-digit', hour12: false, timeZone }).format(d)
   return `${day.charAt(0).toUpperCase()}${day.slice(1)}, ${time(start)}–${time(end)}`

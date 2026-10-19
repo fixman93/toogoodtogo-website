@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
-import { AlertTriangle, Ban, CalendarCheck, ScanLine, ShieldCheck, CheckCircle2, ChevronDown, ClipboardList, History, Leaf, Loader2, MapPin, MessageSquare, PauseCircle, PlayCircle, ReceiptText, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Ban, MapPinCheck, CalendarCheck, ScanLine, ShieldCheck, CheckCircle2, ChevronDown, ClipboardList, History, Leaf, Loader2, MapPin, MessageSquare, PauseCircle, PlayCircle, ReceiptText, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { PLATFORM_ROLES, type AdminBusiness, type AdminReview, type AdminUser, type ApplicationStatus, type PartnerApplication, type Permission, type PaymentDirection, type PaymentMethod, type PlatformStatementPartner, type Reservation, type ReservationStatus, type Role, type TicketStatus } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -35,6 +35,7 @@ import {
   usePartnerModeration,
   usePlatformIntegrity,
   useDisputes,
+  useIntegrityAlerts,
   useResolveDispute,
   useStaffAccess,
   useSetStaffAccess,
@@ -1351,6 +1352,7 @@ function IntegrityTab() {
   const [days, setDays] = useState<'7' | '30' | '90'>('30')
   const { data, isLoading, isError, refetch } = usePlatformIntegrity(Number(days))
   const disputes = useDisputes()
+  const alerts = useIntegrityAlerts()
   return (
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">{t('integrity.intro')}</p>
@@ -1363,6 +1365,42 @@ function IntegrityTab() {
             <ul className="divide-y">
               {disputes.data.map((r) => (
                 <DisputeRow key={r.id} r={r} />
+              ))}
+            </ul>
+          </Card>
+        </section>
+      )}
+
+      {!!alerts.data?.length && (
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-2 font-bold">
+            <MapPinCheck className="size-5 text-destructive" />
+            {t('arrival.alertsTitle', { count: alerts.data.length })}
+          </h2>
+          <p className="text-sm text-muted-foreground">{t('arrival.alertsIntro')}</p>
+          <Card className="overflow-hidden border-destructive/40">
+            <ul className="divide-y">
+              {alerts.data.map((r) => (
+                <li key={r.id} className="space-y-1 p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold">
+                      <span className="font-mono text-primary">{r.code}</span> · {r.business.name}
+                    </span>
+                    <Badge variant="destructive">{t(r.integrityAlert?.kind === 'arrived_cancelled' ? 'arrival.kind.cancelled' : 'arrival.kind.notScanned')}</Badge>
+                  </div>
+                  <p className="text-muted-foreground">
+                    {r.customer?.name ?? '—'} · {r.quantity} × {r.offer.title} · {formatMoney(r.totalMinor, r.currency)}
+                  </p>
+                  {r.presence && (
+                    <p className="text-muted-foreground">
+                      {t('arrival.evidence', {
+                        window: formatPickupWindow(r.pickupStart, r.pickupEnd, r.timezone),
+                        at: formatTime(r.presence.firstAt, r.timezone),
+                        meters: r.presence.minDistanceMeters,
+                      })}
+                    </p>
+                  )}
+                </li>
               ))}
             </ul>
           </Card>
@@ -1420,6 +1458,11 @@ function IntegrityTab() {
                       <span>
                         {t('integrity.repeat')}: <strong className={cn(p.repeatNoShowCustomers >= 2 && 'text-destructive')}>{p.repeatNoShowCustomers}</strong>
                       </span>
+                      {!!p.arrivedNotScanned && (
+                        <span>
+                          {t('arrival.column')}: <strong className="text-destructive">{p.arrivedNotScanned}</strong>
+                        </span>
+                      )}
                     </div>
                     {p.flags.length > 0 && (
                       <ul className="list-inside list-disc text-xs text-muted-foreground">

@@ -315,6 +315,7 @@ export async function cancel(id: string, actor: Actor) {
     return updated
   })
 
+  if (cancelled.cancelledBy === 'business') void flagArrivals([cancelled._id], 'arrived_cancelled')
   if (cancelled.cancelledBy === 'business') {
     void notify([cancelled.user], {
       type: 'reservation_cancelled',
@@ -628,6 +629,72 @@ export async function sharedPass(token: string) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Arrival check: the customer's phone at the shop during the pickup window.
+
+/** "At the shop": within 50 m, plus up to 50 m of the phone's own GPS uncertainty. */
+const NEAR_M = 50
+const MAX_ACCURACY_BONUS_M = 50
+/** Arrival counts this long before/after the pickup window. */
+const PRESENCE_MARGIN_MS = 15 * 60_000
+
+export async function recordPresence(id: string, point: { lat: number; lng: number; accuracy: number }, actor: Actor) {
+  const reservation = await Reservation.findOne({ _id: id, user: actor.id })
+  if (!reservation) throw ApiError.notFound('Rezervacija nije pronađena.')
+  const now = Date.now()
+  const inWindow = now >= reservation.pickupStart.getTime() - PRESENCE_MARGIN_MS && now <= reservation.pickupEnd.getTime() + PRESENCE_MARGIN_MS
+  if (reservation.status !== 'confirmed' || reservation.delivery || !inWindow) return { near: false, recorded: false }
+  const business = await Business.findById(reservation.business).select('location').lean()
+  if (!business) return { near: false, recorded: false }
+  const distance = distanceMeters(fromPoint(business.location), point)
+  const near = distance <= NEAR_M + Math.min(point.accuracy, MAX_ACCURACY_BONUS_M)
+  if (!near) return { near: false, recorded: false, distanceMeters: Math.round(distance) }
+  const at = new Date()
+  const p = reservation.presence
+  reservation.set('presence', {
+    firstAt: p?.firstAt ?? at,
+    lastAt: at,
+    minDistanceMeters: Math.min(p?.minDistanceMeters ?? Infinity, distance),
+    // Accuracy of the closest reading.
+    accuracyMeters: !p || distance < p.minDistanceMeters ? point.accuracy : p.accuracyMeters,
+    pings: (p?.pings ?? 0) + 1,
+  })
+  await reservation.save()
+  return { near: true, recorded: true, distanceMeters: Math.round(distance), firstAt: reservation.presence!.firstAt.toISOString() }
+}
+
+/**
+ * Integrity warnings: the customer was at the shop, yet the bag wasn't
+ * recorded (expired) or the partner cancelled it. The platform team is told.
+ */
+async function flagArrivals(ids: Types.ObjectId[], kind: 'arrived_not_scanned' | 'arrived_cancelled') {
+  if (!ids.length) return
+  const at = new Date()
+  const flagged = await Reservation.find({ _id: { $in: ids }, 'presence.firstAt': { $exists: true }, integrityAlert: { $exists: false } }).lean()
+  if (!flagged.length) return
+  await Reservation.updateMany({ _id: { $in: flagged.map((r) => r._id) }, integrityAlert: { $exists: false } }, { $set: { integrityAlert: { kind, at } } })
+  const names = new Map((await Business.find({ _id: { $in: flagged.map((r) => r.business) } }).select('name').lean()).map((b) => [b._id.toString(), b.name]))
+  const team = await User.find({ role: { $in: ['admin', 'operations'] }, deletedAt: null }).select('_id').lean()
+  for (const r of flagged) {
+    void notify(
+      team.map((u) => u._id),
+      {
+        type: 'integrity_alert',
+        title: `${kind === 'arrived_cancelled' ? 'Otkazano, a kupac je bio u lokalu' : 'Kupac bio u lokalu, nije skenirano'} · ${r.code}`,
+        body: `${names.get(r.business.toString()) ?? ''}: ${r.quantity} × ${r.offerTitle}. Kupac je bio ~${Math.round(r.presence!.minDistanceMeters)} m od lokala.`,
+        link: '/admin?tab=integrity',
+      },
+      { email: false },
+    )
+  }
+}
+
+/** Platform: latest arrival warnings with the evidence. */
+export async function integrityAlerts(actor: Actor, limit = 100) {
+  const rows = await Reservation.find({ integrityAlert: { $exists: true } }).sort({ 'integrityAlert.at': -1 }).limit(limit).lean()
+  return toDto(rows, actor)
+}
+
 /** Housekeeping: mark unclaimed reservations as expired. Run periodically. */
 export async function expireStale(now = new Date()) {
   const cutoff = new Date(now.getTime() - market().expiryGraceMinutes * 60_000)
@@ -639,6 +706,8 @@ export async function expireStale(now = new Date()) {
     { _id: { $in: ids }, status: 'confirmed' },
     { $set: { status: 'expired', 'pickupCheck.askedAt': now } },
   )
+  // Customer was at the shop but nothing was recorded → integrity warning.
+  await flagArrivals(ids, 'arrived_not_scanned')
   // Ask each customer whether they actually got the bag (see answerPickupCheck).
   const expired = await Reservation.find({ _id: { $in: ids }, status: 'expired', 'pickupCheck.askedAt': now }).lean()
   const names = new Map((await Business.find({ _id: { $in: expired.map((r) => r.business) } }).select('name').lean()).map((b) => [b._id.toString(), b.name]))

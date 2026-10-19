@@ -6,9 +6,10 @@
  * - no-show rate vs the platform average (unrecorded hand-overs look like no-shows);
  * - pickups the customer confirmed but the partner never recorded;
  * - customers who "never come" to the same partner yet keep reserving there;
- * - hand-overs recorded without the customer's code (list button) instead of a scan.
+ * - hand-overs recorded without the customer's code (list button) instead of a scan;
+ * - the customer's phone was at the shop, yet nothing was recorded (or the partner cancelled).
  */
-import type { Types } from 'mongoose'
+import { Types } from 'mongoose'
 import { marketFor } from '../config/markets.js'
 import { Business, Reservation, User } from '../models/index.js'
 import { toDto } from './reservation.service.js'
@@ -26,11 +27,13 @@ type Counts = {
   customerNo: number
   /** Gross of expired reservations — the commission at stake if they were secretly handed over. */
   expiredGrossMinor: number
+  /** Customer was at the shop but it wasn't scanned (expired) or the partner cancelled. */
+  arrivedNotScanned: number
 }
 
 type Row = Counts & { _id: Types.ObjectId }
 
-export type RiskFlag = 'high_no_show' | 'unscanned_pickups' | 'repeat_no_shows' | 'manual_handover'
+export type RiskFlag = 'high_no_show' | 'unscanned_pickups' | 'repeat_no_shows' | 'manual_handover' | 'arrived_not_scanned'
 
 const MIN_SAMPLE = 8
 
@@ -56,9 +59,19 @@ async function countsByBusiness(match: Record<string, unknown>, from: Date) {
         viaCustomer: { $sum: { $cond: [{ $and: [collected, { $eq: ['$collectedVia', 'customer'] }] }, 1, 0] } },
         customerNo: { $sum: { $cond: [{ $eq: ['$pickupCheck.answer', 'not_collected'] }, 1, 0] } },
         expiredGrossMinor: { $sum: { $cond: [{ $eq: ['$status', 'expired'] }, '$totalMinor', 0] } },
+        arrivedNotScanned: { $sum: { $cond: [{ $ifNull: ['$integrityAlert', false] }, 1, 0] } },
       },
     },
   ])
+}
+
+/** Partner-cancelled reservations with an arrival warning (not in the collected/expired counts). */
+async function cancelledArrivals(match: Record<string, unknown>, from: Date) {
+  const rows = await Reservation.aggregate<{ _id: Types.ObjectId; n: number }>([
+    { $match: { ...match, status: 'cancelled', 'integrityAlert.kind': 'arrived_cancelled', pickupEnd: { $gte: from } } },
+    { $group: { _id: '$business', n: { $sum: 1 } } },
+  ])
+  return new Map(rows.map((r) => [r._id.toString(), r.n]))
 }
 
 /** Customers with ≥ 2 no-shows at the same partner who still reserved there afterwards. */
@@ -76,7 +89,7 @@ async function repeatNoShows(businessIds: Types.ObjectId[], from: Date) {
   return result
 }
 
-const empty = (): Counts => ({ total: 0, collected: 0, expired: 0, viaQr: 0, viaCode: 0, viaList: 0, viaCustomer: 0, customerNo: 0, expiredGrossMinor: 0 })
+const empty = (): Counts => ({ total: 0, collected: 0, expired: 0, viaQr: 0, viaCode: 0, viaList: 0, viaCustomer: 0, customerNo: 0, expiredGrossMinor: 0, arrivedNotScanned: 0 })
 const add = (a: Counts, b: Counts) => {
   for (const k of Object.keys(a) as (keyof Counts)[]) a[k] += b[k]
   return a
@@ -91,7 +104,9 @@ function assess(c: Counts, othersNoShow: number, repeatCustomers: number) {
   if (c.viaCustomer >= 2 || (c.viaCustomer >= 1 && rate(c.viaCustomer, c.collected) >= 0.1)) flags.push('unscanned_pickups')
   if (repeatCustomers >= 2) flags.push('repeat_no_shows')
   if (c.collected >= MIN_SAMPLE && rate(c.viaList, c.collected) >= 0.5) flags.push('manual_handover')
-  const risk = flags.length >= 2 || c.viaCustomer >= 3 ? 'high' : flags.length === 1 ? 'medium' : 'low'
+  // Hard evidence: the customer's phone was at the counter.
+  if (c.arrivedNotScanned >= 1) flags.push('arrived_not_scanned')
+  const risk = flags.length >= 2 || c.viaCustomer >= 3 || c.arrivedNotScanned >= 2 ? 'high' : flags.length === 1 ? 'medium' : 'low'
   return {
     noShowRate,
     scannedRate: rate(c.viaQr + c.viaCode, c.collected),
@@ -104,6 +119,13 @@ function assess(c: Counts, othersNoShow: number, repeatCustomers: number) {
 export async function platformIntegrity(days: number) {
   const from = since(days)
   const rows = await countsByBusiness({}, from)
+  // Cancelled-with-arrival is counted on top (a location may have only those).
+  const cancelled = await cancelledArrivals({}, from)
+  for (const [id, n] of cancelled) {
+    const row = rows.find((r) => r._id.toString() === id)
+    if (row) row.arrivedNotScanned += n
+    else rows.push({ ...empty(), arrivedNotScanned: n, _id: new Types.ObjectId(id) })
+  }
   const businesses = await Business.find({ _id: { $in: rows.map((r) => r._id) } }).select('name owner currency commissionRate address.countryCode').lean()
   const byId = new Map(businesses.map((b) => [b._id.toString(), b]))
   const repeat = await repeatNoShows(

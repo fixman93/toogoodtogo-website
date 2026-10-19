@@ -6,6 +6,7 @@ import type { Reservation } from '@/api/types'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
+import { arrivedRecently } from '@/features/reservations/arrival'
 import { StatusBadge } from '@/components/reservations/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -73,6 +74,8 @@ function OrderRow({ r }: { r: Reservation }) {
             </Badge>
           )}
           {r.collectedVia === 'customer' && <Badge variant="destructive">{t('pickups.notScanned')}</Badge>}
+          {active && arrivedRecently(r) && <Badge variant="success">{t('arrival.partnerBadge')}</Badge>}
+          {r.integrityAlert && <Badge variant="destructive">{t('arrival.alertBadge')}</Badge>}
         </span>
       </div>
       {active && (

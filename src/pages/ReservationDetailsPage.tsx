@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
 import { Link, useLocation as useRouterLocation, useParams } from 'react-router'
-import { ArrowLeft, CalendarClock, CheckCircle2, ExternalLink, Info, Leaf, Loader2, MapPin, ReceiptText, Send, Star, Truck, Camera, X } from 'lucide-react'
+import { ArrowLeft, CalendarClock, CheckCircle2, ExternalLink, Info, Leaf, Loader2, MapPin, ReceiptText, Send, Star, Truck, Camera, X, MapPinCheck } from 'lucide-react'
 import type { Reservation } from '@/api/types'
 import { ApiError } from '@/api/client'
 import { RequireAuth } from '@/components/common/RequireAuth'
@@ -19,6 +19,7 @@ import { formatMoney, formatPickupWindow, formatTime } from '@/lib/format'
 import { pickupQrValue } from '@/lib/pickup'
 import { directionsUrl } from '@/lib/geo'
 import { DeliveryTracker } from '@/features/delivery/DeliveryTracker'
+import { useArrivalCheck } from '@/features/reservations/useArrivalCheck'
 
 function Details() {
   const { id } = useParams()
@@ -27,6 +28,7 @@ function Details() {
   const { data: r, isLoading, isError, error, refetch } = useReservation(id)
   const { data: business } = useBusiness(r?.business.id)
   const cancel = useCancelReservation()
+  const arrival = useArrivalCheck(r)
   const [confirming, setConfirming] = useState(false)
   const queryClient = useQueryClient()
 
@@ -106,6 +108,21 @@ function Details() {
             <p className="mt-4 text-xs font-semibold tracking-wider text-muted-foreground uppercase">{t('reservations.code')}</p>
             <p className="mt-1 font-mono text-3xl font-extrabold tracking-widest text-primary">{r.code}</p>
             <p className="mt-2 text-sm text-muted-foreground">{r.delivery ? t('track.qrHint') : t('reservations.qrHint')}</p>
+            {arrival.state === 'arrived' && (
+              <p role="status" className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full bg-success/15 px-3 py-1.5 text-sm font-semibold text-success">
+                <MapPinCheck className="size-4" />
+                {t('arrival.here')}
+              </p>
+            )}
+            {arrival.state === 'ask' && (
+              <div className="mt-3 space-y-1">
+                <Button size="sm" variant="outline" onClick={arrival.start}>
+                  <MapPinCheck />
+                  {t('arrival.confirm')}
+                </Button>
+                <p className="text-xs text-muted-foreground">{t('arrival.hint')}</p>
+              </div>
+            )}
           </div>
         )}
 

@@ -748,3 +748,7 @@ export function useDeliveryMessage() {
     onSuccess: (r) => patchReservation(queryClient, r),
   })
 }
+
+export function useIntegrityAlerts() {
+  return useQuery({ queryKey: ['admin', 'integrity', 'alerts'], queryFn: adminApi.integrityAlerts })
+}

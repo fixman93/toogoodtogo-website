@@ -24,7 +24,10 @@ export function BoostPanel({ offerId }: { offerId: string }) {
       kind: 'push',
       icon: BellRing,
       title: t('boost.push'),
-      text: t('boost.pushText', { count: data.push.audience }),
+      text:
+        data.push.customers > 0
+          ? t('boost.pushTextMixed', { followers: data.push.followers, customers: data.push.customers })
+          : t('boost.pushText', { count: data.push.followers }),
       bought: data.push.bought,
       done: t('boost.pushDone', { count: data.push.recipients ?? 0 }),
     },

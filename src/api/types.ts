@@ -239,6 +239,10 @@ export interface Reservation {
   customer?: { name: string; phone?: string }
   fulfillment: Fulfillment
   delivery: ReservationDelivery | null
+  /** The customer's phone was at the shop during the pickup window. */
+  presence?: { firstAt: string; lastAt: string; minDistanceMeters: number } | null
+  /** Platform warning: at the shop, but not scanned / cancelled by the partner. */
+  integrityAlert?: { kind: 'arrived_not_scanned' | 'arrived_cancelled'; at: string } | null
   /** Paid at the counter / to the courier: bags + delivery fee. */
   amountDueMinor: number
   cancelledAt?: string
@@ -427,6 +431,7 @@ export type NotificationType =
   | 'delivery_message'
   | 'offer_boost'
   | 'challenge'
+  | 'integrity_alert'
   | 'offer_new'
   | 'waitlist_available'
   | 'reservation_confirmed'
@@ -656,7 +661,8 @@ export interface BoostCharge {
 export interface BoostOptions {
   currency: string
   top: { priceMinor: number; bought: boolean }
-  push: { priceMinor: number; bought: boolean; recipients: number | null; audience: number }
+  /** audience = followers (always) + recent customers who don't follow (max one promo push a day). */
+  push: { priceMinor: number; bought: boolean; recipients: number | null; audience: number; followers: number; customers: number }
 }
 
 export interface OfferSchedule {
@@ -842,6 +848,8 @@ export interface PickupCounts {
   viaCustomer: number
   customerNo: number
   expiredGrossMinor: number
+  /** Customer's phone was at the shop but nothing was scanned (or the partner cancelled). */
+  arrivedNotScanned?: number
   noShowRate: number
   scannedRate: number
 }
@@ -852,7 +860,7 @@ export interface PartnerIntegrity extends PickupCounts {
   customerConfirmed: Reservation[]
 }
 
-export type RiskFlag = 'high_no_show' | 'unscanned_pickups' | 'repeat_no_shows' | 'manual_handover'
+export type RiskFlag = 'high_no_show' | 'unscanned_pickups' | 'repeat_no_shows' | 'manual_handover' | 'arrived_not_scanned'
 
 export interface PartnerRisk extends PickupCounts {
   ownerId: string

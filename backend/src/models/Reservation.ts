@@ -99,6 +99,13 @@ export interface IReservation {
    * order list, or confirmed by the customer after the partner didn't record it.
    */
   collectedVia?: CollectedVia
+  /**
+   * The customer's phone was at the shop during the pickup window (sent only
+   * while the reservation is open in the app, and only when close by).
+   */
+  presence?: { firstAt: Date; lastAt: Date; minDistanceMeters: number; accuracyMeters: number; pings: number }
+  /** Integrity warning: the customer was at the shop but the hand-over wasn't recorded. */
+  integrityAlert?: { kind: 'arrived_not_scanned' | 'arrived_cancelled'; at: Date }
   /** Picked up in the shop (default) or delivered by the partner's own courier. */
   fulfillment: Fulfillment
   delivery?: ReservationDelivery
@@ -151,6 +158,17 @@ const reservationSchema = new Schema<IReservation>(
     collectedAt: Date,
     commissionRate: { type: Number, min: 0, max: 0.5 },
     collectedVia: { type: String, enum: COLLECTED_VIA },
+    presence: {
+      type: new Schema(
+        { firstAt: Date, lastAt: Date, minDistanceMeters: Number, accuracyMeters: Number, pings: { type: Number, default: 0 } },
+        { _id: false },
+      ),
+      default: undefined,
+    },
+    integrityAlert: {
+      type: new Schema({ kind: { type: String, enum: ['arrived_not_scanned', 'arrived_cancelled'], required: true }, at: { type: Date, required: true } }, { _id: false }),
+      default: undefined,
+    },
     fulfillment: { type: String, enum: FULFILLMENTS, default: 'pickup' },
     delivery: {
       type: new Schema<ReservationDelivery>(
@@ -205,6 +223,7 @@ reservationSchema.index({ user: 1, pickupStart: -1 })
 reservationSchema.index({ status: 1, pickupEnd: 1 })
 reservationSchema.index({ business: 1, pickupEnd: -1 })
 reservationSchema.index({ 'dispute.status': 1 }, { sparse: true })
+reservationSchema.index({ 'integrityAlert.at': -1 }, { sparse: true })
 reservationSchema.index({ business: 1, code: 1 })
 
 export type ReservationDoc = HydratedDocument<IReservation>

@@ -139,6 +139,10 @@ export function serializeReservation(r: WithId<IReservation>, business: WithId<I
               : null,
         }
       : null,
+    presence: r.presence?.firstAt
+      ? { firstAt: r.presence.firstAt.toISOString(), lastAt: r.presence.lastAt.toISOString(), minDistanceMeters: Math.round(r.presence.minDistanceMeters) }
+      : null,
+    integrityAlert: r.integrityAlert ? { kind: r.integrityAlert.kind, at: r.integrityAlert.at.toISOString() } : null,
     /** What the customer pays at the door / counter: bags + delivery. */
     amountDueMinor: r.totalMinor + (d?.feeMinor ?? 0),
     cancelledAt: r.cancelledAt?.toISOString(),

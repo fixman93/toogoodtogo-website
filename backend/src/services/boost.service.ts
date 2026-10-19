@@ -2,16 +2,17 @@
  * Paid promotion of an offer ("Istakni"). No online payments yet, so the
  * price is added to the partner's monthly statement (see statement.service).
  * - top:  listed first (with an "Istaknuto" badge) until the pickup ends;
- * - push: one push to the location's followers and recent customers.
- * Customers get at most one promotional push a day (from any partner).
+ * - push: to everyone who follows the partner (push + e-mail), plus recent customers (push only).
  */
 import { Types } from 'mongoose'
 import { marketFor } from '../config/markets.js'
-import { Boost, Business, Favorite, Notification, Offer, Reservation, effectivePriceMinor, type BoostKind } from '../models/index.js'
+import { Boost, Business, Favorite, Notification, Offer, Reservation, User, effectivePriceMinor, type BoostKind } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { assertBusinessAccess, type Actor } from './access.service.js'
 import { assertNotSuspended } from './partner-moderation.service.js'
 import { notify } from './notification.service.js'
+import { sendMail } from './mail.service.js'
+import { pickupWindow } from './ticket.service.js'
 
 const RECENT_CUSTOMERS_DAYS = 90
 const money = (minor: number, currency: string) =>
@@ -27,25 +28,40 @@ export async function options(offerId: string, actor: Actor) {
   return {
     currency: business.currency,
     top: { priceMinor: prices.top, bought: bought.some((b) => b.kind === 'top') },
-    push: { priceMinor: prices.push, bought: bought.some((b) => b.kind === 'push'), recipients: bought.find((b) => b.kind === 'push')?.recipients ?? null, audience: await audience(business._id, offer._id).then((ids) => ids.length) },
+    push: {
+      priceMinor: prices.push,
+      bought: bought.some((b) => b.kind === 'push'),
+      recipients: bought.find((b) => b.kind === 'push')?.recipients ?? null,
+      ...(await audience(business, offer._id).then((a) => ({ audience: a.ids.length, followers: a.followers, customers: a.customers }))),
+    },
   }
 }
 
-/** Followers of the location (or of its offers) and its customers of the last 90 days. */
-async function audience(businessId: Types.ObjectId, offerId: Types.ObjectId) {
-  const offerIds = await Offer.find({ business: businessId }).select('_id').lean()
-  const [followers, offerFans, customers, alreadyToday] = await Promise.all([
-    Favorite.distinct('user', { targetType: 'business', targetId: businessId }),
-    Favorite.distinct('user', { targetType: 'offer', targetId: { $in: offerIds.map((o) => o._id) } }),
-    Reservation.distinct('user', { business: businessId, status: 'collected', collectedAt: { $gte: new Date(Date.now() - RECENT_CUSTOMERS_DAYS * 86_400_000) } }),
-    // Max one promotional push per person per day.
+/**
+ * Who gets the push:
+ * - everyone who saved the partner (any of its locations or offers) as a favorite — always,
+ *   they chose to follow it;
+ * - customers of this location from the last 90 days who don't follow it — at most one
+ *   promotional push a day;
+ * - never people who already reserved this offer.
+ */
+async function audience(business: { _id: Types.ObjectId; owner: Types.ObjectId }, offerId: Types.ObjectId) {
+  const locations = (await Business.find({ owner: business.owner, deletedAt: null }).select('_id').lean()).map((b) => b._id)
+  const offerIds = (await Offer.find({ business: { $in: locations } }).select('_id').lean()).map((o) => o._id)
+  const [locationFans, offerFans, customers, alreadyToday, reserved] = await Promise.all([
+    Favorite.distinct('user', { targetType: 'business', targetId: { $in: locations } }),
+    Favorite.distinct('user', { targetType: 'offer', targetId: { $in: offerIds } }),
+    Reservation.distinct('user', { business: business._id, status: 'collected', collectedAt: { $gte: new Date(Date.now() - RECENT_CUSTOMERS_DAYS * 86_400_000) } }),
     Notification.distinct('user', { type: 'offer_boost', createdAt: { $gte: new Date(Date.now() - 86_400_000) } }),
+    Reservation.distinct('user', { offer: offerId, status: { $ne: 'cancelled' } }),
   ])
-  void offerId
-  const skip = new Set(alreadyToday.map(String))
-  // Users who already reserved this offer don't need the push.
-  const reserved = new Set((await Reservation.distinct('user', { offer: offerId, status: { $ne: 'cancelled' } })).map(String))
-  return [...new Set([...followers, ...offerFans, ...customers].map(String))].filter((id) => !skip.has(id) && !reserved.has(id))
+  const skipReserved = new Set(reserved.map(String))
+  const notifiedToday = new Set(alreadyToday.map(String))
+  const followers = new Set([...locationFans, ...offerFans].map(String))
+  const otherCustomers = customers.map(String).filter((id) => !followers.has(id) && !notifiedToday.has(id))
+  const fans = [...followers].filter((id) => !skipReserved.has(id))
+  const extra = [...new Set(otherCustomers)].filter((id) => !skipReserved.has(id))
+  return { ids: [...fans, ...extra], fanIds: fans, followers: fans.length, customers: extra.length }
 }
 
 export async function buy(offerId: string, kind: BoostKind, actor: Actor) {
@@ -58,9 +74,10 @@ export async function buy(offerId: string, kind: BoostKind, actor: Actor) {
   if (await Boost.exists({ offer: offer._id, kind })) throw ApiError.conflict('Ova ponuda je već istaknuta na taj način.', 'ALREADY_BOOSTED')
 
   const prices = marketFor(business.address.countryCode).boostPrices
-  const recipients = kind === 'push' ? await audience(business._id, offer._id) : []
+  const reach = kind === 'push' ? await audience(business, offer._id) : null
+  const recipients = reach?.ids ?? []
   if (kind === 'push' && recipients.length === 0) {
-    throw ApiError.conflict('Trenutno nema kome da se pošalje obaveštenje (nema pratilaca ni skorašnjih kupaca, ili su danas već dobili jedno).', 'NO_AUDIENCE')
+    throw ApiError.conflict('Još niko nije dodao tvoj lokal ili ponude u omiljene, a nema ni skorašnjih kupaca. Obaveštenje se ne naplaćuje dok nema kome da ode.', 'NO_AUDIENCE')
   }
   const boost = await Boost.create({
     business: business._id,
@@ -92,8 +109,39 @@ export async function buy(offerId: string, kind: BoostKind, actor: Actor) {
       },
       { email: false },
     )
+    // Followers also get an e-mail (they chose to follow this partner; respects their e-mail setting).
+    void emailFollowers(reach!.fanIds, business, { ...offer.toObject(), id: offer.id as string }, price, percent)
   }
   return { id: boost.id as string, kind, priceMinor: boost.priceMinor, currency: boost.currency, recipients: boost.recipients ?? null }
+}
+
+/** One e-mail per follower, sent one after another (gentle on the mail provider's rate limit). */
+async function emailFollowers(
+  userIds: string[],
+  business: { name: string; address: { street: string; city: string } },
+  offer: { id: string; title: string; currency: string; originalPriceMinor: number; quantityAvailable: number; pickupStart: Date; pickupEnd: Date; timezone: string },
+  price: number,
+  percent: number,
+) {
+  try {
+    const users = await User.find({ _id: { $in: userIds }, deletedAt: null, isBlocked: { $ne: true }, 'notificationPrefs.email': { $ne: false } }).select('email').lean()
+    const subject = `${business.name}: ${offer.title} za ${money(price, offer.currency)} (−${percent}%)`
+    const body = [
+      `Lokal koji pratiš na Foodnesi ima ponudu za tebe – još ${offer.quantityAvailable} ${offer.quantityAvailable === 1 ? 'kesa' : 'kese'}.`,
+      'Rezerviši u aplikaciji, a plaćaš pri preuzimanju u lokalu.',
+      'Ove poruke dobijaš jer si lokal ili njegovu ponudu dodao/la u omiljene. Isključuješ ih u Profilu (e-mail obaveštenja) ili uklanjanjem iz omiljenih.',
+    ].join('\n')
+    const details: [string, string][] = [
+      ['Lokal', business.name],
+      ['Adresa', `${business.address.street}, ${business.address.city}`],
+      ['Ponuda', offer.title],
+      ['Cena', `${money(price, offer.currency)} umesto ${money(offer.originalPriceMinor, offer.currency)}`],
+      ['Preuzimanje', pickupWindow(offer.pickupStart, offer.pickupEnd, offer.timezone)],
+    ]
+    for (const u of users) await sendMail(u.email, subject, body, `/offers/${offer.id}`, 'Rezerviši', { details })
+  } catch (error) {
+    console.error('Boost e-mails failed', error)
+  }
 }
 
 /** Partner's promotions in a month (statement detail). */

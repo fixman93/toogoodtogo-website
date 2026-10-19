@@ -13,7 +13,7 @@ export const LEGAL = {
   privacyEmail: '[privatnost@vas-domen]',
   supportEmail: '[podrska@vas-domen]',
   /** Date of the current version of the documents (YYYY-MM-DD). */
-  updatedAt: '2026-10-18',
+  updatedAt: '2026-10-19',
 }
 
 export const legalHasPlaceholders = Object.values(LEGAL).some((v) => v.startsWith('['))

@@ -5,6 +5,7 @@ export const NOTIFICATION_TYPES = [
   'pickup_check',
   'pickup_confirmed_by_customer',
   'pickup_dispute',
+  'integrity_alert',
   'partner_status',
   'partner_warning',
   'reservation_confirmed',

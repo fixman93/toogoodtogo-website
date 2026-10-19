@@ -17,6 +17,13 @@ export const createReservationBody = z.object({
     .optional(),
 })
 
+/** Customer's phone near the shop during the pickup window. */
+export const presenceBody = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  accuracy: z.number().min(0).max(5000),
+})
+
 /** Courier's phone position while delivering. */
 export const courierLocationBody = z.object({
   lat: z.number().min(-90).max(90),

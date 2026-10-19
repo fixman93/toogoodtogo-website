@@ -143,6 +143,9 @@ export const reservationsApi = {
   /** Staff: "Krećem" — become the courier of a delivery. */
   startDelivery: (id: string) => unwrap<Reservation>(api.post(`/reservations/${id}/delivery/start`)),
   /** Courier's phone position while delivering. */
+  /** Customer's phone near the shop during the pickup window (arrival check). */
+  presence: (id: string, body: { lat: number; lng: number; accuracy: number }) =>
+    unwrap<{ near: boolean; recorded: boolean; distanceMeters?: number; firstAt?: string }>(api.post(`/reservations/${id}/presence`, body)),
   /** Courier: "Stigao sam". */
   courierArrived: (id: string) => unwrap<Reservation>(api.post(`/reservations/${id}/delivery/arrived`)),
   /** Preset quick message (customer ↔ courier). */
@@ -201,6 +204,8 @@ export const adminApi = {
   staffAccess: (userId: string) => unwrap<StaffAccess>(api.get(`/admin/users/${userId}/staff-access`)),
   setStaffAccess: (userId: string, businessIds: string[]) => unwrap<StaffAccess>(api.put(`/admin/users/${userId}/staff-access`, { businessIds })),
   disputes: () => unwrap<Reservation[]>(api.get('/admin/disputes')),
+  /** Arrival warnings: customer at the shop, nothing recorded. */
+  integrityAlerts: () => unwrap<Reservation[]>(api.get('/admin/integrity/alerts')),
   resolveDispute: (id: string, body: { decision: 'upheld' | 'rejected'; note?: string }) => unwrap<Reservation>(api.patch(`/admin/disputes/${id}`, body)),
   deletePartner: (id: string, reason: string) => api.delete(`/admin/partners/${id}`, { data: { reason } }).then(() => undefined),
   setCommission: (businessId: string, rate: number | null) => unwrap<{ businessId: string; commissionRate: number | null }>(api.patch(`/admin/businesses/${businessId}/commission`, { rate })),
