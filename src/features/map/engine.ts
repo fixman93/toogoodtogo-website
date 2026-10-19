@@ -9,11 +9,9 @@ import type { ExpressionSpecification, Map as MlMap } from 'maplibre-gl'
 // MapLibre draws tiles in a Web Worker; let Vite bundle it and tell MapLibre where it is
 // (its own guess points to the wrong place once bundled). Only a URL — loaded if MapLibre is used.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+import { MAPBOX_STYLE, MAPBOX_TOKEN } from '@/config/maps'
 import { script } from '@/i18n'
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined
-/** Mapbox style (e.g. streets-v12, light-v11, or your own from Mapbox Studio). */
-const MAPBOX_STYLE = (import.meta.env.VITE_MAPBOX_STYLE as string | undefined) || 'mapbox://styles/mapbox/streets-v12'
 /** OpenFreeMap styles: liberty (colourful), positron (light grey), bright. */
 const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 
@@ -55,4 +53,14 @@ export function localizeLabels(map: MlMap, kind: Engine['kind']) {
 /** Keep the attribution as the small (i) button; it opens on tap. */
 export function collapseAttribution(container: HTMLElement) {
   container.querySelector('.maplibregl-compact-show, .mapboxgl-compact-show')?.classList.remove('maplibregl-compact-show', 'mapboxgl-compact-show')
+}
+
+/** Big map pin in the brand colour (a place: the partner's location). */
+export function dropPinElement(label: string) {
+  const el = document.createElement('div')
+  el.className = 'zl-drop'
+  el.setAttribute('aria-label', label)
+  el.innerHTML =
+    '<svg viewBox="0 0 32 42" width="36" height="47" aria-hidden="true"><path d="M16 1C7.7 1 1 7.6 1 15.8 1 27 16 41 16 41s15-14 15-25.2C31 7.6 24.3 1 16 1Z" fill="var(--primary)" stroke="white" stroke-width="2"/><circle cx="16" cy="15.5" r="5.5" fill="white"/></svg>'
+  return el
 }

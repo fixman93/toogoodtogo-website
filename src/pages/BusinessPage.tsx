@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from 'react-router'
-import { ArrowLeft, Clock, ExternalLink, Info, MapPin, Phone, Star, Store } from 'lucide-react'
+import { ArrowLeft, Clock, Info, Phone, Star, Store } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { SafeImage } from '@/components/common/SafeImage'
 import { EmptyState, ErrorState, OfferCardSkeleton } from '@/components/common/StateViews'
@@ -14,7 +14,7 @@ import { useLocation } from '@/features/location/location-context'
 import { useBusiness, useOffers } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatRating } from '@/lib/format'
-import { directionsUrl, osmEmbedUrl } from '@/lib/geo'
+import { DirectionsCard } from '@/features/map/DirectionsCard'
 
 /** Public partner profile: about, hours, address, live offers and reviews. */
 export function BusinessPage() {
@@ -107,26 +107,7 @@ export function BusinessPage() {
           </CardContent>
         </Card>
 
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="size-5 text-primary" />
-              {t('offer.address')}
-            </CardTitle>
-            <p className="text-sm">
-              {business.address.street}, {business.address.city}
-            </p>
-          </CardHeader>
-          <iframe title={`Mapa – ${business.name}`} src={osmEmbedUrl(business.location)} loading="lazy" className="h-48 w-full border-y" />
-          <div className="p-4">
-            <Button asChild variant="outline" className="w-full">
-              <a href={directionsUrl(business.location)} target="_blank" rel="noreferrer">
-                {t('offer.directions')}
-                <ExternalLink />
-              </a>
-            </Button>
-          </div>
-        </Card>
+        <DirectionsCard name={business.name} address={business.address} point={business.location} />
       </div>
 
       <Card>

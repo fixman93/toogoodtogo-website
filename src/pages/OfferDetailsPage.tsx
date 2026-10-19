@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { AlertTriangle, ArrowLeft, Bell, BellRing, Clock, CalendarClock, ExternalLink, Info, Loader2, MapPin, Minus, PackageOpen, Plus, ShoppingBag, Star } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Bell, BellRing, Clock, CalendarClock, Info, Loader2, MapPin, Minus, PackageOpen, Plus, ShoppingBag, Star } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import type { Offer } from '@/api/types'
 import { SafeImage } from '@/components/common/SafeImage'
@@ -14,13 +14,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/features/auth/auth-context'
 import { useLocation } from '@/features/location/location-context'
+import { DirectionsCard } from '@/features/map/DirectionsCard'
 import { PriceDropBadge } from '@/components/offers/PriceDropBadge'
 import { ReviewList } from '@/components/offers/ReviewList'
 import { Input } from '@/components/ui/input'
 import { useBusiness, useCheckPromotion, useCreateReservation, useOffer, useToggleWaitlist, useWaitlist } from '@/hooks/api'
 import { t } from '@/i18n'
 import { discountPercent, formatDistance, formatMoney, formatPickupWindow, formatRating } from '@/lib/format'
-import { directionsUrl, distanceMeters, osmEmbedUrl } from '@/lib/geo'
+import { distanceMeters } from '@/lib/geo'
 
 function ReservePanel({ offer }: { offer: Offer }) {
   const { user } = useAuth()
@@ -157,7 +158,6 @@ export function OfferDetailsPage() {
   const CategoryIcon = CATEGORY_ICONS[offer.category]
   const km = formatDistance(distanceMeters(location, business.location))
   const distance = km && !isDeviceLocation ? t('location.fromCenter', { distance: km }) : km
-  const address = `${business.address.street}, ${business.address.city}`
 
   return (
     <div className="-mt-5 sm:mt-0">
@@ -290,29 +290,7 @@ export function OfferDetailsPage() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="size-5 text-primary" />
-                {t('offer.address')}
-              </CardTitle>
-              <p className="text-sm">{address}</p>
-            </CardHeader>
-            <iframe
-              title={`Mapa – ${business.name}`}
-              src={osmEmbedUrl(business.location)}
-              loading="lazy"
-              className="h-56 w-full border-y"
-            />
-            <div className="p-4">
-              <Button asChild variant="outline" className="w-full">
-                <a href={directionsUrl(business.location)} target="_blank" rel="noreferrer">
-                  {t('offer.directions')}
-                  <ExternalLink />
-                </a>
-              </Button>
-            </div>
-          </Card>
+          <DirectionsCard name={business.name} address={business.address} point={business.location} />
 
           <InstructionsCard businessId={business.id} />
 

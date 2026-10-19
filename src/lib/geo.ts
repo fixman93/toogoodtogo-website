@@ -10,8 +10,13 @@ export function distanceMeters(a: GeoPoint, b: GeoPoint): number {
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
-export function directionsUrl(point: GeoPoint): string {
-  return `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}`
+const GOOGLE_MODE = { walking: 'walking', driving: 'driving', cycling: 'bicycling' } as const
+
+/** Google Maps directions to `point` (from the phone's location unless `from` is given). */
+export function directionsUrl(point: GeoPoint, from?: GeoPoint | null, mode?: keyof typeof GOOGLE_MODE): string {
+  const origin = from ? `&origin=${from.lat},${from.lng}` : ''
+  const travel = mode ? `&travelmode=${GOOGLE_MODE[mode]}` : ''
+  return `https://www.google.com/maps/dir/?api=1&destination=${point.lat},${point.lng}${origin}${travel}`
 }
 
 export function osmEmbedUrl(point: GeoPoint, delta = 0.006): string {

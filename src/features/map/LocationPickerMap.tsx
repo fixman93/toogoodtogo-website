@@ -7,22 +7,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { Map as MlMap, Marker as MlMarker } from 'maplibre-gl'
 import type { GeoPoint } from '@/api/types'
 import { t } from '@/i18n'
-import { collapseAttribution, loadEngine, localizeLabels, type Gl } from './engine'
+import { collapseAttribution, dropPinElement, loadEngine, localizeLabels, type Gl } from './engine'
 
 const PIN_ZOOM = 16
 const CITY_ZOOM = 13
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6
 const same = (a: GeoPoint | null, b: GeoPoint | null) => a?.lat === b?.lat && a?.lng === b?.lng
-
-function dropPinElement() {
-  const el = document.createElement('div')
-  el.className = 'zl-drop'
-  el.setAttribute('aria-label', t('partner.field.location'))
-  el.innerHTML =
-    '<svg viewBox="0 0 32 42" width="36" height="47" aria-hidden="true"><path d="M16 1C7.7 1 1 7.6 1 15.8 1 27 16 41 16 41s15-14 15-25.2C31 7.6 24.3 1 16 1Z" fill="var(--primary)" stroke="white" stroke-width="2"/><circle cx="16" cy="15.5" r="5.5" fill="white"/></svg>'
-  return el
-}
 
 export default function LocationPickerMap({ value, fallbackCenter, onChange }: { value: GeoPoint | null; fallbackCenter: GeoPoint; onChange: (point: GeoPoint) => void }) {
   const container = useRef<HTMLDivElement>(null)
@@ -43,7 +34,7 @@ export default function LocationPickerMap({ value, fallbackCenter, onChange }: {
     const gl = glRef.current
     if (!map || !gl) return
     if (!pin.current) {
-      pin.current = new gl.Marker({ element: dropPinElement(), anchor: 'bottom', draggable: true }).setLngLat([point.lng, point.lat]).addTo(map)
+      pin.current = new gl.Marker({ element: dropPinElement(t('partner.field.location')), anchor: 'bottom', draggable: true }).setLngLat([point.lng, point.lat]).addTo(map)
       pin.current.on('dragend', () => {
         const { lat, lng } = pin.current!.getLngLat()
         emit({ lat: round(lat), lng: round(lng) })
