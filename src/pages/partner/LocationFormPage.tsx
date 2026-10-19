@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { Suspense, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ArrowLeft, Loader2, LocateFixed, MapPin, Search } from 'lucide-react'
 import { ApiError } from '@/api/client'
@@ -18,7 +18,9 @@ import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { useBusiness, useDeleteBusiness, useSaveBusiness } from '@/hooks/api'
 import { t } from '@/i18n'
 import { geocodeAddress } from '@/lib/geocode'
-import { osmEmbedUrl } from '@/lib/geo'
+import { lazyWithReload } from '@/lib/chunks'
+
+const LocationPickerMap = lazyWithReload(() => import('@/features/map/LocationPickerMap'))
 
 interface FormState {
   name: string
@@ -69,6 +71,9 @@ function LocationForm({ business }: { business?: Business }) {
 
   // The country sets the location's currency and timezone; it can't change after creation.
   const country = MARKETS[form.countryCode] ?? market
+  // Where the map opens before a pin is placed: the typed city if known, else the country's default.
+  const city = country.cities.find((c) => c.name.toLowerCase() === form.city.trim().toLowerCase()) ?? country.cities.find((c) => c.id === country.defaultCityId) ?? country.cities[0]
+  const cityCenter = { lat: city.lat, lng: city.lng }
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }))
     // A field's error disappears as soon as the user edits it.
@@ -230,15 +235,17 @@ function LocationForm({ business }: { business?: Business }) {
               {t('partner.field.useGps')}
             </Button>
           </div>
-          {form.location && (
-            <div className="overflow-hidden rounded-xl border">
-              <iframe title={t('partner.field.location')} src={osmEmbedUrl(form.location, 0.004)} className="h-52 w-full" loading="lazy" />
-              <p className="flex items-center gap-1.5 bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                <MapPin className="size-3.5" />
-                {form.location.lat.toFixed(5)}, {form.location.lng.toFixed(5)}
-              </p>
+          <div className="overflow-hidden rounded-xl border">
+            <div className="relative isolate h-72 bg-muted sm:h-80">
+              <Suspense fallback={<Skeleton className="absolute inset-0 rounded-none" />}>
+                <LocationPickerMap value={form.location} fallbackCenter={cityCenter} onChange={(point) => set('location', point)} />
+              </Suspense>
             </div>
-          )}
+            <p className="flex items-center gap-1.5 bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              <MapPin className="size-3.5 shrink-0" />
+              {form.location ? `${form.location.lat.toFixed(5)}, ${form.location.lng.toFixed(5)} · ${t('partner.field.dragPin')}` : t('partner.field.tapToPlace')}
+            </p>
+          </div>
         </FormField>
       </FormSection>
 

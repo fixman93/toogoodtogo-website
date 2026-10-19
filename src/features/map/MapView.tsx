@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLocation } from '@/features/location/location-context'
 import { useOfferLocations, useOffers } from '@/hooks/api'
+import { MapLocationCard } from './MapLocationCard'
 import { t } from '@/i18n'
 import { lazyWithReload } from '@/lib/chunks'
 
@@ -52,7 +53,9 @@ export function MapView({ filters }: { filters: OfferFilters }) {
 
   return (
     <div className="space-y-4">
-      <div className="relative isolate h-[46dvh] min-h-72 overflow-hidden rounded-3xl border bg-muted lg:h-[65vh]">
+      {/* The mask makes WebKit (iPhone Safari / iOS app) clip the WebGL map and its pins to the
+          rounded frame — overflow:hidden + border-radius alone doesn't while the page scrolls. */}
+      <div className="relative isolate h-[58dvh] min-h-80 transform-gpu overflow-hidden rounded-3xl border bg-muted [mask-image:radial-gradient(white,black)] lg:h-[65vh]">
         <Suspense
           fallback={
             <div className="flex size-full items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -72,13 +75,22 @@ export function MapView({ filters }: { filters: OfferFilters }) {
             onViewportChange={(b) => setBbox(roundBox(b))}
           />
         </Suspense>
+        {selectedId && (
+          <MapLocationCard
+            key={selectedId}
+            location={selectedLocation}
+            offers={selected.data?.data ?? []}
+            isLoading={selected.isLoading}
+            onClose={() => setSelectedId(undefined)}
+          />
+        )}
         {pins.isFetching && (
           <span className="pointer-events-none absolute top-3 left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-card/95 px-3 py-1.5 text-xs font-semibold shadow">
             <Loader2 className="size-3.5 animate-spin" />
             {t('common.loading')}
           </span>
         )}
-        {pins.isSuccess && !pins.isFetching && locations.length === 0 && (
+        {pins.isSuccess && !pins.isFetching && locations.length === 0 && !selectedId && (
           <span className="pointer-events-none absolute inset-x-6 bottom-6 z-[1000] rounded-2xl bg-card/95 px-4 py-3 text-center text-sm font-medium shadow">
             {t('map.empty')}
           </span>

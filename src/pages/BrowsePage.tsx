@@ -233,7 +233,7 @@ export function BrowsePage() {
         )}
       </div>
 
-      <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8">
+      <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8">
         <aside className="hidden lg:block">
           <div className="sticky top-24 rounded-2xl border bg-card p-5">{filters}</div>
         </aside>

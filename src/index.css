@@ -96,13 +96,11 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Map pins (Leaflet divIcons): anchor the pill's bottom-center on the point. */
+/* Map markers (MapLibre HTML markers; MapLibre positions the element itself). */
 .zl-pin {
-  position: absolute;
-  transform: translate(-50%, -100%);
+  position: relative;
   padding-bottom: 6px;
   cursor: pointer;
-  transition: transform 150ms ease;
 }
 .zl-pin::after {
   content: '';
@@ -116,14 +114,33 @@
   box-shadow: 1px 1px 2px oklch(0 0 0 / 0.15);
   z-index: -1;
 }
-.zl-pin--selected {
-  transform: translate(-50%, -100%) scale(1.15);
+/* Selected: colour only — no scaling, so the pin doesn't move. */
+.zl-pin--selected > span {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+}
+@keyframes zl-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.zl-card-in {
+  animation: zl-card-in 180ms ease-out;
+}
+/* Draggable location pin (partner location form). */
+.zl-drop {
+  cursor: grab;
+  filter: drop-shadow(0 3px 4px oklch(0 0 0 / 0.3));
+  touch-action: none;
+}
+.zl-drop:active {
+  cursor: grabbing;
 }
 .zl-me {
-  position: absolute;
+  position: relative;
   width: 18px;
   height: 18px;
-  transform: translate(-50%, -50%);
   border-radius: 9999px;
   background: oklch(0.6 0.18 255 / 0.25);
 }
@@ -134,11 +151,16 @@
   background: oklch(0.6 0.18 255);
   box-shadow: 0 0 0 2px white;
 }
-.leaflet-container {
+.maplibregl-map {
+  font-family: inherit;
+}
+/* Mapbox requires its logo on the map; it hides it by itself for some styles (e.g. basic-v9). */
+.mapboxgl-ctrl-bottom-left .mapboxgl-ctrl:has(.mapboxgl-ctrl-logo) {
+  display: block !important;
+}
+.mapboxgl-map {
   font-family: inherit;
 }
 .zl-cluster {
-  position: absolute;
-  transform: translate(-50%, -50%);
   cursor: pointer;
 }

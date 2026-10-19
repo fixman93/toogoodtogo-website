@@ -82,6 +82,7 @@ export const MARKETS: Record<string, MarketConfig> = {
       city('banja-luka', 'Banja Luka', 'Banjoj Luci', 44.7722, 17.191),
       city('tuzla', 'Tuzla', 'Tuzli', 44.5384, 18.6763),
       city('mostar', 'Mostar', 'Mostaru', 43.3438, 17.8078),
+      city('derventa', 'Derventa', 'Derventi', 44.9767, 17.9086),
     ],
   },
   ME: {
