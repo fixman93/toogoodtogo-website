@@ -5,6 +5,7 @@ import { scannerPrefs } from '@/lib/scanner-prefs'
 import { Logo } from '@/components/common/Logo'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
+import { PermissionBanner } from '@/features/permissions/PermissionBanner'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { LocationPicker } from './LocationPicker'
 import { NAV_ITEMS, OWNER_NAV_ITEMS, PARTNER_NAV_ITEMS } from './nav-items'
@@ -81,6 +82,7 @@ export function AppShell() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 pt-5 pb-28 md:pb-16">
+        <PermissionBanner />
         <Outlet />
         <footer className="mt-12 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t pt-5 text-xs text-muted-foreground">
           <span>© {new Date().getFullYear()} Foodnesi</span>
