@@ -61,9 +61,10 @@ export function PermissionBanner() {
 
   const check = useCallback(async () => {
     const next: Partial<Record<Need, State>> = {}
-    // Location: fine once the app has the device position (or the browser says it's allowed).
+    // Location: the browser's answer wins — a GPS position saved earlier doesn't count once it's
+    // been turned off. Only when the browser can't tell, a device position means it's fine.
     const geo = await queryPermission('geolocation')
-    next.location = isDeviceLocation || geo === 'granted' ? 'ok' : geo === 'denied' ? 'denied' : 'ask'
+    next.location = geo === 'granted' || (geo === 'unknown' && isDeviceLocation) ? 'ok' : geo === 'denied' ? 'denied' : 'ask'
     // Notifications: web push for signed-in users only.
     if (user && !isNativeApp()) {
       if (isIosBrowserTab()) next.notifications = 'ios-install'
@@ -81,9 +82,18 @@ export function PermissionBanner() {
     // Re-check when the user comes back from the phone/browser settings.
     const onVisible = () => document.visibilityState === 'visible' && void check()
     document.addEventListener('visibilitychange', onVisible)
+    // …and when it's toggled from the address bar without leaving the page.
+    const onChange = () => void check()
+    const statuses = (['geolocation', 'camera'] as const).map((name) =>
+      navigator.permissions
+        ?.query({ name: name as PermissionName })
+        .then((status) => (status.addEventListener('change', onChange), status))
+        .catch(() => undefined),
+    )
     return () => {
       clearTimeout(first)
       document.removeEventListener('visibilitychange', onVisible)
+      statuses.forEach((p) => void p?.then((status) => status?.removeEventListener('change', onChange)))
     }
   }, [check])
 
