@@ -3,6 +3,9 @@
   "appName": "Foodnesi",
   "webDir": "../dist",
   "backgroundColor": "#faf8f2",
+  "android": {
+    "backgroundColor": "#faf8f2"
+  },
   "ios": {
     "contentInset": "never",
     "backgroundColor": "#faf8f2",

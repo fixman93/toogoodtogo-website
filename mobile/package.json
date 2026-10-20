@@ -6,12 +6,15 @@
   "scripts": {
     "build:web": "npm --prefix .. run build",
     "build:web:local": "VITE_API_URL=http://localhost:4000/api npm --prefix .. run build",
-    "sync": "cap sync ios",
+    "sync": "cap sync",
     "ios": "npm run build:web && cap sync ios && cap open ios",
     "ios:local": "npm run build:web:local && cap sync ios && cap open ios",
-    "assets": "python3 ../design/make_app_assets.py"
+    "assets": "python3 ../design/make_brand.py",
+    "android": "npm run build:web && cap sync android && cap open android",
+    "apk": "npm run build:web && cap sync android && cd android && JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" ./gradlew assembleDebug"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@capacitor/ios": "^8.5.3"
   },

@@ -8,13 +8,15 @@ import { apiRouter } from './routes/index.js'
 
 export function createApp() {
   const app = express()
+  /** The iOS (capacitor://) and Android (https://localhost) apps — the same in every environment. */
+  const NATIVE_APP_ORIGINS = ['capacitor://localhost', 'https://localhost']
 
   app.set('trust proxy', 1)
   app.disable('x-powered-by')
   app.use(helmet())
   app.use(
     cors({
-      origin: (origin, callback) => callback(null, !origin || env.CORS_ORIGINS.includes(origin)),
+      origin: (origin, callback) => callback(null, !origin || env.CORS_ORIGINS.includes(origin) || NATIVE_APP_ORIGINS.includes(origin)),
       credentials: false,
       // Renewed session token (sliding sign-in), read by the web app.
       exposedHeaders: [SESSION_TOKEN_HEADER],

@@ -35,9 +35,10 @@ export function OfferCarousel({
         <ErrorState onRetry={onRetry} className="rounded-2xl border bg-card py-8" />
       ) : (
         <div className="scrollbar-none -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-          {isLoading
+          {/* No data yet also covers a paused query (offline / network blocked) — show placeholders, never crash. */}
+          {isLoading || !offers
             ? Array.from({ length: 3 }, (_, i) => <OfferCardSkeleton key={i} className="w-[80vw] max-w-80 shrink-0" />)
-            : offers!.map((offer) => <OfferCard key={offer.id} offer={offer} className="w-[80vw] max-w-80 shrink-0 snap-start" />)}
+            : offers.map((offer) => <OfferCard key={offer.id} offer={offer} className="w-[80vw] max-w-80 shrink-0 snap-start" />)}
         </div>
       )}
     </section>

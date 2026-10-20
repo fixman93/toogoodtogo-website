@@ -116,6 +116,37 @@ if os.path.isdir(XC):
     for name in ('splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'):
         splash.convert('RGB').save(os.path.join(XC, 'Splash.imageset', name), optimize=True)
 
+# --- Android ---------------------------------------------------------------
+RES = os.path.join(ROOT, 'mobile', 'android', 'app', 'src', 'main', 'res')
+if os.path.isdir(RES):
+    densities = {'mdpi': 1, 'hdpi': 1.5, 'xhdpi': 2, 'xxhdpi': 3, 'xxxhdpi': 4}
+    for name, k in densities.items():
+        folder = os.path.join(RES, f'mipmap-{name}')
+        os.makedirs(folder, exist_ok=True)
+        # Legacy launcher icon (48 dp) and its round twin.
+        legacy = symbol(round(48 * k), GREEN)
+        legacy.convert('RGB').save(os.path.join(folder, 'ic_launcher.png'), optimize=True)
+        mask = Image.new('L', legacy.size, 0)
+        from PIL import ImageDraw
+        ImageDraw.Draw(mask).ellipse((0, 0, legacy.width - 1, legacy.height - 1), fill=255)
+        round_icon = Image.new('RGBA', legacy.size, (0, 0, 0, 0))
+        round_icon.paste(legacy, (0, 0), mask)
+        round_icon.save(os.path.join(folder, 'ic_launcher_round.png'), optimize=True)
+        # Adaptive icon foreground (108 dp; the launcher may crop to ~66 %, keep the symbol inside).
+        symbol(round(108 * k), CLEAR, 0.46).save(os.path.join(folder, 'ic_launcher_foreground.png'), optimize=True)
+    with open(os.path.join(RES, 'values', 'ic_launcher_background.xml'), 'w') as f:
+        f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#0F3D2E</color>\n</resources>\n')
+    # Launch screen: logo with the slogan on cream, same size as each existing splash.png.
+    for folder in os.listdir(RES):
+        path = os.path.join(RES, folder, 'splash.png')
+        if not folder.startswith('drawable') or not os.path.isfile(path):
+            continue
+        w, h = Image.open(path).size
+        canvas = Image.new('RGBA', (w, h), CREAM)
+        f = width(full, round(min(w, h) * 0.6))
+        canvas.alpha_composite(f, ((w - f.width) // 2, (h - f.height) // 2))
+        canvas.convert('RGB').save(path, optimize=True)
+
 # --- Hero banner -------------------------------------------------------------
 banner = Image.open(os.path.join(SRC, 'foodnesi-website-banner.png')).convert('RGB')
 banner = banner.crop((0, 13, banner.width, banner.height))  # white strip + thin dark line at the top edge of the crop
@@ -125,4 +156,4 @@ banner.crop((945, 0, 1708, banner.height)).save(os.path.join(WEB, 'hero-mobile.w
 
 for name in sorted(os.listdir(WEB)):
     print(f'{name:32} {os.path.getsize(os.path.join(WEB, name)) // 1024} KB')
-print('public icons, e-mail logo' + (' and iOS icon/splash' if os.path.isdir(XC) else '') + ' written')
+print('public icons, e-mail logo' + (', iOS icon/splash' if os.path.isdir(XC) else '') + (', Android icons/splash' if os.path.isdir(RES) else '') + ' written')
