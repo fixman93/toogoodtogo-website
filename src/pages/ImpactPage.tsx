@@ -1,4 +1,4 @@
-import logoLight from '@/assets/images/web/foodnesi-logo-full-light.png'
+import logoLight from '@/assets/images/web/foodnesi-wordmark-light.png'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { ArrowLeft, Award, CalendarHeart, Cloud, Compass, Flame, Leaf, Loader2, Moon, PiggyBank, Share2, ShoppingBag, Sparkles, Sunrise, Target, Trophy, type LucideIcon } from 'lucide-react'

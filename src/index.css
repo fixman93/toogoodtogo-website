@@ -18,9 +18,9 @@
 
   --primary: oklch(0.38 0.08 165);
   --primary-foreground: oklch(0.98 0.01 85);
-  /* Light green of "nesi" in the Foodnesi logo. */
+  /* Light green of the small leaf in the Foodnesi logo. */
   --brand-leaf: #4c983b;
-  /* Logo colours: the "O" and the "D" of foODnesi. */
+  /* Logo colours: the orange fruit "O" of Foodnesi. */
   --brand-orange: #fd8e16;
   --brand-orange-deep: #f76813;
   --secondary: oklch(0.95 0.025 160);

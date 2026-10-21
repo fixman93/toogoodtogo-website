@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 220" role="img" aria-labelledby="title desc">
+<title id="title">Foodnesi logo</title><desc id="desc">Dark green Foodnesi wordmark with an orange fruit-inspired O.</desc>
+<rect width="1000" height="220" fill="none"/>
+<g fill="#073F32" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="176" letter-spacing="-7">
+<text x="10" y="177">Fo</text><text x="303" y="177">dnesi</text>
+</g>
+<g>
+<circle cx="249" cy="126" r="68" fill="#FF6B0B"/>
+<circle cx="249" cy="126" r="31" fill="#FFFFFF"/>
+<path d="M242 52 C244 24 270 9 299 12 C293 39 273 54 242 52Z" fill="#073F32"/>
+<path d="M243 53 C226 31 205 31 190 40 C204 59 223 63 243 53Z" fill="#2F7D4A"/>
+<path d="M247 50 L275 20" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" opacity=".9"/>
+</g></svg>

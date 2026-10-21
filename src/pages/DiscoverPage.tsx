@@ -33,7 +33,7 @@ export function DiscoverPage() {
         {/* Brand banner: the bag with groceries on phones, the full banner from 640 px. */}
         <picture>
           <source media="(min-width: 640px)" srcSet={heroBanner} />
-          <img src={heroMobile} alt={t('discover.heroAlt')} width={763} height={365} className="block h-auto w-full bg-[#f6efe2]" />
+          <img src={heroMobile} alt={t('discover.heroAlt')} width={763} height={481} className="block h-auto w-full bg-[#f6efe2]" />
         </picture>
         <div className="relative overflow-hidden px-5 py-6 sm:px-10 sm:py-8">
         <div className="absolute -top-16 -right-16 size-56 rounded-full bg-accent/25 blur-2xl" aria-hidden />

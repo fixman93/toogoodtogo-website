@@ -1,14 +1,20 @@
-foODnesi brand assets
-====================
+Foodnesi website assets
 
-Files included:
-- foodnesi-logo-transparent.png: logo crop with near-white background removed
-- foodnesi-logo-light.png: logo on a light background
-- foodnesi-logo-dark-background.png: light logo for dark backgrounds
-- foodnesi-favicon-concept.png: favicon concept crop
-- foodnesi-app-icon-concept.png: app icon concept crop
-- foodnesi-website-banner.png: wide website banner crop
+- foodnesi-logo.svg: scalable vector wordmark for headers and website use
+- foodnesi-logo.png: transparent PNG wordmark
+- foodnesi-favicon.svg: scalable favicon/app mark
+- foodnesi-favicon.png: 512x512 PNG icon
+- foodnesi-favicon-64.png: 64x64 PNG icon
+- foodnesi-hero.jpg: wide hero image cropped from the approved brand concept
 
-Note: These are raster PNG assets cropped from the generated branding concept board.
-The favicon/app icon are concept crops, not optimized 32x32/512x512 production exports.
-The logo artwork should be reviewed and rebuilt as clean vector SVG before final production use.
+Suggested use:
+- Website logo: SVG preferred; PNG fallback
+- Favicon: SVG where supported, PNG fallback
+- Hero: use foodnesi-hero.jpg as a wide banner background with responsive cover cropping
+
+Colors:
+- Dark green: #073F32
+- Orange: #FF6B0B
+- Leaf green: #2F7D4A
+
+Note: the hero image is cropped from the generated concept sheet, so it may include the embedded headline/button artwork. The logo and favicon are separately prepared assets.

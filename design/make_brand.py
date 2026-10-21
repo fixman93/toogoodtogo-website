@@ -1,13 +1,12 @@
 """Usage: python3 design/make_brand.py   (from the repo root)
 
-Builds every brand asset from the new "foODnesi" artwork in src/assets/images:
-- web logos (wordmark for the header, light version for dark backgrounds, full logo with the slogan),
-- the "OD + leaf" app symbol, favicons, PWA icons, the e-mail logo,
-- the iOS app icon and launch screen,
+Builds every brand asset from the "Foodnesi" fruit-logo artwork in src/assets/images:
+- web logos (wordmark for the header + a light version for dark backgrounds),
+- the "fruit O" app symbol, favicons, PWA icons, the e-mail logo,
+- the iOS/Android app icons and launch screens,
 - an optimized hero banner (WebP, desktop + mobile crop).
 
-The source PNGs are concept crops (see src/assets/images/README.txt); re-run this
-script after replacing them with final exports.
+Re-run it after replacing "Foodnesi Fruit Logo.png" or foodnesi-hero.jpg.
 """
 import os
 import numpy as np
@@ -21,13 +20,21 @@ XC = os.path.join(ROOT, 'mobile', 'ios', 'App', 'App', 'Assets.xcassets')
 os.makedirs(WEB, exist_ok=True)
 
 CREAM = (250, 248, 242, 255)   # --background of the web app
-GREEN = (15, 61, 46, 255)      # logo dark green
+GREEN = (7, 63, 45, 255)       # logo dark green
 
-logo = Image.open(os.path.join(SRC, 'foodnesi-logo-transparent.png')).convert('RGBA')
+
+def unwhite(img):
+    """White background → transparent; edge pixels are un-mixed from white so they stay crisp on any colour."""
+    a = np.asarray(img.convert('RGB')).astype(float)
+    d = (255 - a).max(axis=2)
+    alpha = np.clip((d - 12) / (110 - 12), 0, 1)
+    rgb = np.where(alpha[..., None] > 0, (a - 255 * (1 - alpha[..., None])) / np.maximum(alpha[..., None], 1e-3), 0)
+    out = np.dstack([np.clip(rgb, 0, 255), alpha * 255]).astype(np.uint8)
+    return Image.fromarray(out, 'RGBA')
 
 
 def keep(img, test):
-    """Keep only pixels whose colour passes `test` (removes bits of neighbouring letters)."""
+    """Keep only pixels whose colour passes `test`."""
     a = np.asarray(img).astype(int).copy()
     a[..., 3] = np.where(test(a[..., 0], a[..., 1], a[..., 2]), a[..., 3], 0)
     return Image.fromarray(a.astype(np.uint8), 'RGBA')
@@ -42,21 +49,16 @@ def width(img, w):
 
 
 orange = lambda r, g, b: (r > g + 40) & (r > b + 80)
-green = lambda r, g, b: (g > r + 15) & (g > b + 20)
+green = lambda r, g, b: (g > r + 15) & (g > b + 20) & (r > 40)   # light leaf, not the dark letters
+
+logo = unwhite(Image.open(os.path.join(SRC, 'Foodnesi Fruit Logo.png')))
 
 # --- Logos ---------------------------------------------------------------
-# The orange accents right of the "i" are cut off in the concept crop: drop everything right of the leaf.
-clean = logo.copy()
-a = np.asarray(clean).copy()
-a[:, 716:, 3] = 0
-clean = Image.fromarray(a, 'RGBA')
-
-full = trim(clean)                      # with "DOBRA HRANA. MANJE OTPADA."
-wordmark = trim(clean.crop((0, 0, clean.width, 232)))  # letters + leaf only (header)
+wordmark = trim(logo)
 
 
 def on_dark(img):
-    """Dark-green letters → cream, orange and leaf unchanged (for dark backgrounds)."""
+    """Dark-green letters and leaf → cream, orange and light leaf unchanged (for dark backgrounds)."""
     a = np.asarray(img).astype(int).copy()
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
     text = ~orange(r, g, b) & ~green(r, g, b)
@@ -70,27 +72,27 @@ def save_png(img, path):
     img.quantize(256, method=Image.Quantize.FASTOCTREE).save(path, optimize=True)
 
 
-save_png(width(wordmark, 480), os.path.join(WEB, 'foodnesi-wordmark.png'))           # header (shown ~150 px wide)
-save_png(width(on_dark(wordmark), 480), os.path.join(WEB, 'foodnesi-wordmark-light.png'))
-save_png(width(full, 720), os.path.join(WEB, 'foodnesi-logo-full.png'))              # auth pages
-save_png(width(on_dark(full), 720), os.path.join(WEB, 'foodnesi-logo-full-light.png'))
-save_png(width(full, 480), os.path.join(PUBLIC, 'brand', 'foodnesi-logo.png'))       # e-mail header
+save_png(width(wordmark, 720), os.path.join(WEB, 'foodnesi-wordmark.png'))           # header, auth pages
+save_png(width(on_dark(wordmark), 720), os.path.join(WEB, 'foodnesi-wordmark-light.png'))
+save_png(width(wordmark, 480), os.path.join(PUBLIC, 'brand', 'foodnesi-logo.png'))   # e-mail header
 
-# --- Symbol: "OD" + leaf ---------------------------------------------------
-od = trim(keep(logo.crop((186, 40, 418, 224)), orange))
-leaf = trim(keep(logo.crop((630, 10, 722, 125)), green))
+# --- Symbol: the orange "O" with its two leaves ------------------------------
+# Below y=300 only the orange belongs to the "O" (the neighbouring letters are dark green).
+fruit = logo.crop((600, 120, 905, 548))
+f = np.asarray(fruit).copy()
+rows = np.arange(f.shape[0])[:, None] + 120
+r, g, b = (f[..., i].astype(int) for i in range(3))
+f[..., 3] = np.where((rows < 300) | orange(r, g, b), f[..., 3], 0)
+fruit = trim(Image.fromarray(f, 'RGBA'))
 
 
-def symbol(size, bg, scale=0.66):
+def symbol(size, bg, scale=0.66, dark=None):
+    """Fruit "O" centred on a square; on the dark green tile the dark leaf turns cream."""
     canvas = Image.new('RGBA', (size, size), bg)
-    w = round(size * scale)
-    o = width(od, w)
-    lw = round(w * 0.30)
-    l = width(leaf, lw)
-    ox = (size - w) // 2 - round(size * 0.02)
-    oy = (size - o.height) // 2 + round(size * 0.08)
-    canvas.alpha_composite(o, (ox, oy))
-    canvas.alpha_composite(l, (ox + w - round(lw * 0.75), oy - round(l.height * 0.82)))
+    mark = on_dark(fruit) if (bg == GREEN if dark is None else dark) else fruit
+    h = round(size * scale)
+    m = mark.resize((round(mark.width * h / mark.height), h), Image.LANCZOS)
+    canvas.alpha_composite(m, ((size - m.width) // 2, (size - m.height) // 2))
     return canvas
 
 
@@ -111,7 +113,7 @@ symbol(256, CLEAR, 0.92).save(os.path.join(PUBLIC, 'favicon.ico'), sizes=[(16, 1
 if os.path.isdir(XC):
     symbol(1024, GREEN).convert('RGB').save(os.path.join(XC, 'AppIcon.appiconset', 'AppIcon-512@2x.png'), optimize=True)
     splash = Image.new('RGBA', (2732, 2732), CREAM)
-    f = width(full, 1100)
+    f = width(wordmark, 1300)
     splash.alpha_composite(f, ((2732 - f.width) // 2, (2732 - f.height) // 2))
     for name in ('splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'):
         splash.convert('RGB').save(os.path.join(XC, 'Splash.imageset', name), optimize=True)
@@ -133,26 +135,25 @@ if os.path.isdir(RES):
         round_icon.paste(legacy, (0, 0), mask)
         round_icon.save(os.path.join(folder, 'ic_launcher_round.png'), optimize=True)
         # Adaptive icon foreground (108 dp; the launcher may crop to ~66 %, keep the symbol inside).
-        symbol(round(108 * k), CLEAR, 0.46).save(os.path.join(folder, 'ic_launcher_foreground.png'), optimize=True)
+        symbol(round(108 * k), CLEAR, 0.5, dark=True).save(os.path.join(folder, 'ic_launcher_foreground.png'), optimize=True)
     with open(os.path.join(RES, 'values', 'ic_launcher_background.xml'), 'w') as f:
-        f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#0F3D2E</color>\n</resources>\n')
-    # Launch screen: logo with the slogan on cream, same size as each existing splash.png.
+        f.write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#073F2D</color>\n</resources>\n')
+    # Launch screen: wordmark on cream, same size as each existing splash.png.
     for folder in os.listdir(RES):
         path = os.path.join(RES, folder, 'splash.png')
         if not folder.startswith('drawable') or not os.path.isfile(path):
             continue
         w, h = Image.open(path).size
         canvas = Image.new('RGBA', (w, h), CREAM)
-        f = width(full, round(min(w, h) * 0.6))
+        f = width(wordmark, round(min(w, h) * 0.7))
         canvas.alpha_composite(f, ((w - f.width) // 2, (h - f.height) // 2))
         canvas.convert('RGB').save(path, optimize=True)
 
 # --- Hero banner -------------------------------------------------------------
-banner = Image.open(os.path.join(SRC, 'foodnesi-website-banner.png')).convert('RGB')
-banner = banner.crop((0, 13, banner.width, banner.height))  # white strip + thin dark line at the top edge of the crop
+banner = Image.open(os.path.join(SRC, 'foodnesi-hero.jpg')).convert('RGB')
 banner.save(os.path.join(WEB, 'hero.webp'), quality=82, method=6)
-# Phones: the bag with groceries (right part), taller crop.
-banner.crop((945, 0, 1708, banner.height)).save(os.path.join(WEB, 'hero-mobile.webp'), quality=82, method=6)
+# Phones: the bag with groceries (right part).
+banner.crop((700, 0, 1463, banner.height)).save(os.path.join(WEB, 'hero-mobile.webp'), quality=82, method=6)
 
 for name in sorted(os.listdir(WEB)):
     print(f'{name:32} {os.path.getsize(os.path.join(WEB, name)) // 1024} KB')
