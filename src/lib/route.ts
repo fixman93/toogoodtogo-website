@@ -55,7 +55,7 @@ const CYR_TO_LAT: Record<string, string> = Object.fromEntries(
     .reduce<[string, string][]>((pairs, v, i, all) => (i % 2 ? pairs : [...pairs, [v, all[i + 1]]]), []),
 )
 /** Mapbox returns Serbian names in Cyrillic; the app writes Latin. */
-const toLatin = (text: string) =>
+export const toLatin = (text: string) =>
   text.replace(/[\u0400-\u04FF]/g, (c) => {
     const lower = CYR_TO_LAT[c.toLowerCase()]
     if (lower == null) return c

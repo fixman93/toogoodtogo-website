@@ -1,4 +1,4 @@
-import { Suspense, useState, type FormEvent } from 'react'
+import { Suspense, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ArrowLeft, Loader2, LocateFixed, MapPin, Search } from 'lucide-react'
 import { ApiError } from '@/api/client'
@@ -17,7 +17,7 @@ import { PartnerGuard } from '@/features/business/PartnerGuard'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { useBusiness, useDeleteBusiness, useSaveBusiness } from '@/hooks/api'
 import { t } from '@/i18n'
-import { geocodeAddress } from '@/lib/geocode'
+import { geocodeAddress, reverseGeocodeAddress } from '@/lib/geocode'
 import { lazyWithReload } from '@/lib/chunks'
 import { fromMinor, toMinor } from '@/lib/format'
 
@@ -81,6 +81,9 @@ function LocationForm({ business }: { business?: Business }) {
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({})
   const [locating, setLocating] = useState<'address' | 'gps' | null>(null)
   const [locateError, setLocateError] = useState<string | null>(null)
+  const [lookingUp, setLookingUp] = useState(false)
+  /** Only the newest pin position may fill the address (earlier lookups can answer later). */
+  const lookup = useRef(0)
 
   // The country sets the location's currency and timezone; it can't change after creation.
   const country = MARKETS[form.countryCode] ?? market
@@ -115,13 +118,42 @@ function LocationForm({ business }: { business?: Business }) {
     }
   }
 
+  /** The pin was placed by hand (drag, tap, GPS): fill street, city and postal code from that point. */
+  const fillAddressFrom = async (point: GeoPoint) => {
+    const id = ++lookup.current
+    setLookingUp(true)
+    try {
+      const found = await reverseGeocodeAddress(point)
+      if (id !== lookup.current || !found) return
+      // A pin dropped across the border doesn't change the (locked) country — leave the fields alone.
+      if (found.countryCode && found.countryCode !== country.code) return
+      // The pin decides the address: always replace it, so nothing from the previous spot stays behind.
+      setForm((f) => ({
+        ...f,
+        street: found.street ?? '',
+        city: found.city ?? f.city,
+        postalCode: found.postalCode ?? '',
+      }))
+      setErrors((e) => ({ ...e, street: undefined, city: undefined }))
+    } catch {
+      // Offline or rate-limited: the partner can still type the address.
+    } finally {
+      if (id === lookup.current) setLookingUp(false)
+    }
+  }
+
+  const placePin = (point: GeoPoint) => {
+    set('location', point)
+    void fillAddressFrom(point)
+  }
+
   const useGps = () => {
     if (!('geolocation' in navigator)) return setLocateError(t('location.denied'))
     setLocating('gps')
     setLocateError(null)
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        set('location', { lat: pos.coords.latitude, lng: pos.coords.longitude })
+        placePin({ lat: pos.coords.latitude, lng: pos.coords.longitude })
         setLocating(null)
       },
       () => {
@@ -273,14 +305,16 @@ function LocationForm({ business }: { business?: Business }) {
                 <LocationPickerMap
                   value={form.location}
                   fallbackCenter={cityCenter}
-                  onChange={(point) => set('location', point)}
+                  onChange={placePin}
                   radiusKm={form.deliveryEnabled && num(form.deliveryRadius) >= 0.5 ? Math.min(50, num(form.deliveryRadius)) : null}
                 />
               </Suspense>
             </div>
             <p className="flex items-center gap-1.5 bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              <MapPin className="size-3.5 shrink-0" />
-              {form.location ? `${form.location.lat.toFixed(5)}, ${form.location.lng.toFixed(5)} · ${t('partner.field.dragPin')}` : t('partner.field.tapToPlace')}
+              {lookingUp ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : <MapPin className="size-3.5 shrink-0" />}
+              {lookingUp
+                ? t('partner.field.lookingUpAddress')
+                : form.location ? `${form.location.lat.toFixed(5)}, ${form.location.lng.toFixed(5)} · ${t('partner.field.dragPin')}` : t('partner.field.tapToPlace')}
             </p>
           </div>
         </FormField>
