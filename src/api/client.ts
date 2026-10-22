@@ -66,8 +66,11 @@ const SESSION_ERRORS = new Set(['UNAUTHORIZED', 'INVALID_TOKEN', 'SESSION_EXPIRE
 api.interceptors.response.use(
   (response) => {
     // Sliding session: the API sends a fresh token about once a day while the app is used.
+    // Only when the request was sent with the token still stored: a late response from before a
+    // sign-out or an account switch must not bring back the previous account's session.
     const renewed = response.headers['x-session-token']
-    if (typeof renewed === 'string' && renewed && tokenStorage.get()) tokenStorage.set(renewed)
+    const current = tokenStorage.get()
+    if (typeof renewed === 'string' && renewed && current && response.config.headers?.Authorization === `Bearer ${current}`) tokenStorage.set(renewed)
     return response
   },
   (error: AxiosError<ApiErrorBody>) => {

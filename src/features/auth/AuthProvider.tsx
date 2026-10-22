@@ -25,8 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStorage.set(token)
       // Drop user-specific data cached for the previous session. Never remove the
       // `me` query itself: this provider observes it, so we update it in place.
-      queryClient.removeQueries({ queryKey: ['reservations'] })
-      queryClient.removeQueries({ queryKey: ['favorites'] })
+      queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== ME_QUERY_KEY[0] })
       queryClient.setQueryData(ME_QUERY_KEY, user)
       // Fetch the full profile (points, level, invite code) in the background.
       void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY })
