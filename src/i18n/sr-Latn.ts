@@ -870,6 +870,8 @@ export const srLatn = {
   'partner.field.tapToPlace': 'Tapni na mapu da postaviš pin',
   'partner.field.dragPin': 'prevuci pin da ga pomeriš',
   'partner.field.lookingUpAddress': 'Tražim adresu za ovu tačku…',
+  'partner.field.countryUnsupported': 'Trenutno ne podržavamo ovu zemlju ({country}). Postavi pin u jednoj od ponuđenih zemalja.',
+  'partner.field.countryLockedPin': 'Pin je u drugoj zemlji ({country}). Zemlja lokacije se ne može menjati posle otvaranja – vrati pin u {current}.',
   'partner.field.locationMissing': 'Odredi lokaciju na mapi.',
   'partner.field.addressNotFound': 'Adresa nije pronađena. Proveri ulicu i grad ili koristi trenutnu lokaciju.',
   'partner.field.business': 'Lokacija',

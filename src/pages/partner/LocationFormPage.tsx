@@ -82,6 +82,8 @@ function LocationForm({ business }: { business?: Business }) {
   const [locating, setLocating] = useState<'address' | 'gps' | null>(null)
   const [locateError, setLocateError] = useState<string | null>(null)
   const [lookingUp, setLookingUp] = useState(false)
+  /** The pin is in a country we can't use (not supported, or the location's country is locked). */
+  const [countryError, setCountryError] = useState<string | null>(null)
   /** Only the newest pin position may fill the address (earlier lookups can answer later). */
   const lookup = useRef(0)
 
@@ -109,8 +111,10 @@ function LocationForm({ business }: { business?: Business }) {
     setLocateError(null)
     try {
       const point = await geocodeAddress({ street: form.street, city: form.city, postalCode: form.postalCode }, country.code)
-      if (point) set('location', point)
-      else setLocateError(t('partner.field.addressNotFound'))
+      if (point) {
+        set('location', point)
+        setCountryError(null)
+      } else setLocateError(t('partner.field.addressNotFound'))
     } catch {
       setLocateError(t('partner.field.addressNotFound'))
     } finally {
@@ -125,11 +129,15 @@ function LocationForm({ business }: { business?: Business }) {
     try {
       const found = await reverseGeocodeAddress(point)
       if (id !== lookup.current || !found) return
-      // A pin dropped across the border doesn't change the (locked) country — leave the fields alone.
-      if (found.countryCode && found.countryCode !== country.code) return
+      // A pin across the border switches the country — if we support it and the location is new.
+      const next = found.countryCode ? MARKETS[found.countryCode] : country
+      if (!next) return setCountryError(t('partner.field.countryUnsupported', { country: found.countryName ?? found.countryCode ?? '' }))
+      if (business && next.code !== country.code) return setCountryError(t('partner.field.countryLockedPin', { country: next.name, current: country.name }))
+      setCountryError(null)
       // The pin decides the address: always replace it, so nothing from the previous spot stays behind.
       setForm((f) => ({
         ...f,
+        countryCode: next.code,
         street: found.street ?? '',
         city: found.city ?? f.city,
         postalCode: found.postalCode ?? '',
@@ -170,6 +178,7 @@ function LocationForm({ business }: { business?: Business }) {
     if (form.street.trim().length < 2) next.street = t('partner.error.required')
     if (form.city.trim().length < 2) next.city = t('partner.error.required')
     if (!form.location) next.location = t('partner.field.locationMissing')
+    else if (countryError) next.location = countryError
     if (!isUrl(form.logoUrl)) next.logoUrl = t('partner.error.url')
     if (!isUrl(form.coverUrl)) next.coverUrl = t('partner.error.url')
     if (form.deliveryEnabled) {
@@ -262,6 +271,7 @@ function LocationForm({ business }: { business?: Business }) {
                 city: country.cities.some((c) => c.name === f.city) ? next.cities[0].name : f.city,
                 location: null,
               }))
+              setCountryError(null)
             }}
           >
             {MARKET_LIST.map((m) => (
@@ -288,7 +298,7 @@ function LocationForm({ business }: { business?: Business }) {
           </FormField>
         </div>
 
-        <FormField label={t('partner.field.location')} hint={t('partner.field.locationHint')} error={errors.location ?? locateError ?? undefined}>
+        <FormField label={t('partner.field.location')} hint={t('partner.field.locationHint')} error={errors.location ?? countryError ?? locateError ?? undefined}>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="button" variant="secondary" className="flex-1" disabled={!!locating || !form.street || !form.city} onClick={findAddress}>
               {locating === 'address' ? <Loader2 className="animate-spin" /> : <Search />}

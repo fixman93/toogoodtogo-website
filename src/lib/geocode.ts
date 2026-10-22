@@ -30,6 +30,8 @@ export interface FoundAddress {
   postalCode?: string
   /** ISO code, upper case ("RS"). */
   countryCode?: string
+  /** "Srbija", "Albanija" (for messages). */
+  countryName?: string
 }
 
 /** Coordinates → address parts for the location form (Nominatim, same limits as above). */
@@ -53,5 +55,6 @@ export async function reverseGeocodeAddress(point: GeoPoint): Promise<FoundAddre
     city: city ? toLatin(city) : undefined,
     postalCode: a.postcode,
     countryCode: a.country_code?.toUpperCase(),
+    countryName: a.country ? toLatin(a.country) : undefined,
   }
 }
