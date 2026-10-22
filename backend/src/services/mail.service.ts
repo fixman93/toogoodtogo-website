@@ -9,7 +9,9 @@ const API_URL = 'https://api.mailersend.com/v1/email'
 
 function parseFrom(value: string) {
   const match = /^(.*)<(.+)>$/.exec(value.trim())
-  return match ? { name: match[1].trim() || 'Foodnesi', email: match[2].trim() } : { name: 'Foodnesi', email: value.trim() }
+  // A MAIL_FROM left over from before the rename ("Zalogaj <…>") still shows "Foodnesi".
+  const name = (match?.[1].trim() || 'Foodnesi').replace(/zalogaj/gi, 'Foodnesi')
+  return { name, email: (match ? match[2] : value).trim() }
 }
 
 export const mailEnabled = () => Boolean(env.MAILERSEND_API_KEY)
@@ -21,6 +23,8 @@ export interface MailExtras {
   details?: [label: string, value: string][]
   /** PNG embedded in the e-mail (inline attachment), shown above the button. */
   image?: { png: Buffer; alt: string; caption?: string }
+  /** Reply-To for this e-mail (e.g. the sender of a contact form); default MAIL_REPLY_TO. */
+  replyTo?: string
 }
 
 const IMAGE_CID = 'foodnesi-image'
@@ -53,14 +57,17 @@ function html(subject: string, body: string, url: string, button: string, extras
   </div></body></html>`
 }
 
+/** `skipped` = no MAILERSEND_API_KEY (only logged); `error` never contains credentials. */
+export type MailResult = { status: 'sent' | 'skipped' | 'failed'; error?: string }
+
 /**
  * Send one e-mail. `link` is an in-app path ("/reservations/123") or a full URL.
  * Never throws — a failed e-mail must not break the action that triggered it.
  */
-export async function sendMail(to: string, subject: string, body: string, link?: string, button = 'Otvori Foodnesi', extras: MailExtras = {}) {
+export async function sendMail(to: string, subject: string, body: string, link?: string, button = 'Otvori Foodnesi', extras: MailExtras = {}): Promise<MailResult> {
   const url = link ? new URL(link, env.APP_URL).toString() : env.APP_URL
   if (!isProduction) console.log(`[mail] → ${to} | ${subject} | ${url}${extras.image ? ' | +QR' : ''}`)
-  if (!env.MAILERSEND_API_KEY) return
+  if (!env.MAILERSEND_API_KEY) return { status: 'skipped' }
   try {
     const res = await fetch(API_URL, {
       method: 'POST',
@@ -68,6 +75,7 @@ export async function sendMail(to: string, subject: string, body: string, link?:
       body: JSON.stringify({
         from: parseFrom(env.MAIL_FROM),
         to: [{ email: to }],
+        ...(extras.replyTo || env.MAIL_REPLY_TO ? { reply_to: { email: extras.replyTo ?? env.MAIL_REPLY_TO } } : {}),
         subject,
         text: [body, ...(extras.image?.caption ? [`Kod: ${extras.image.caption}`] : []), ...(extras.details ?? []).map(([l, v]) => `${l}: ${v}`), url].join('\n\n'),
         html: html(subject, body, url, button, extras),
@@ -77,8 +85,14 @@ export async function sendMail(to: string, subject: string, body: string, link?:
       }),
       signal: AbortSignal.timeout(10_000),
     })
-    if (!res.ok) console.error('MailerSend error', res.status, (await res.text()).slice(0, 300))
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 300)
+      console.error('MailerSend error', res.status, detail)
+      return { status: 'failed', error: `MailerSend ${res.status}: ${detail}`.slice(0, 500) }
+    }
+    return { status: 'sent' }
   } catch (error) {
     console.error('E-mail failed', error)
+    return { status: 'failed', error: (error instanceof Error ? error.message : String(error)).slice(0, 500) }
   }
 }

@@ -11,6 +11,7 @@ import { zonedTime } from '../utils/time.js'
 import type { ScheduleInput } from '../validators/schedule.validators.js'
 import { assertBusinessAccess, type Actor } from './access.service.js'
 import { assertNotSuspended } from './partner-moderation.service.js'
+import { assertCanPublishOffers } from './partner-onboarding.service.js'
 
 /** Publish this many days ahead (0 = today, 1 = tomorrow). */
 const DAYS_AHEAD = [0, 1]
@@ -71,6 +72,8 @@ function checkInput(input: Partial<ScheduleInput>, merged: Pick<IOfferSchedule, 
 async function publish(schedule: OfferScheduleDoc, now = new Date()) {
   const business = await Business.findById(schedule.business)
   if (!business || business.deletedAt || !business.isActive || business.suspended) return 0
+  // Partner rules not accepted (yet): wait, don't publish.
+  if (!(await assertCanPublishOffers(business.owner).then(() => true, () => false))) return 0
   const market = MARKETS[business.address.countryCode] ?? marketFor(undefined)
   let created = 0
   for (const offset of DAYS_AHEAD) {
@@ -140,6 +143,7 @@ export async function list(actor: Actor, businessId?: string) {
 export async function create(input: ScheduleInput, actor: Actor) {
   const business = await assertBusinessAccess(input.businessId, actor)
   await assertNotSuspended(business)
+  await assertCanPublishOffers(business.owner)
   checkInput(input, { ...input, priceDrop: input.priceDrop ?? undefined })
   const { businessId: _businessId, priceDrop, ...fields } = input
   const schedule = await OfferSchedule.create({
@@ -157,7 +161,10 @@ export async function update(id: string, input: Partial<ScheduleInput> & { isAct
   const schedule = await OfferSchedule.findById(id)
   if (!schedule) throw ApiError.notFound('Ponavljajuća ponuda nije pronađena.')
   const business = await assertBusinessAccess(schedule.business, actor)
-  if (input.isActive) await assertNotSuspended(business)
+  if (input.isActive) {
+    await assertNotSuspended(business)
+    await assertCanPublishOffers(business.owner)
+  }
   const { businessId: _businessId, priceDrop, ...fields } = input
   schedule.set(fields)
   if (priceDrop === null) schedule.set('priceDrop', undefined)

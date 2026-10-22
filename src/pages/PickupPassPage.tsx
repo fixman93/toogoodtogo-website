@@ -1,5 +1,5 @@
 import { useParams } from 'react-router'
-import { CalendarClock, CheckCircle2, ExternalLink, Gift, Link2Off, MapPin, XCircle } from 'lucide-react'
+import { CalendarClock, CheckCircle2, ExternalLink, Gift, Link2Off, MapPin, XCircle, Info } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { SafeImage } from '@/components/common/SafeImage'
 import { EmptyState } from '@/components/common/StateViews'
@@ -44,6 +44,10 @@ export function PickupPassPage() {
             </div>
             <p className="mt-4 font-mono text-3xl font-extrabold tracking-widest text-primary">{pass.code}</p>
             <p className="mt-2 text-sm text-muted-foreground">{t('reservations.qrHint')}</p>
+            <p className="mx-auto mt-3 flex max-w-sm items-start justify-center gap-1.5 text-xs text-muted-foreground">
+              <Info className="mt-0.5 size-3.5 shrink-0" />
+              {t('reservations.noGuarantee')}
+            </p>
           </div>
         ) : (
           <div className="mx-5 mb-5 flex items-center gap-3 rounded-2xl bg-muted p-4 font-semibold">

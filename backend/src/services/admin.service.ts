@@ -14,6 +14,7 @@ import type { AdminBusinessesQuery, AdminUsersQuery } from '../validators/admin.
 import type { Actor } from './access.service.js'
 import { audit } from './audit.service.js'
 import * as moderation from './partner-moderation.service.js'
+import { activationMailMarker, onboardingSummary, sendActivationMail } from './partner-onboarding.service.js'
 import { toDto } from './reservation.service.js'
 
 export async function stats() {
@@ -65,7 +66,13 @@ export async function listUsers(query: AdminUsersQuery) {
   ])
   const byOwner = new Map(counts.map((c) => [String(c._id), c.count]))
   return {
-    items: users.map((u) => ({ ...serializeUser(u), isBlocked: u.isBlocked, partnerStatus: u.partnerStatus ?? 'active', businessCount: byOwner.get(u.id) ?? 0 })),
+    items: users.map((u) => ({
+      ...serializeUser(u),
+      isBlocked: u.isBlocked,
+      partnerStatus: u.partnerStatus ?? 'active',
+      businessCount: byOwner.get(u.id) ?? 0,
+      ...(u.role === 'business' ? { partnerOnboarding: onboardingSummary(u) } : {}),
+    })),
     meta: { page: query.page, limit: query.limit, total },
   }
 }
@@ -80,13 +87,25 @@ export async function setRole(userId: string, role: Role, actor: Actor) {
     throw ApiError.conflict('Aplikacija mora imati bar jednog admina.', 'LAST_ADMIN')
   }
   const previous = user.role
-  user.role = role
-  // Any other role than staff (handled by staff-access) loses its location assignments.
-  user.staffOf = []
-  await user.save()
-  void audit(actor, { action: 'user.role', targetType: 'user', targetId: user._id, summary: `${user.email}: ${previous} → ${role}` })
+  if (previous !== role) {
+    const promoted = role === 'business'
+    // Only matches while the role is still `previous`: a repeated or concurrent request
+    // can't count as a second promotion (and send a second e-mail).
+    const result = await User.updateOne(
+      { _id: user._id, role: previous },
+      // Any other role than staff (handled by staff-access) loses its location assignments.
+      { $set: { role, staffOf: [], ...(promoted ? { 'partnerOnboarding.activationMail': activationMailMarker() } : {}) } },
+    )
+    if (result.modifiedCount === 1) {
+      void audit(actor, { action: 'user.role', targetType: 'user', targetId: user._id, summary: `${user.email}: ${previous} → ${role}` })
+      // Only after the change is saved; the delivery status is stored on the user.
+      if (promoted) await sendActivationMail(user._id)
+    }
+  }
+  const fresh = (await User.findById(user._id))!
+  if (fresh.role !== role) throw ApiError.conflict('Uloga je u međuvremenu promenjena. Osveži listu.', 'ROLE_CHANGED')
   const businessCount = await Business.countDocuments({ owner: user._id })
-  return { ...serializeUser(user), businessCount }
+  return { ...serializeUser(fresh), isBlocked: fresh.isBlocked, partnerStatus: fresh.partnerStatus ?? 'active', businessCount, ...(role === 'business' ? { partnerOnboarding: onboardingSummary(fresh) } : {}) }
 }
 
 export async function listBusinesses(query: AdminBusinessesQuery) {

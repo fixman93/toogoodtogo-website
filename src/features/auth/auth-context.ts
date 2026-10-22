@@ -11,7 +11,8 @@ export interface AuthContextValue {
   hasRole: (...roles: Role[]) => boolean
   /** Platform permission (admin panel). */
   can: (permission: Permission) => boolean
-  register: (input: { name: string; email: string; password: string; phone: string; referralCode?: string }) => Promise<User>
+  /** `acceptTerms`: the terms checkbox (also checked by the API). */
+  register: (input: { name: string; email: string; password: string; phone: string; referralCode?: string; acceptTerms: boolean }) => Promise<User>
 }
 
 export const ME_QUERY_KEY = ['auth', 'me'] as const

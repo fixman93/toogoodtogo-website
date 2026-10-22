@@ -78,9 +78,9 @@ the backend locally, set
 
 `cd backend && npm run seed` replaces the database with clean test data:
 
-* **Test Partner** (`test.partner@zalogaj.rs`): three locations, *Test
+* **Test Partner** (`test.partner@foodnesi.test`): three locations, *Test
   Pekara – Dorćol / Vračar / Novi Beograd*, with offers for the next 3 days.
-* **Test Kupac** (`test.kupac@zalogaj.rs`).
+* **Test Kupac** (`test.kupac@foodnesi.test`).
 
 The script prints the password (or set `SEED_PASSWORD`). Re-run it to get
 fresh offers. It refuses to wipe a database that contains any other (real)
@@ -347,7 +347,7 @@ panel shows only the tabs the role may use.
   * partner API keys (`X-Api-Key`) to publish offers, read orders and confirm
     pickups;
   * signed webhooks (`reservation.created/cancelled/collected`, header
-    `X-Foodnesi-Signature: sha256=HMAC(secret, body)`; the old `X-Zalogaj-*` headers are still sent).
+    `X-Foodnesi-Signature: sha256=HMAC(secret, body)`).
 
 ## Images (Cloudflare R2)
 

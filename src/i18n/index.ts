@@ -5,7 +5,7 @@ import { srLatn, type MessageKey, type Messages, type PluralMessage } from './sr
 const catalogues: Record<string, Messages> = { 'sr-Latn': srLatn }
 
 export type Script = 'latn' | 'cyrl'
-const SCRIPT_KEY = 'zalogaj.script'
+const SCRIPT_KEY = 'foodnesi.script'
 
 /** Latin (default) or Cyrillic; chosen in Profile → Settings, stored per device. */
 export const script: Script = (() => {

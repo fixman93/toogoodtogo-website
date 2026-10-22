@@ -12,6 +12,7 @@ import { notify } from './notification.service.js'
 import { notifyIfAvailable } from './waitlist.service.js'
 import { deleteIfOwned } from './storage.service.js'
 import { assertNotSuspended } from './partner-moderation.service.js'
+import { assertCanPublishOffers } from './partner-onboarding.service.js'
 
 type OfferWithBusiness = IOffer & { _id: Types.ObjectId; distanceMeters?: number; businessDoc: IBusiness & { _id: Types.ObjectId } }
 
@@ -208,6 +209,7 @@ export async function get(id: string) {
 export async function create(input: CreateOfferInput, actor: Actor) {
   const business = await assertBusinessAccess(input.businessId, actor)
   await assertNotSuspended(business)
+  await assertCanPublishOffers(business.owner)
   if (!business.isActive) throw ApiError.conflict('Lokal nije aktivan.', 'BUSINESS_INACTIVE')
   if (input.pickupEnd <= new Date()) throw ApiError.badRequest('Vreme preuzimanja mora biti u budućnosti.', 'PICKUP_IN_PAST')
   if (input.priceDrop && input.priceDrop.priceMinor >= input.priceMinor) {
@@ -243,7 +245,10 @@ export async function update(id: string, input: UpdateOfferInput, actor: Actor) 
   const offer = await Offer.findById(id)
   if (!offer || offer.status === 'archived') throw ApiError.notFound('Ponuda nije pronađena.')
   const business = await assertBusinessAccess(offer.business, actor)
-  if (input.status === 'active') await assertNotSuspended(business)
+  if (input.status === 'active') {
+    await assertNotSuspended(business)
+    await assertCanPublishOffers(business.owner)
+  }
 
   const merged = { ...offer.toObject(), ...input }
   if (merged.priceMinor >= merged.originalPriceMinor) throw ApiError.badRequest('Cena mora biti niža od redovne.', 'INVALID_PRICE')

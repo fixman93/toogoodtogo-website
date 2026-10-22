@@ -74,7 +74,34 @@ export interface User {
   welcomeDiscountPercent?: number | null
   /** What an invited friend gets (shown on the invite card). */
   referralDiscountPercent?: number
+  /** Accepted legal documents (versions are dates) and whether the app must ask again. */
+  legal?: LegalStatus
   createdAt: string
+}
+
+export interface LegalStatus {
+  termsVersion: string
+  privacyVersion: string
+  termsAcceptedVersion: string | null
+  termsAcceptedAt: string | null
+  termsNeedsAcceptance: boolean
+  partnerTermsVersion: string
+  partnerTermsAcceptedVersion: string | null
+  partnerTermsAcceptedAt: string | null
+  partnerTermsNeedsAcceptance: boolean
+}
+
+export type LegalDocumentKind = 'terms' | 'partner_terms'
+
+/** Admin view of a partner's onboarding. */
+export interface PartnerOnboarding {
+  partnerTermsAcceptedVersion: string | null
+  partnerTermsAcceptedAt: string | null
+  partnerTermsNeedsAcceptance: boolean
+  /** "Nalog partnera je aktiviran" e-mail; null for partners promoted before it existed. */
+  activationMail: { status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'; attempts: number; sentAt: string | null; lastAttemptAt: string | null; error: string | null } | null
+  /** Contract + Prilog A/B signed outside the app (recorded by the team). */
+  contract: { signedAt: string; recordedAt: string; note: string | null } | null
 }
 
 export interface AuthResult {
@@ -339,6 +366,8 @@ export interface AdminUser extends User {
   businessCount: number
   isBlocked: boolean
   partnerStatus: PartnerStatus
+  /** Only for partners. */
+  partnerOnboarding?: PartnerOnboarding
 }
 
 export type PartnerNoteKind = 'warning' | 'paused' | 'blocked' | 'reactivated' | 'deleted'

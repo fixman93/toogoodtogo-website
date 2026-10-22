@@ -13,6 +13,7 @@ import { supportRoutes } from './support.routes.js'
 import { uploadRoutes } from './upload.routes.js'
 import { pickupRoutes, reservationRoutes } from './reservation.routes.js'
 import { scheduleRoutes } from './schedule.routes.js'
+import { contactRoutes } from './contact.routes.js'
 
 export const apiRouter = Router()
 
@@ -36,3 +37,5 @@ apiRouter.use('/uploads', uploadRoutes)
 apiRouter.use('/reservations', reservationRoutes)
 apiRouter.use('/favorites', favoriteRoutes)
 apiRouter.use('/offer-schedules', scheduleRoutes)
+// Public contact form → e-mail to the team.
+apiRouter.use('/contact', contactRoutes)

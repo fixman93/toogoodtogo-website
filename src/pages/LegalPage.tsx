@@ -14,13 +14,14 @@ import { localize } from '@/i18n'
  */
 type Section = { title: string; text?: string[]; list?: string[] }
 
-const company = `${LEGAL.company}, ${LEGAL.address}, matični broj ${LEGAL.registrationNumber}, PIB ${LEGAL.taxId}`
+const company = `${LEGAL.company}, ${LEGAL.address}, matični broj ${LEGAL.registrationNumber}, poreski broj ${LEGAL.taxId}`
 
 const PRIVACY_SR: Section[] = [
   {
     title: '1. Ko obrađuje tvoje podatke',
     text: [
-      `Rukovalac podacima je ${company}. Za sva pitanja o privatnosti i za ostvarivanje svojih prava piši nam na ${LEGAL.privacyEmail}.`,
+      `Rukovalac podacima je ${LEGAL.company}, sa sedištem na adresi ${LEGAL.address}, matični broj: ${LEGAL.registrationNumber}, poreski broj: ${LEGAL.taxId}.`,
+      `Za sva pitanja u vezi sa privatnošću i ostvarivanjem svojih prava možeš nam pisati na: ${LEGAL.privacyEmail}.`,
       'Ova politika važi za sajt i mobilnu aplikaciju Foodnesi i usklađena je sa Opštom uredbom EU o zaštiti podataka (GDPR) i Zakonom o zaštiti podataka o ličnosti Republike Srbije, kao i sa propisima drugih zemalja u kojima Foodnesi radi.',
     ],
   },
@@ -182,13 +183,14 @@ const TERMS_SR: Section[] = [
   },
 ]
 
-const companyEn = `${LEGAL.company}, ${LEGAL.address}, company ID ${LEGAL.registrationNumber}, tax ID (PIB) ${LEGAL.taxId}`
+const companyEn = `${LEGAL.company}, ${LEGAL.address}, company ID ${LEGAL.registrationNumber}, tax number ${LEGAL.taxId}`
 
 const PRIVACY_EN: Section[] = [
   {
     title: '1. Who processes your data',
     text: [
-      `The data controller is ${companyEn}. For any privacy question or to exercise your rights, write to ${LEGAL.privacyEmail}.`,
+      `The data controller is ${LEGAL.company}, registered at ${LEGAL.address}, company ID: ${LEGAL.registrationNumber}, tax number: ${LEGAL.taxId}.`,
+      `For any question about privacy or to exercise your rights, write to: ${LEGAL.privacyEmail}.`,
       'This policy applies to the Foodnesi website and mobile app. It follows the EU General Data Protection Regulation (GDPR), the Serbian Law on Personal Data Protection and the laws of the other countries where Foodnesi operates.',
     ],
   },

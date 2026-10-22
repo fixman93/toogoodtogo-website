@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation as useRouterLocation, useNavigate, useSearchParams } from 'react-router'
 import { Gift, Loader2 } from 'lucide-react'
 import { ApiError } from '@/api/client'
@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ConsentNote } from '@/components/common/LegalLinks'
+import { LEGAL_PATHS } from '@/config/legal'
 import { market } from '@/config/markets'
 import { useAuth } from '@/features/auth/auth-context'
 import { t } from '@/i18n'
@@ -22,6 +22,10 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  // Terms checkbox: never pre-checked; required for registration (the API checks it too).
+  const [acceptTerms, setAcceptTerms] = useState(false)
+  const [termsError, setTermsError] = useState(false)
+  const termsBox = useRef<HTMLInputElement>(null)
   const isLogin = mode === 'login'
 
   const onSubmit = async (e: FormEvent) => {
@@ -29,10 +33,15 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setError(null)
     if (!isLogin && form.phone.replace(/\D/g, '').length < 6) return setError(t('auth.phoneRequired'))
     if (!isLogin && form.password.length < 8) return setError(t('auth.passwordHint'))
+    if (!isLogin && !acceptTerms) {
+      setTermsError(true)
+      termsBox.current?.focus()
+      return
+    }
     setPending(true)
     try {
       if (isLogin) await login(form.email, form.password)
-      else await register({ name: form.name, email: form.email, phone: form.phone, password: form.password, referralCode })
+      else await register({ name: form.name, email: form.email, phone: form.phone, password: form.password, referralCode, acceptTerms })
       navigate(from, { replace: true })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('common.errorText'))
@@ -90,6 +99,41 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             <PasswordInput {...field('password')} autoComplete={isLogin ? 'current-password' : 'new-password'} required />
             {!isLogin && <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>}
           </div>
+          {!isLogin && (
+            <div className="space-y-1.5">
+              <label className="flex items-start gap-3 text-sm leading-relaxed">
+                <input
+                  ref={termsBox}
+                  type="checkbox"
+                  checked={acceptTerms}
+                  onChange={(e) => {
+                    setAcceptTerms(e.target.checked)
+                    if (e.target.checked) setTermsError(false)
+                  }}
+                  aria-invalid={termsError || undefined}
+                  aria-describedby={termsError ? 'terms-error' : undefined}
+                  className="mt-0.5 size-5 shrink-0 accent-[var(--primary)]"
+                />
+                <span>
+                  {t('auth.termsBefore')}{' '}
+                  {/* New tab: the filled-in form stays as it is. */}
+                  <a href={LEGAL_PATHS.terms} target="_blank" rel="noopener" className="font-semibold text-primary underline">
+                    {t('auth.termsLink')}
+                  </a>{' '}
+                  {t('auth.termsMiddle')}{' '}
+                  <a href={LEGAL_PATHS.privacy} target="_blank" rel="noopener" className="font-semibold text-primary underline">
+                    {t('auth.privacyLink')}
+                  </a>
+                  .
+                </span>
+              </label>
+              {termsError && (
+                <p id="terms-error" role="alert" className="text-sm font-medium text-destructive">
+                  {t('auth.termsRequired')}
+                </p>
+              )}
+            </div>
+          )}
           {error && (
             <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm font-medium text-destructive">
               {error}
@@ -99,7 +143,6 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             {pending && <Loader2 className="animate-spin" />}
             {t(isLogin ? 'auth.submitLogin' : 'auth.submitRegister')}
           </Button>
-          {!isLogin && <ConsentNote kind="register" />}
         </form>
 
         <p className="mt-5 text-center text-sm text-muted-foreground">

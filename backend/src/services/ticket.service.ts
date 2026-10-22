@@ -61,6 +61,7 @@ export async function sendReservationTicket(to: string, reservation: Ticket, bus
         ? 'Tvoja kesa je rezervisana i stiže na tvoju adresu. Kada dostavljač stigne, pokaži mu ovaj QR kod. Dostavljača možeš da pratiš na mapi u aplikaciji.'
         : 'Tvoja kesa je rezervisana. Kada dođeš u lokal, pokaži ovaj QR kod na kasi (može direktno iz mejla) ili reci kod ispod.',
       ...(business.collectionInstructions && !delivery ? [business.collectionInstructions] : []),
+      'Napomena: ne garantujemo tačan sadržaj kese – određuje ga lokal prema onome što ostane tog dana. Za sastav, alergene i kvalitet hrane odgovoran je lokal; ako nešto nije u redu sa hranom, reci odmah u lokalu.',
     ].join('\n')
     await sendMail(
       to,

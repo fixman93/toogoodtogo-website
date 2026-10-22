@@ -2,7 +2,7 @@
  * Integrations for partners' POS/ERP systems:
  * - API keys (header `X-Api-Key`) act as the partner on partner endpoints
  *   (offers, orders, pickups) — never on account or admin endpoints.
- * - Webhooks receive signed JSON (`X-Foodnesi-Signature: sha256=<hmac>`; the old X-Zalogaj-* headers are still sent).
+ * - Webhooks receive signed JSON (`X-Foodnesi-Signature: sha256=<hmac>`).
  */
 import { createHash, createHmac, randomBytes } from 'node:crypto'
 import type { Types } from 'mongoose'
@@ -113,8 +113,6 @@ async function deliver(hookId: Types.ObjectId, event: string, data: unknown) {
         'X-Foodnesi-Event': event,
         'X-Foodnesi-Signature': `sha256=${signature}`,
         // Integrations built before the rename.
-        'X-Zalogaj-Event': event,
-        'X-Zalogaj-Signature': `sha256=${signature}`,
       },
       body,
       signal: AbortSignal.timeout(5000),

@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { currencyInfo, market } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
+import { PartnerTermsGate } from '@/features/business/PartnerTermsNotice'
 import { useDeleteOffer, useMyBusinesses, useOffer, useSaveOffer, useSuggestion } from '@/hooks/api'
 import { t } from '@/i18n'
 import { discountPercent, formatMoney } from '@/lib/format'
@@ -509,7 +510,8 @@ export function OfferFormPage() {
       </Button>
       <PageHeader title={id ? t('partner.editOffer') : t('partner.addOffer')} />
       <PartnerGuard>
-        <OfferFormLoader />
+        {/* Editing existing offers stays possible; new ones wait for the partner rules. */}
+        {id ? <OfferFormLoader /> : <PartnerTermsGate><OfferFormLoader /></PartnerTermsGate>}
       </PartnerGuard>
     </div>
   )

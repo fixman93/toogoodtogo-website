@@ -25,3 +25,5 @@ authRoutes.post('/reset-password', authLimiter, c.resetPassword)
 authRoutes.delete('/me', authLimiter, authenticate, c.deleteAccount)
 authRoutes.patch('/me/preferences', authenticate, c.updatePreferences)
 authRoutes.patch('/me', authenticate, c.updateProfile)
+// Accept the current terms / partner rules (stored with version and time).
+authRoutes.post('/me/legal', authenticate, c.acceptLegal)

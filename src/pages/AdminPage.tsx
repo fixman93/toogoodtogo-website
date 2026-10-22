@@ -47,6 +47,8 @@ import {
   useSetReviewHidden,
   useSetUserBlocked,
   useSetUserRole,
+  useRetryActivationMail,
+  useSetPartnerContract,
 } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatDate, formatDayLabel, formatMoney, formatPickupWindow, formatTime, fromMinor, toMinor } from '@/lib/format'
@@ -243,6 +245,90 @@ function StaffAccessEditor({ user, onDone }: { user: AdminUser; onDone?: () => v
   )
 }
 
+const MAIL_BADGE = { pending: 'muted', sending: 'muted', sent: 'success', failed: 'destructive', skipped: 'accent' } as const
+
+/**
+ * Partner onboarding (admin): partner rules accepted in the app, the activation e-mail
+ * (resend after a failure) and the contract signed outside the app (recorded here —
+ * the app does not sign anything).
+ */
+function PartnerOnboardingPanel({ user }: { user: AdminUser }) {
+  const { can } = useAuth()
+  const retry = useRetryActivationMail()
+  const contract = useSetPartnerContract()
+  const [signedAt, setSignedAt] = useState(() => new Date().toISOString().slice(0, 10))
+  const [note, setNote] = useState('')
+  const o = user.partnerOnboarding
+  if (!o) return null
+  const manage = can('partners.manage')
+  const mail = o.activationMail
+  const error = retry.error ?? contract.error
+
+  return (
+    <div className="space-y-2 rounded-xl bg-muted/50 p-3 text-xs">
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">{t('onboarding.rules')}</span>
+        {o.partnerTermsAcceptedAt && !o.partnerTermsNeedsAcceptance ? (
+          <Badge variant="success">{t('onboarding.rulesAccepted', { date: formatDate(o.partnerTermsAcceptedAt), version: o.partnerTermsAcceptedVersion ?? '' })}</Badge>
+        ) : (
+          <Badge variant="accent">{t('onboarding.rulesMissing')}</Badge>
+        )}
+      </p>
+      <p className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">{t('onboarding.mail')}</span>
+        {mail ? (
+          <Badge variant={MAIL_BADGE[mail.status]}>
+            {t(`onboarding.mail.${mail.status}`, { date: mail.sentAt ? formatDate(mail.sentAt) : '' })}
+          </Badge>
+        ) : (
+          <Badge variant="muted">{t('onboarding.mail.none')}</Badge>
+        )}
+        {manage && mail?.status !== 'sent' && mail?.status !== 'sending' && (
+          <Button size="sm" variant="outline" className="h-7" disabled={retry.isPending} onClick={() => retry.mutate(user.id)}>
+            {retry.isPending && <Loader2 className="animate-spin" />}
+            {t(mail ? 'onboarding.mailRetry' : 'onboarding.mailSend')}
+          </Button>
+        )}
+      </p>
+      {mail?.status === 'failed' && mail.error && <p className="break-words text-destructive">{mail.error}</p>}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-semibold">{t('onboarding.contract')}</span>
+        {o.contract ? (
+          <>
+            <Badge variant="success">{t('onboarding.contractSigned', { date: formatDate(o.contract.signedAt) })}</Badge>
+            {o.contract.note && <span className="text-muted-foreground">{o.contract.note}</span>}
+            {manage && (
+              <Button size="sm" variant="ghost" className="h-7 text-destructive" disabled={contract.isPending} onClick={() => contract.mutate({ id: user.id, signed: false })}>
+                {t('onboarding.contractClear')}
+              </Button>
+            )}
+          </>
+        ) : (
+          <Badge variant="muted">{t('onboarding.contractMissing')}</Badge>
+        )}
+      </div>
+      {manage && !o.contract && (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="space-y-1">
+            <span className="block text-muted-foreground">{t('onboarding.contractDate')}</span>
+            <Input type="date" value={signedAt} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setSignedAt(e.target.value)} className="h-8 w-40" />
+          </label>
+          <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} placeholder={t('onboarding.contractNote')} className="h-8 min-w-40 flex-1" />
+          <Button size="sm" className="h-8" disabled={contract.isPending || !signedAt} onClick={() => contract.mutate({ id: user.id, signed: true, signedAt, note: note.trim() || undefined })}>
+            {contract.isPending && <Loader2 className="animate-spin" />}
+            {t('onboarding.contractRecord')}
+          </Button>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="font-semibold text-destructive">
+          {error instanceof ApiError ? error.message : t('common.errorText')}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
   const { can } = useAuth()
   const canRoles = can('users.roles')
@@ -333,6 +419,7 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
       )}
 
       {changed && role === 'business' && <p className="text-xs text-muted-foreground">{t('admin.promoteHint')}</p>}
+      {!changed && user.role === 'business' && <PartnerOnboardingPanel user={user} />}
       {canRoles && !isSelf && ((changed && role === 'staff') || (!changed && user.role === 'staff')) && (
         <StaffAccessEditor user={user} onDone={() => setLocalRole(user.role === 'staff' ? 'staff' : role)} />
       )}

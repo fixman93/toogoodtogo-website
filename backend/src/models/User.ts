@@ -8,6 +8,33 @@ export const ROLES = ['customer', 'business', 'staff', 'admin', 'operations', 's
 export type Role = (typeof ROLES)[number]
 export const PLATFORM_ROLES: Role[] = ['admin', 'operations', 'support', 'finance']
 
+/** Proof that the user accepted a legal document (never removed; a new version adds a new entry). */
+export interface LegalAcceptance {
+  document: 'terms' | 'partner_terms'
+  /** Version of the document (config/legal.ts). */
+  version: string
+  acceptedAt: Date
+  /** Version of the privacy policy shown next to the terms (informed, not "accepted"). */
+  privacyVersion?: string
+}
+
+export type MailStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'
+
+export interface PartnerOnboarding {
+  /** "Vaš nalog partnera je aktiviran" — one per promotion to partner. */
+  activationMail?: {
+    status: MailStatus
+    /** When the user became a partner (identifies the role change the e-mail belongs to). */
+    roleChangedAt: Date
+    attempts: number
+    lastAttemptAt?: Date
+    sentAt?: Date
+    error?: string
+  }
+  /** Contract + Prilog A/B signed outside the app, recorded by the team (not an e-signature). */
+  contract?: { signedAt: Date; recordedAt: Date; recordedBy: Types.ObjectId; note?: string }
+}
+
 export interface IUser {
   name: string
   email: string
@@ -48,6 +75,8 @@ export interface IUser {
   streakRewarded?: number
   /** Set when the user deleted their account (personal data is anonymized). */
   deletedAt?: Date
+  legalAcceptances: LegalAcceptance[]
+  partnerOnboarding?: PartnerOnboarding
   createdAt: Date
   updatedAt: Date
 }
@@ -81,6 +110,54 @@ const userSchema = new Schema<IUser>(
       email: { type: Boolean, default: true },
     },
     deletedAt: Date,
+    legalAcceptances: {
+      type: [
+        new Schema<LegalAcceptance>(
+          {
+            document: { type: String, enum: ['terms', 'partner_terms'], required: true },
+            version: { type: String, required: true, maxlength: 32 },
+            acceptedAt: { type: Date, required: true },
+            privacyVersion: { type: String, maxlength: 32 },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
+    partnerOnboarding: {
+      type: new Schema<PartnerOnboarding>(
+        {
+          activationMail: {
+            type: new Schema(
+              {
+                status: { type: String, enum: ['pending', 'sending', 'sent', 'failed', 'skipped'], required: true },
+                roleChangedAt: { type: Date, required: true },
+                attempts: { type: Number, default: 0 },
+                lastAttemptAt: Date,
+                sentAt: Date,
+                error: { type: String, maxlength: 500 },
+              },
+              { _id: false },
+            ),
+            default: undefined,
+          },
+          contract: {
+            type: new Schema(
+              {
+                signedAt: { type: Date, required: true },
+                recordedAt: { type: Date, required: true },
+                recordedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+                note: { type: String, maxlength: 500 },
+              },
+              { _id: false },
+            ),
+            default: undefined,
+          },
+        },
+        { _id: false },
+      ),
+      default: undefined,
+    },
   },
   { timestamps: true },
 )

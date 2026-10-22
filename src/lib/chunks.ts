@@ -6,7 +6,7 @@
  */
 import { lazy, type ComponentType } from 'react'
 
-const RELOAD_KEY = 'zalogaj.chunkReloadAt'
+const RELOAD_KEY = 'foodnesi.chunkReloadAt'
 const GUARD_MS = 15_000
 
 export const isChunkLoadError = (error: unknown) =>

@@ -153,7 +153,7 @@ export const MARKETS: Record<string, MarketConfig> = {
 
 export const MARKET_LIST = Object.values(MARKETS)
 
-const MARKET_KEY = 'zalogaj.market'
+const MARKET_KEY = 'foodnesi.market'
 const FALLBACK = MARKETS[import.meta.env.VITE_MARKET ?? 'RS'] ?? MARKETS.RS
 
 /** The country the visitor picked in Profile, if any. */
@@ -184,7 +184,7 @@ export function setMarket(code: string, reload = true) {
   try {
     localStorage.setItem(MARKET_KEY, code)
     // The saved city belongs to the old country.
-    localStorage.removeItem('zalogaj.location')
+    localStorage.removeItem('foodnesi.location')
   } catch {
     /* ignore */
   }

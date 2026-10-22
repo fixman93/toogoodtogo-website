@@ -6,6 +6,7 @@ import * as auditService from '../services/audit.service.js'
 import * as donationService from '../services/donation.service.js'
 import * as statementService from '../services/statement.service.js'
 import * as moderationService from '../services/partner-moderation.service.js'
+import * as onboardingService from '../services/partner-onboarding.service.js'
 import * as integrityService from '../services/integrity.service.js'
 import * as staffService from '../services/staff.service.js'
 import * as reservationService from '../services/reservation.service.js'
@@ -27,6 +28,7 @@ import {
   warningBody,
   reviewHiddenBody,
   roleBody,
+  partnerContractBody,
 } from '../validators/admin.validators.js'
 import { idParams } from '../validators/common.js'
 
@@ -103,6 +105,14 @@ export async function deletePayment(req: Request, res: Response) {
 export async function partnerStats(req: Request, res: Response) {
   const { days } = z.object({ days: z.coerce.number().int().min(0).max(3650).default(30) }).parse(req.query)
   ok(res, await integrityService.partnerStats(idParams.parse(req.params).id, days))
+}
+
+export async function retryActivationMail(req: Request, res: Response) {
+  ok(res, await onboardingService.retryActivationMail(idParams.parse(req.params).id, currentUser(req)))
+}
+
+export async function setPartnerContract(req: Request, res: Response) {
+  ok(res, await onboardingService.setContract(idParams.parse(req.params).id, partnerContractBody.parse(req.body), currentUser(req)))
 }
 
 export async function partnerStanding(req: Request, res: Response) {

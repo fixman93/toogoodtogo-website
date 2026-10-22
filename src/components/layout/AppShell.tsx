@@ -6,6 +6,9 @@ import { Logo } from '@/components/common/Logo'
 import { t } from '@/i18n'
 import { cn } from '@/lib/utils'
 import { PermissionBanner } from '@/features/permissions/PermissionBanner'
+import { TermsUpdateNotice } from '@/features/auth/TermsUpdateNotice'
+import { SupportBubble } from '@/features/contact/SupportBubble'
+import { usePartnerTermsPending } from '@/features/business/partner-terms'
 import { NotificationBell } from '@/features/notifications/NotificationBell'
 import { LocationPicker } from './LocationPicker'
 import { NAV_ITEMS, OWNER_NAV_ITEMS, PARTNER_NAV_ITEMS } from './nav-items'
@@ -18,7 +21,7 @@ function ScrollToTop() {
   return null
 }
 
-const LAUNCH_KEY = 'zalogaj.launched'
+const LAUNCH_KEY = 'foodnesi.launched'
 
 /**
  * Partners and staff open the app to scan: on launch (the first screen of a
@@ -47,6 +50,9 @@ function OpenScannerOnLaunch() {
 export function AppShell() {
   const { hasRole } = useAuth()
   const navItems = hasRole('business') ? OWNER_NAV_ITEMS : hasRole('staff') ? PARTNER_NAV_ITEMS : NAV_ITEMS
+  // "Nova ponuda" is dimmed until the partner rules are accepted (it opens the acceptance card).
+  const termsPending = usePartnerTermsPending()
+  const locked = (to: string) => termsPending && to === '/business/new'
   return (
     <div className="min-h-dvh">
       <ScrollToTop />
@@ -67,6 +73,7 @@ export function AppShell() {
                   cn(
                     'flex h-10 items-center gap-2 rounded-full px-3.5 text-sm font-semibold transition-colors',
                     isActive ? 'bg-secondary text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    locked(to) && 'opacity-50',
                   )
                 }
               >
@@ -81,8 +88,10 @@ export function AppShell() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 pt-5 pb-28 md:pb-16">
+      {/* Bottom padding: tab bar + support bubble on phones, bubble on larger screens. */}
+      <main className="mx-auto max-w-6xl px-4 pt-5 pb-36 md:pb-24">
         <PermissionBanner />
+        <TermsUpdateNotice />
         <Outlet />
         <footer className="mt-12 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-t pt-5 text-xs text-muted-foreground">
           <span>© {new Date().getFullYear()} Foodnesi</span>
@@ -92,11 +101,19 @@ export function AppShell() {
           <Link to="/terms" className="hover:text-foreground hover:underline">
             {t('legal.terms')}
           </Link>
+          <Link to="/partner-uslovi" className="hover:text-foreground hover:underline">
+            {t('legal.partnerTerms')}
+          </Link>
           <Link to="/support" className="hover:text-foreground hover:underline">
             {t('profile.support')}
           </Link>
+          <Link to="/kontakt" className="hover:text-foreground hover:underline">
+            {t('contact.title')}
+          </Link>
         </footer>
       </main>
+
+      <SupportBubble />
 
       <nav
         aria-label="Glavna navigacija"
@@ -112,6 +129,7 @@ export function AppShell() {
                   cn(
                     'flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors',
                     isActive ? 'text-primary' : 'text-muted-foreground',
+                    locked(to) && 'opacity-50',
                   )
                 }
               >

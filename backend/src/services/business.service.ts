@@ -8,6 +8,7 @@ import type { CreateBusinessInput, UpdateBusinessInput } from '../validators/bus
 import { assertBusinessAccess, hasPermission, isAdmin, type Actor } from './access.service.js'
 import { audit } from './audit.service.js'
 import { deleteIfOwned } from './storage.service.js'
+import { assertCanAddLocations } from './partner-onboarding.service.js'
 
 /** "No free-delivery threshold" arrives as null; store it as missing. */
 const normalizeDelivery = (d: CreateBusinessInput['delivery']) => (d ? { ...d, freeFromMinor: d.freeFromMinor ?? undefined } : undefined)
@@ -59,6 +60,7 @@ async function assertSameCurrency(ownerId: unknown, currency: string) {
 }
 
 export async function create(input: CreateBusinessInput, actor: Actor) {
+  await assertCanAddLocations(actor.id)
   const market = marketFor(input.address.countryCode)
   await assertSameCurrency(actor.id, market.currency)
   const business = await Business.create({

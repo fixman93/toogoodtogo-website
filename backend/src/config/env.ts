@@ -28,11 +28,15 @@ const schema = z.object({
   /** Web push (optional). Generate with: npx web-push generate-vapid-keys */
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
-  VAPID_SUBJECT: z.string().default('mailto:podrska@zalogaj.rs'),
+  VAPID_SUBJECT: z.string().default('mailto:civcicboris93@gmail.com'),
   /** E-mail via MailerSend (optional). Without it e-mails are only logged. */
   MAILERSEND_API_KEY: z.string().optional(),
   /** Sender — its domain must be verified in MailerSend. */
   MAIL_FROM: z.string().default('Foodnesi <noreply@fixman-app.online>'),
+  /** Optional Reply-To (e.g. the team's inbox) — the sender is a no-reply address. */
+  MAIL_REPLY_TO: z.preprocess((v) => (v === '' ? undefined : v), z.email().optional()),
+  /** Inbox that receives the public contact form ("Kontakt"). */
+  CONTACT_EMAIL: z.preprocess((v) => (v === '' ? undefined : v), z.email().default('civcicboris93@gmail.com')),
   /** Cloudflare R2 (S3-compatible) for uploaded images — optional. */
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),

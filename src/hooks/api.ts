@@ -2,8 +2,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { uploadsApi, type CreateReservationBody, type ImageKind } from '@/api/services'
 import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, promotionsApi, reservationsApi, schedulesApi, supportApi, waitlistApi } from '@/api/services'
-import type { BoostKind, DeliveryMessageKey, OfferScheduleInput, Donation, PromotionInput, TicketCategory, TicketStatus, WebhookEvent, ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role } from '@/api/types'
-import { useAuth } from '@/features/auth/auth-context'
+import type { BoostKind, DeliveryMessageKey, OfferScheduleInput, Donation, PromotionInput, TicketCategory, TicketStatus, WebhookEvent, ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role, User } from '@/api/types'
+import { ME_QUERY_KEY, useAuth } from '@/features/auth/auth-context'
 
 export function useOffers(query: OfferQuery, options: { enabled?: boolean } = {}) {
   return useQuery({
@@ -456,6 +456,31 @@ export function useSetUserBlocked() {
   return useMutation({
     mutationFn: ({ id, blocked }: { id: string; blocked: boolean }) => adminApi.setBlocked(id, blocked),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  })
+}
+
+export function useRetryActivationMail() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => adminApi.retryActivationMail(id),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  })
+}
+
+export function useSetPartnerContract() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; signed: boolean; signedAt?: string; note?: string }) => adminApi.setPartnerContract(id, body),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin'] }),
+  })
+}
+
+/** Accept the current terms or partner rules; the signed-in profile is updated in place. */
+export function useAcceptLegal() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: authApi.acceptLegal,
+    onSuccess: (user) => queryClient.setQueryData(ME_QUERY_KEY, (old: User | null | undefined) => (old ? { ...old, ...user } : user)),
   })
 }
 

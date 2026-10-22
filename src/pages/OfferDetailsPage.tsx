@@ -113,6 +113,12 @@ function ReservePanel({ offer }: { offer: Offer }) {
             ? t(mode === 'delivery' ? 'delivery.orderFor' : 'offer.reserveFor', { price: formatMoney(subtotal + fee, offer.currency) })
             : t('offer.loginToReserve')}
       </Button>
+      {!soldOut && (
+        <p className="flex items-start justify-center gap-1.5 text-center text-xs text-muted-foreground">
+          <Info className="mt-0.5 size-3.5 shrink-0" />
+          {t('offer.noGuarantee')}
+        </p>
+      )}
       {welcomeMinor > 0 && (
         <p className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-success">
           <Gift className="size-4" />
@@ -298,10 +304,15 @@ export function OfferDetailsPage() {
                       <li key={item}>{item}</li>
                     ))}
                   </ul>
+                  <p className="mt-2 text-xs text-muted-foreground">{t('offer.knownNote')}</p>
                 </div>
               ) : (
-                <p className="rounded-xl bg-muted p-3 text-muted-foreground">{t('offer.surpriseNote')}</p>
+                <p className="flex items-start gap-2 rounded-xl bg-muted p-3 font-medium">
+                  <Info className="mt-0.5 size-4 shrink-0 text-primary" />
+                  {t('offer.surpriseNote')}
+                </p>
               )}
+              <p className="text-xs text-muted-foreground">{t('offer.responsibility')}</p>
               <div>
                 <p className="mb-1.5 flex items-center gap-1.5 font-semibold">
                   <AlertTriangle className="size-4 text-accent-foreground" />

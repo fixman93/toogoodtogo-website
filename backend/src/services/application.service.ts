@@ -7,6 +7,7 @@ import { ApiError } from '../utils/ApiError.js'
 import type { Actor } from './access.service.js'
 import { audit } from './audit.service.js'
 import { notify } from './notification.service.js'
+import { activationMailMarker, sendActivationMail } from './partner-onboarding.service.js'
 
 type ApplicationInput = {
   businessName: string
@@ -78,13 +79,18 @@ export async function decide(id: string, decision: { status: 'approved' | 'rejec
 
   if (decision.status === 'approved') {
     // Only promote customers; never downgrade an admin.
-    await User.updateOne({ _id: application.user, role: 'customer' }, { $set: { role: 'business' } })
+    const promoted = await User.updateOne(
+      { _id: application.user, role: 'customer' },
+      { $set: { role: 'business', 'partnerOnboarding.activationMail': activationMailMarker() } },
+    )
+    // In the app (and push); the e-mail is the activation e-mail with the partner rules.
     void notify([application.user], {
       type: 'application_approved',
       title: 'Dobro došao među partnere!',
-      body: 'Tvoja prijava je odobrena. Dodaj prvu lokaciju i ponudu u portalu za partnere.',
+      body: 'Tvoja prijava je odobrena. Pročitaj i prihvati Pravila za partnere, pa dodaj prvu lokaciju i ponudu u portalu za partnere.',
       link: '/business',
-    }, { email: true })
+    }, { email: promoted.modifiedCount === 0 })
+    if (promoted.modifiedCount === 1) await sendActivationMail(application.user)
   } else {
     void notify([application.user], {
       type: 'application_rejected',

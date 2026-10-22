@@ -1,5 +1,5 @@
 /** Per-device scanner preferences (the phone at the counter). */
-const KEYS = { onLaunch: 'zalogaj.scan.onLaunch', autoCollect: 'zalogaj.scan.autoCollect', cameraOk: 'zalogaj.scan.cameraOk' } as const
+const KEYS = { onLaunch: 'foodnesi.scan.onLaunch', autoCollect: 'foodnesi.scan.autoCollect', cameraOk: 'foodnesi.scan.cameraOk' } as const
 
 const read = (key: string) => {
   try {

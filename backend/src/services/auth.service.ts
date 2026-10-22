@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { env } from '../config/env.js'
+import { LEGAL_VERSIONS, type LegalDocument } from '../config/legal.js'
 import { signToken } from '../middleware/auth.js'
 import { isPhoneDuplicate, normalizePhone, phoneTaken } from '../utils/phone.js'
 import { ensureReferralCode, findReferrer, levelFor, welcomeDiscountPercent } from './loyalty.service.js'
@@ -25,7 +26,23 @@ import { serializeUser } from '../utils/serializers.js'
 
 const BCRYPT_ROUNDS = 12
 
-export async function register(input: { name: string; email: string; password: string; phone: string; referralCode?: string; countryCode?: string }) {
+const outdatedTerms = () =>
+  ApiError.conflict('Uslovi su u međuvremenu ažurirani. Osveži stranicu i pročitaj novu verziju.', 'LEGAL_VERSION_OUTDATED')
+
+export async function register(input: {
+  name: string
+  email: string
+  password: string
+  phone: string
+  referralCode?: string
+  countryCode?: string
+  acceptTerms?: boolean
+  termsVersion?: string
+  privacyVersion?: string
+}) {
+  // Enforced here too, not only by the checkbox in the app.
+  if (input.acceptTerms !== true) throw ApiError.badRequest('Da bi napravio/la nalog, prihvati Uslove korišćenja.', 'TERMS_NOT_ACCEPTED')
+  if (input.termsVersion !== LEGAL_VERSIONS.terms || (input.privacyVersion && input.privacyVersion !== LEGAL_VERSIONS.privacy)) throw outdatedTerms()
   if (await User.exists({ email: input.email })) throw ApiError.conflict('Nalog sa ovom e-poštom već postoji.', 'EMAIL_TAKEN')
   const phone = normalizePhone(input.phone, input.countryCode ?? env.DEFAULT_MARKET)
   if (await User.exists({ phone })) throw phoneTaken()
@@ -39,6 +56,7 @@ export async function register(input: { name: string; email: string; password: s
     passwordHash,
     role: 'customer',
     referredBy: referrer?._id,
+    legalAcceptances: [{ document: 'terms', version: LEGAL_VERSIONS.terms, acceptedAt: new Date(), privacyVersion: LEGAL_VERSIONS.privacy }],
     ...(input.countryCode ? { countryCode: input.countryCode } : {}),
   }).catch((error: unknown) => {
     throw isPhoneDuplicate(error) ? phoneTaken() : error
@@ -148,6 +166,7 @@ export async function exportMyData(userId: string) {
       notificationPrefs: user.notificationPrefs,
       createdAt: user.createdAt,
     },
+    legalAcceptances: (user.legalAcceptances ?? []).map((a) => ({ document: a.document, version: a.version, acceptedAt: a.acceptedAt, privacyVersion: a.privacyVersion ?? null })),
     reservations: reservations.map((r) => ({
       code: r.code,
       business: business(r.business),
@@ -171,6 +190,37 @@ export async function exportMyData(userId: string) {
     pushDevices: pushDevices.map((d) => ({ device: d.userAgent ?? null, since: d.createdAt })),
     notifications: notifications.map((n) => ({ title: n.title, body: n.body ?? null, at: n.createdAt })),
   }
+}
+
+const CURRENT: Record<LegalDocument, string> = { terms: LEGAL_VERSIONS.terms, partner_terms: LEGAL_VERSIONS.partnerTerms }
+
+/**
+ * Accept the current version of the terms (when the app asks again) or of the partner rules
+ * (partner portal). Earlier acceptances are kept; accepting the same version twice adds nothing.
+ */
+export async function acceptLegal(userId: string, input: { document: LegalDocument; version: string; privacyVersion?: string }) {
+  if (input.version !== CURRENT[input.document]) throw outdatedTerms()
+  const user = await User.findById(userId)
+  if (!user || user.deletedAt) throw ApiError.notFound('Nalog nije pronađen.')
+  if (input.document === 'partner_terms' && user.role !== 'business') {
+    throw ApiError.forbidden('Pravila za partnere prihvata vlasnik partnerskog naloga.', 'NOT_A_PARTNER')
+  }
+  // Atomic: a double click can't add the same version twice.
+  const updated = await User.findOneAndUpdate(
+    { _id: user._id, legalAcceptances: { $not: { $elemMatch: { document: input.document, version: input.version } } } },
+    {
+      $push: {
+        legalAcceptances: {
+          document: input.document,
+          version: input.version,
+          acceptedAt: new Date(),
+          ...(input.document === 'terms' ? { privacyVersion: LEGAL_VERSIONS.privacy } : {}),
+        },
+      },
+    },
+    { new: true },
+  )
+  return serializeUser(updated ?? user)
 }
 
 export async function updatePreferences(userId: string, prefs: { push?: boolean; email?: boolean }) {

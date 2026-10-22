@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { MARKETS, MARKET_LIST, market } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
+import { PartnerTermsGate } from '@/features/business/PartnerTermsNotice'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { useBusiness, useDeleteBusiness, useSaveBusiness } from '@/hooks/api'
 import { t } from '@/i18n'
@@ -424,7 +425,15 @@ export function LocationFormPage() {
         </Link>
       </Button>
       <PageHeader title={id ? t('partner.editLocation') : t('partner.addLocation')} />
-      <PartnerGuard>{id ? <EditLocation id={id} /> : <LocationForm />}</PartnerGuard>
+      <PartnerGuard>
+        {id ? (
+          <EditLocation id={id} />
+        ) : (
+          <PartnerTermsGate>
+            <LocationForm />
+          </PartnerTermsGate>
+        )}
+      </PartnerGuard>
     </div>
   )
 }

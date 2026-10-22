@@ -12,6 +12,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { StaffGuard } from '@/features/business/PartnerGuard'
 import { StaffSection } from '@/features/business/StaffSection'
 import { StandingNotice } from '@/features/business/StandingNotice'
+import { PartnerTermsNotice } from '@/features/business/PartnerTermsNotice'
+import { usePartnerTermsPending } from '@/features/business/partner-terms'
 import { BoostPanel } from '@/features/business/BoostPanel'
 import { useAuth } from '@/features/auth/auth-context'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
@@ -31,6 +33,7 @@ function OfferStatus({ offer }: { offer: Offer }) {
 }
 
 function OfferRow({ offer }: { offer: Offer }) {
+  const termsPending = usePartnerTermsPending()
   const save = useSaveOffer()
   const remove = useDeleteOffer()
   const [boosting, setBoosting] = useState(false)
@@ -93,12 +96,14 @@ function OfferRow({ offer }: { offer: Offer }) {
             {t('boost.open')}
           </Button>
         )}
-        <Button asChild size="sm" variant={past ? 'secondary' : 'ghost'}>
-          <Link to={`/business/offers/new?copy=${offer.id}`}>
-            <Copy />
-            {t('partner.repeatOffer')}
-          </Link>
-        </Button>
+        {!termsPending && (
+          <Button asChild size="sm" variant={past ? 'secondary' : 'ghost'}>
+            <Link to={`/business/offers/new?copy=${offer.id}`}>
+              <Copy />
+              {t('partner.repeatOffer')}
+            </Link>
+          </Button>
+        )}
         <ConfirmDelete
           label={t('partner.deleteShort')}
           question={t('partner.deleteConfirmShort', { title: offer.title })}
@@ -120,6 +125,7 @@ function LocationCard({ business }: { business: Business }) {
   const offers = data?.data ?? []
   const current = offers.filter((o) => !isPast(o)).sort((a, b) => a.pickupStart.localeCompare(b.pickupStart))
   const past = offers.filter(isPast)
+  const termsPending = usePartnerTermsPending()
 
   return (
     <Card className="overflow-hidden">
@@ -138,12 +144,19 @@ function LocationCard({ business }: { business: Business }) {
       </div>
 
       <div className="flex flex-wrap gap-2 border-b bg-muted/30 px-4 py-3">
-        <Button asChild size="sm" className="flex-1 sm:flex-none">
-          <Link to={`/business/offers/new?businessId=${business.id}`}>
+        {termsPending ? (
+          <Button size="sm" className="flex-1 sm:flex-none" disabled title={t('partnerTerms.disabledHint')}>
             <Plus />
             {t('partner.addOffer')}
-          </Link>
-        </Button>
+          </Button>
+        ) : (
+          <Button asChild size="sm" className="flex-1 sm:flex-none">
+            <Link to={`/business/offers/new?businessId=${business.id}`}>
+              <Plus />
+              {t('partner.addOffer')}
+            </Link>
+          </Button>
+        )}
         <Button asChild size="sm" variant="outline" className="flex-1 sm:flex-none">
           <Link to={`/business/locations/${business.id}/edit`}>
             <Pencil />
@@ -201,7 +214,14 @@ function LocationCard({ business }: { business: Business }) {
   )
 }
 
-function Tile({ to, icon: Icon, label, primary }: { to: string; icon: LucideIcon; label: string; primary?: boolean }) {
+function Tile({ to, icon: Icon, label, primary, disabled }: { to: string; icon: LucideIcon; label: string; primary?: boolean; disabled?: boolean }) {
+  if (disabled)
+    return (
+      <span aria-disabled="true" title={t('partnerTerms.disabledHint')} className="flex min-h-20 cursor-not-allowed flex-col items-start justify-between gap-2 rounded-2xl border bg-card p-3.5 text-sm font-semibold opacity-50">
+        <Icon className="size-5" />
+        {label}
+      </span>
+    )
   return (
     <Link
       to={to}
@@ -263,6 +283,7 @@ function TodaySummary() {
 
 function Dashboard() {
   const { data, isLoading, isError, refetch } = useMyBusinesses()
+  const termsPending = usePartnerTermsPending()
   if (isLoading) return <Skeleton className="h-48 rounded-2xl" />
   if (isError) return <ErrorState onRetry={() => refetch()} />
   const businesses = data?.data ?? []
@@ -270,17 +291,25 @@ function Dashboard() {
   return (
     <div className="space-y-5">
       <StandingNotice />
-      <Button asChild size="lg" className="h-14 w-full text-lg">
-        <Link to="/business/new">
+      <PartnerTermsNotice />
+      {termsPending ? (
+        <Button size="lg" className="h-14 w-full text-lg" disabled title={t('partnerTerms.disabledHint')}>
           <Plus />
           {t('nav.newOffer')}
-        </Link>
-      </Button>
+        </Button>
+      ) : (
+        <Button asChild size="lg" className="h-14 w-full text-lg">
+          <Link to="/business/new">
+            <Plus />
+            {t('nav.newOffer')}
+          </Link>
+        </Button>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile to="/business/scan" icon={ScanLine} label={t('business.scan')} primary />
         <Tile to="/business/orders" icon={ClipboardList} label={t('orders.title')} />
         <Tile to="/business/sales" icon={BarChart3} label={t('sales.link')} />
-        <Tile to="/business/locations/new" icon={Plus} label={t('partner.addLocation')} />
+        <Tile to="/business/locations/new" icon={Plus} label={t('partner.addLocation')} disabled={termsPending} />
         <Tile to="/business/schedules" icon={Repeat} label={t('repeat.title')} />
         <Tile to="/business/counter" icon={MonitorSmartphone} label={t('counter.title')} />
         <Tile to="/business/promotions" icon={TicketPercent} label={t('promo.title')} />
@@ -298,9 +327,15 @@ function Dashboard() {
           icon={Store}
           title={t('business.empty')}
           action={
-            <Button asChild>
-              <Link to="/business/locations/new">{t('partner.addFirstLocation')}</Link>
-            </Button>
+            termsPending ? (
+              <Button disabled title={t('partnerTerms.disabledHint')}>
+                {t('partner.addFirstLocation')}
+              </Button>
+            ) : (
+              <Button asChild>
+                <Link to="/business/locations/new">{t('partner.addFirstLocation')}</Link>
+              </Button>
+            )
           }
         />
       ) : (

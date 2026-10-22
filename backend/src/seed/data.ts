@@ -7,9 +7,10 @@ import type { Allergen, Category } from '../models/index.js'
 
 const img = (id: string, w = 900) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=70`
 
-export const TEST_PARTNER = { name: 'Test Partner', email: 'test.partner@zalogaj.rs', role: 'business' } as const
-export const TEST_CUSTOMER = { name: 'Test Kupac', email: 'test.kupac@zalogaj.rs', role: 'customer' } as const
-export const TEST_EMAILS: string[] = [TEST_PARTNER.email, TEST_CUSTOMER.email]
+export const TEST_PARTNER = { name: 'Test Partner', email: 'test.partner@foodnesi.test', role: 'business' } as const
+export const TEST_CUSTOMER = { name: 'Test Kupac', email: 'test.kupac@foodnesi.test', role: 'customer' } as const
+/** Also the pre-rename addresses, so a database seeded earlier still counts as test data. */
+export const TEST_EMAILS: string[] = [TEST_PARTNER.email, TEST_CUSTOMER.email, 'test.partner@zalogaj.rs', 'test.kupac@zalogaj.rs']
 
 export interface SeedLocation {
   name: string

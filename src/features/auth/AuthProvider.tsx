@@ -2,6 +2,7 @@ import { useCallback, useMemo, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { tokenStorage } from '@/api/client'
 import { authApi } from '@/api/services'
+import { LEGAL_VERSIONS } from '@/config/legal'
 import { market } from '@/config/markets'
 import type { AuthResult, Role } from '@/api/types'
 import { AuthContext, ME_QUERY_KEY, type AuthContextValue } from './auth-context'
@@ -40,7 +41,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login: (email, password) => authApi.login({ email, password }).then(onAuthenticated),
       resetPassword: (token, password) => authApi.resetPassword({ token, password }).then(onAuthenticated),
-      register: (input) => authApi.register({ ...input, countryCode: market.code }).then(onAuthenticated),
+      register: ({ acceptTerms, ...input }) =>
+        authApi
+          .register({ ...input, countryCode: market.code, acceptTerms, termsVersion: LEGAL_VERSIONS.terms, privacyVersion: LEGAL_VERSIONS.privacy })
+          .then(onAuthenticated),
       logout: () => {
         tokenStorage.clear()
         queryClient.setQueryData(ME_QUERY_KEY, null)

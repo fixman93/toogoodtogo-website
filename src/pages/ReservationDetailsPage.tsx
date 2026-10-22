@@ -108,6 +108,10 @@ function Details() {
             <p className="mt-4 text-xs font-semibold tracking-wider text-muted-foreground uppercase">{t('reservations.code')}</p>
             <p className="mt-1 font-mono text-3xl font-extrabold tracking-widest text-primary">{r.code}</p>
             <p className="mt-2 text-sm text-muted-foreground">{r.delivery ? t('track.qrHint') : t('reservations.qrHint')}</p>
+            <p className="mx-auto mt-3 flex max-w-sm items-start justify-center gap-1.5 text-xs text-muted-foreground">
+              <Info className="mt-0.5 size-3.5 shrink-0" />
+              {t('reservations.noGuarantee')}
+            </p>
             {arrival.state === 'arrived' && (
               <p role="status" className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full bg-success/15 px-3 py-1.5 text-sm font-semibold text-success">
                 <MapPinCheck className="size-4" />

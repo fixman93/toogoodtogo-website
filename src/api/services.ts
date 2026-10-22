@@ -67,14 +67,27 @@ import type {
   OfferScheduleInput,
   ReviewPhoto,
   PartnerStats,
+  LegalDocumentKind,
+  PartnerOnboarding,
 } from './types'
 
 const unwrap = <T>(promise: Promise<{ data: ApiSuccess<T> }>) => promise.then((res) => res.data.data)
 
 export const authApi = {
   login: (body: { email: string; password: string }) => unwrap<AuthResult>(api.post('/auth/login', body)),
-  register: (body: { name: string; email: string; password: string; phone: string; referralCode?: string; countryCode?: string }) =>
-    unwrap<AuthResult>(api.post('/auth/register', body)),
+  register: (body: {
+    name: string
+    email: string
+    password: string
+    phone: string
+    referralCode?: string
+    countryCode?: string
+    acceptTerms: boolean
+    termsVersion: string
+    privacyVersion: string
+  }) => unwrap<AuthResult>(api.post('/auth/register', body)),
+  /** Accept the current terms / partner rules (stored with version and time). */
+  acceptLegal: (body: { document: LegalDocumentKind; version: string }) => unwrap<User>(api.post('/auth/me/legal', body)),
   me: () => unwrap<User>(api.get('/auth/me')),
   forgotPassword: (email: string) => unwrap<{ sent: boolean }>(api.post('/auth/forgot-password', { email })),
   resetPassword: (body: { token: string; password: string }) => unwrap<AuthResult>(api.post('/auth/reset-password', body)),
@@ -85,6 +98,14 @@ export const authApi = {
   updateProfile: (body: { name?: string; avatarUrl?: string; countryCode?: string; phone?: string }) => unwrap<User>(api.patch('/auth/me', body)),
   /** "Moj uticaj": totals, weekly challenge, streak, badges, yearly recap. */
   impact: (year?: number) => unwrap<Impact>(api.get('/auth/me/impact', { params: { year } })),
+}
+
+export type ContactTopic = 'partnership' | 'support' | 'privacy' | 'other'
+
+/** Public contact form — e-mailed to the team. */
+export const contactApi = {
+  send: (body: { name: string; email: string; phone?: string; company?: string; topic: ContactTopic; message: string; website?: string }) =>
+    unwrap<{ sent: boolean }>(api.post('/contact', body)),
 }
 
 export const schedulesApi = {
@@ -200,6 +221,11 @@ export const adminApi = {
   setPartnerStatus: (id: string, body: { status: 'active' | 'paused' | 'blocked'; reason?: string }) =>
     unwrap<PartnerStanding>(api.patch(`/admin/partners/${id}/status`, body)),
   warnPartner: (id: string, message: string) => unwrap<PartnerNote>(api.post(`/admin/partners/${id}/warnings`, { message })),
+  /** Send the "nalog partnera je aktiviran" e-mail again after a failure. */
+  retryActivationMail: (id: string) => unwrap<PartnerOnboarding>(api.post(`/admin/partners/${id}/activation-mail`)),
+  /** Record (or clear) the contract signed outside the app. */
+  setPartnerContract: (id: string, body: { signed: boolean; signedAt?: string; note?: string }) =>
+    unwrap<PartnerOnboarding>(api.put(`/admin/partners/${id}/contract`, body)),
   resolveWarning: (noteId: string) => unwrap<PartnerNote>(api.patch(`/admin/partner-notes/${noteId}/resolve`)),
   integrity: (days = 30) => unwrap<PlatformIntegrity>(api.get('/admin/integrity', { params: { days } })),
   staffAccess: (userId: string) => unwrap<StaffAccess>(api.get(`/admin/users/${userId}/staff-access`)),

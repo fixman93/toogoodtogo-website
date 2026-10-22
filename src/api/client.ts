@@ -2,8 +2,8 @@ import axios, { AxiosError } from 'axios'
 import { localize } from '@/i18n'
 import type { ApiErrorBody } from './types'
 
-// Storage keys keep the pre-rename "zalogaj." prefix so nobody is signed out by the rename to Foodnesi.
-const TOKEN_KEY = 'zalogaj.token'
+// Old "zalogaj." keys are moved to "foodnesi." on start (lib/storage-migration), so nobody is signed out.
+const TOKEN_KEY = 'foodnesi.token'
 
 /** Kept until sign-out (or until the session expires after a long time without use). */
 export const tokenStorage = {

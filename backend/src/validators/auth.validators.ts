@@ -11,6 +11,18 @@ export const registerBody = z.object({
   phone: z.string({ error: 'Unesi broj telefona.' }).trim().min(1, 'Unesi broj telefona.').max(30),
   /** Country chosen in the app (prices, cities); defaults to the platform market. */
   countryCode: countryCode.optional(),
+  /** The terms checkbox; checked in the service so the user gets a clear message. */
+  acceptTerms: z.boolean().optional(),
+  /** Versions of the terms / privacy policy linked next to the checkbox. */
+  termsVersion: z.string().trim().max(32).optional(),
+  privacyVersion: z.string().trim().max(32).optional(),
+})
+
+export const acceptLegalBody = z.object({
+  document: z.enum(['terms', 'partner_terms']),
+  version: z.string().trim().min(1).max(32),
+  /** Only with `terms`: the privacy policy version linked next to it. */
+  privacyVersion: z.string().trim().max(32).optional(),
 })
 
 export const loginBody = z.object({

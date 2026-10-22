@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { currencyInfo } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
+import { PartnerTermsGate } from '@/features/business/PartnerTermsNotice'
 import { useBusinessOffers, useMyBusinesses, useSaveOffer, useSaveSchedule } from '@/hooks/api'
 import { SuggestionHint } from '@/features/business/BagSuggestion'
 import { PickupTimePicker } from '@/features/business/PickupTimePicker'
@@ -25,7 +26,7 @@ import { cn } from '@/lib/utils'
  * surprise bag) → check quantity/price/time → publish. Everything is
  * pre-filled; the full form stays one link away for photos, allergens, etc.
  */
-const LAST_LOCATION_KEY = 'zalogaj.quickOffer.location'
+const LAST_LOCATION_KEY = 'foodnesi.quickOffer.location'
 
 type Template = { key: string; title: string; description: string; price: string; original: string; quantity: number; from: string; to: string; source?: Offer }
 
@@ -432,7 +433,9 @@ export function QuickOfferPage() {
     <div className="mx-auto max-w-2xl">
       <PageHeader title={t('quick.title')} subtitle={t('quick.intro')} />
       <PartnerGuard>
-        <QuickOffer />
+        <PartnerTermsGate>
+          <QuickOffer />
+        </PartnerTermsGate>
       </PartnerGuard>
     </div>
   )

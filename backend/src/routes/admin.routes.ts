@@ -35,6 +35,9 @@ adminRoutes.patch('/partners/:id/status', requirePermission('partners.manage'), 
 adminRoutes.post('/partners/:id/warnings', requirePermission('partners.manage'), c.warnPartner)
 adminRoutes.patch('/partner-notes/:id/resolve', requirePermission('partners.manage'), c.resolveWarning)
 adminRoutes.delete('/partners/:id', requirePermission('partners.manage'), c.deletePartner)
+// Onboarding: resend a failed activation e-mail; record the contract signed outside the app.
+adminRoutes.post('/partners/:id/activation-mail', requirePermission('partners.manage'), c.retryActivationMail)
+adminRoutes.put('/partners/:id/contract', requirePermission('partners.manage'), c.setPartnerContract)
 // Pickup integrity: are hand-overs recorded (scanned)? + disputes on customer-confirmed pickups.
 adminRoutes.get('/integrity', requirePermission('integrity.view'), c.integrity)
 adminRoutes.get('/disputes', requirePermission('integrity.view'), c.listDisputes)

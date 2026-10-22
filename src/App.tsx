@@ -34,6 +34,8 @@ import { ReservationDetailsPage } from '@/pages/ReservationDetailsPage'
 import { ReservationsPage } from '@/pages/ReservationsPage'
 import { RouteErrorPage } from '@/pages/RouteErrorPage'
 import { PrivacyPage, TermsPage } from '@/pages/LegalPage'
+import { PartnerTermsPage } from '@/pages/PartnerTermsPage'
+import { ContactPage } from '@/pages/ContactPage'
 
 const router = createBrowserRouter([
   {
@@ -75,6 +77,9 @@ const router = createBrowserRouter([
       { path: 'terms', element: <TermsPage /> },
       { path: 'privatnost', element: <PrivacyPage lang="sr" /> },
       { path: 'uslovi', element: <TermsPage lang="sr" /> },
+      // Public partner rules (linked from the activation e-mail) — keep this URL stable.
+      { path: 'partner-uslovi', element: <PartnerTermsPage /> },
+      { path: 'kontakt', element: <ContactPage /> },
       { path: 'support/:id', element: <SupportPage /> },
       { path: 'business/locations/new', element: <LocationFormPage /> },
       { path: 'business/locations/:id/edit', element: <LocationFormPage /> },

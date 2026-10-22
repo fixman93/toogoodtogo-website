@@ -5,6 +5,7 @@
  */
 import type { Types } from 'mongoose'
 import { permissionsFor } from '../config/permissions.js'
+import { legalStatus } from './legal.js'
 import { effectivePriceMinor, type IBusiness, type IFavorite, type IOffer, type IReservation, type IReview, type IUser } from '../models/index.js'
 
 type WithId<T> = T & { _id: Types.ObjectId }
@@ -24,6 +25,8 @@ export function serializeUser(u: WithId<IUser>) {
     /** Platform permissions (admin panel), see config/permissions. */
     permissions: permissionsFor(u.role),
     notificationPrefs: { push: u.notificationPrefs?.push ?? true, email: u.notificationPrefs?.email ?? true },
+    /** Accepted legal documents and whether the app has to ask again. */
+    legal: legalStatus(u),
     createdAt: u.createdAt.toISOString(),
   }
 }

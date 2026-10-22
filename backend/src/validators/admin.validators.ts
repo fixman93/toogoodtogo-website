@@ -4,6 +4,13 @@ import { pagination } from './common.js'
 
 export const roleBody = z.object({ role: z.enum(ROLES) })
 
+/** Contract + Prilog A/B signed outside the app (recorded, not signed, in the app). */
+export const partnerContractBody = z.object({
+  signed: z.boolean(),
+  signedAt: z.coerce.date().max(new Date(Date.now() + 86_400_000), 'Datum potpisa ne može biti u budućnosti.').optional(),
+  note: z.string().trim().max(500).optional(),
+})
+
 export const adminUsersQuery = z.object({
   q: z.string().trim().max(100).optional(),
   role: z.enum(ROLES).optional(),

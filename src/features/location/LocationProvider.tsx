@@ -3,7 +3,7 @@ import { market } from '@/config/markets'
 import { t } from '@/i18n'
 import { LocationContext, type LocationContextValue, type UserLocation } from './location-context'
 
-const STORAGE_KEY = 'zalogaj.location'
+const STORAGE_KEY = 'foodnesi.location'
 
 function cityLocation(cityId: string): UserLocation {
   const city = market.cities.find((c) => c.id === cityId) ?? market.cities[0]
