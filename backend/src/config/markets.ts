@@ -16,7 +16,7 @@ export interface Market {
   maxQuantityPerReservation: number
   /** Unclaimed reservations become "expired" this long after pickup ends. */
   expiryGraceMinutes: number
-  /** Platform commission on collected sales (0.15 = 15%); can be overridden per location. */
+  /** Platform commission on collected sales (0.2 = 20%); can be overridden per location. */
   commissionRate: number
   /**
    * Paid promotion of an offer (minor units, market currency), added to the
@@ -28,7 +28,7 @@ export interface Market {
   referralDiscountPercent: number
 }
 
-const defaults = { cancellationCutoffMinutes: 30, maxQuantityPerReservation: 4, expiryGraceMinutes: 60, commissionRate: 0.15, referralDiscountPercent: 30 }
+const defaults = { cancellationCutoffMinutes: 30, maxQuantityPerReservation: 4, expiryGraceMinutes: 60, commissionRate: 0.2, referralDiscountPercent: 30 }
 const boost = { RSD: { top: 20_000, push: 40_000 }, BAM: { top: 300, push: 600 }, EUR: { top: 150, push: 300 }, MKD: { top: 10_000, push: 20_000 } }
 
 /**

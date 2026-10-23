@@ -341,7 +341,7 @@ panel shows only the tabs the role may use.
   weekday over the last 8 weeks.
 * **Monthly statement:**
   * customers pay in the shop, so the partner owes the platform commission
-    (15% by default; finance can override it per location);
+    (20% by default; finance can override it per location);
   * discounts funded by the platform are credited back to the partner.
 * **Integrations** (POS/ERP):
   * partner API keys (`X-Api-Key`) to publish offers, read orders and confirm

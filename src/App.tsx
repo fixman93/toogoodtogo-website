@@ -1,4 +1,6 @@
+import { Suspense } from 'react'
 import { createBrowserRouter, RouterProvider } from 'react-router'
+import { lazyWithReload } from '@/lib/chunks'
 import { AppShell } from '@/components/layout/AppShell'
 import { AdminPage } from '@/pages/AdminPage'
 import { AuthPage } from '@/pages/AuthPage'
@@ -37,7 +39,19 @@ import { PrivacyPage, TermsPage } from '@/pages/LegalPage'
 import { PartnerTermsPage } from '@/pages/PartnerTermsPage'
 import { ContactPage } from '@/pages/ContactPage'
 
+// Presentation page with its own layout; loaded only when opened.
+const DemoPage = lazyWithReload(() => import('@/pages/DemoPage'))
+
 const router = createBrowserRouter([
+  {
+    path: 'demo',
+    errorElement: <RouteErrorPage />,
+    element: (
+      <Suspense fallback={null}>
+        <DemoPage />
+      </Suspense>
+    ),
+  },
   {
     element: <AppShell />,
     errorElement: <RouteErrorPage />,
