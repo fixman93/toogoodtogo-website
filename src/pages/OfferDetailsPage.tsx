@@ -49,8 +49,13 @@ function ReservePanel({ offer }: { offer: Offer }) {
   const subtotal = gross - (applied?.discountMinor ?? 0) - welcomeMinor
   const fee = delivery && mode === 'delivery' ? deliveryFee(delivery, subtotal) : 0
   const needsAddress = mode === 'delivery' && !target
-  const max = Math.min(offer.maxPerReservation, offer.quantityAvailable)
+  // The limit is per customer: bags from earlier reservations of this offer count too.
+  const held = offer.myQuantity ?? 0
+  const left = Math.max(0, offer.maxPerReservation - held)
+  const max = Math.min(left, offer.quantityAvailable)
   const soldOut = offer.quantityAvailable === 0
+  const limitReached = !!user && !soldOut && left === 0
+  const showLimit = !soldOut && (held > 0 || offer.maxPerReservation < offer.quantityAvailable)
   const error = reserve.error instanceof ApiError ? reserve.error.message : reserve.error ? t('common.errorText') : null
 
   const submit = () => {
@@ -92,8 +97,14 @@ function ReservePanel({ offer }: { offer: Offer }) {
           </div>
         </div>
       )}
+      {showLimit && (
+        <p className="text-center text-xs font-medium text-muted-foreground">
+          {t('offer.perCustomer', { count: offer.maxPerReservation })}
+          {held > 0 && ` · ${t('offer.alreadyHeld', { count: held })}`}
+        </p>
+      )}
       {soldOut && <WaitlistButton offerId={offer.id} />}
-      {delivery && !soldOut && (
+      {delivery && !soldOut && !limitReached && (
         <FulfillmentPicker
           business={offer.business}
           delivery={delivery}
@@ -105,11 +116,13 @@ function ReservePanel({ offer }: { offer: Offer }) {
           onTargetChange={setTarget}
         />
       )}
-      <Button size="lg" className="w-full" disabled={soldOut || reserve.isPending || (!!user && needsAddress)} onClick={submit}>
+      <Button size="lg" className="w-full" disabled={soldOut || limitReached || reserve.isPending || (!!user && needsAddress)} onClick={submit}>
         {reserve.isPending && <Loader2 className="animate-spin" />}
         {soldOut
           ? t('offer.soldOut')
-          : user
+          : limitReached
+            ? t('offer.limitReached')
+            : user
             ? t(mode === 'delivery' ? 'delivery.orderFor' : 'offer.reserveFor', { price: formatMoney(subtotal + fee, offer.currency) })
             : t('offer.loginToReserve')}
       </Button>

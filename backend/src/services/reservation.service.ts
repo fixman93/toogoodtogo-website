@@ -34,6 +34,7 @@ import { POINTS_PER_BAG, rewardPickup, welcomeDiscountPercent } from './loyalty.
 /** Shown as the "promo code" of an invited friend's first bag. */
 const WELCOME_CODE = 'PREPORUKA'
 import { dispatchReservationEvent } from './integration.service.js'
+import { quantityHeldBy } from './offer.service.js'
 import { notifyIfAvailable } from './waitlist.service.js'
 
 const market = () => getMarket(env.DEFAULT_MARKET)
@@ -86,12 +87,21 @@ async function uniquePickupCode(businessId: Types.ObjectId) {
   throw new ApiError(503, 'CODE_GENERATION_FAILED', 'Pokušajte ponovo.')
 }
 
-/** Explains why the atomic reservation update matched nothing. */
-async function unavailableReason(offerId: string, quantity: number) {
+/** Explains why the atomic reservation update matched nothing. `held`: bags this customer already has from the offer. */
+async function unavailableReason(offerId: string, quantity: number, held: number) {
   const offer = await Offer.findById(offerId)
   if (!offer || offer.status === 'archived') return ApiError.notFound('Ponuda nije pronađena.')
   if (offer.status !== 'active') return ApiError.conflict('Ponuda trenutno nije dostupna.', 'OFFER_UNAVAILABLE')
   if (offer.pickupEnd <= new Date()) return ApiError.conflict('Vreme preuzimanja je isteklo.', 'OFFER_EXPIRED')
+  if (held > 0 && held + quantity > offer.maxPerReservation) {
+    const left = Math.max(0, offer.maxPerReservation - held)
+    return ApiError.conflict(
+      left > 0
+        ? `Iz ove ponude možeš uzeti najviše ${offer.maxPerReservation} po kupcu. Već imaš ${held}, pa možeš još ${left}.`
+        : `Iz ove ponude možeš uzeti najviše ${offer.maxPerReservation} po kupcu, a već ih imaš ${held}.`,
+      'PER_CUSTOMER_LIMIT',
+    )
+  }
   if (quantity > offer.maxPerReservation)
     return ApiError.badRequest(`Možete rezervisati najviše ${offer.maxPerReservation}.`, 'INVALID_QUANTITY')
   return ApiError.conflict(
@@ -137,18 +147,20 @@ export async function create(input: CreateReservationInput, actor: Actor) {
   const welcomePercent = input.promoCode ? null : await welcomeDiscountPercent(actor.id)
 
   const reservation = await runAtomically(async (session, onRollback) => {
+    // The limit is per customer: earlier reservations of this offer count too.
+    const held = await quantityHeldBy(offerId, actor.id, session)
     const offer = await Offer.findOneAndUpdate(
       {
         _id: offerId,
         status: 'active',
         pickupEnd: { $gt: new Date() },
         quantityAvailable: { $gte: quantity },
-        maxPerReservation: { $gte: quantity },
+        maxPerReservation: { $gte: held + quantity },
       },
       { $inc: { quantityAvailable: -quantity, reservedCount: quantity } },
       { new: true, session },
     )
-    if (!offer) throw await unavailableReason(offerId, quantity)
+    if (!offer) throw await unavailableReason(offerId, quantity, held)
     onRollback(() => Offer.updateOne({ _id: offer._id }, { $inc: { quantityAvailable: quantity, reservedCount: -quantity } }))
 
     const unitPrice = effectivePriceMinor(offer)

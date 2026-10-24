@@ -3,7 +3,7 @@
  * example city, bakery and prices in the local currency; locale and currency
  * come from the app's market config, so money is formatted the same way.
  */
-import { MARKETS, currencyInfo, type MarketConfig } from '@/config/markets'
+import { MARKETS, PLATFORM_COMMISSION_RATE, currencyInfo, type MarketConfig } from '@/config/markets'
 
 export interface DemoMarket {
   code: string
@@ -64,8 +64,8 @@ export function demoMarketFor(code: string | null): DemoMarket | null {
   return DEMO_MARKETS.find((m) => m.code === code.toUpperCase()) ?? null
 }
 
-/** Platform commission shown in the demo (same as the backend default, commissionRate). */
-export const DEMO_COMMISSION_RATE = 0.2
+/** Platform commission shown in the demo. */
+export const DEMO_COMMISSION_RATE = PLATFORM_COMMISSION_RATE
 
 /** Example month for one location: 124 bags, 3 bags of platform-funded discounts, 2 boosts. */
 export function demoStatement(m: DemoMarket) {

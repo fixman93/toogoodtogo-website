@@ -15,7 +15,9 @@ export function useOffers(query: OfferQuery, options: { enabled?: boolean } = {}
 }
 
 export function useOffer(id: string | undefined) {
-  return useQuery({ queryKey: ['offers', 'detail', id], queryFn: () => offersApi.get(id!), enabled: !!id })
+  const { user } = useAuth()
+  // Per user: the response includes how many bags this customer already holds.
+  return useQuery({ queryKey: ['offers', 'detail', id, user?.id ?? null], queryFn: () => offersApi.get(id!), enabled: !!id })
 }
 
 export function useBusinessReviews(businessId: string | undefined) {

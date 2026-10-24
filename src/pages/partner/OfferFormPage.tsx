@@ -323,7 +323,7 @@ function OfferForm({ mode, businesses, preferredBusinessId }: { mode: Mode; busi
           >
             <Input {...field('quantity')} type="number" inputMode="numeric" min={Math.max(1, reserved)} />
           </FormField>
-          <FormField label={t('partner.field.maxPer')} htmlFor="maxPer" error={errors.maxPer}>
+          <FormField label={t('partner.field.maxPer')} htmlFor="maxPer" hint={t('partner.field.maxPerHint')} error={errors.maxPer}>
             <Input {...field('maxPer')} type="number" inputMode="numeric" min={1} max={20} />
           </FormField>
         </div>

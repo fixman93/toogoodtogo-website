@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { ConsentNote } from '@/components/common/LegalLinks'
-import { Link } from 'react-router'
-import { CheckCircle2, Clock, Loader2, Store, XCircle } from 'lucide-react'
+import { Link, useLocation as useRouterLocation } from 'react-router'
+import { ArrowDown, BadgePercent, CheckCircle2, Clock, Loader2, PlayCircle, Store, Timer, Users, Wallet, XCircle } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { CATEGORIES, type Category, type PartnerApplicationInput } from '@/api/types'
 import { FormField, FormSection } from '@/components/common/FormField'
@@ -13,7 +13,9 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { market } from '@/config/markets'
+import { PLATFORM_COMMISSION_RATE, market } from '@/config/markets'
+import { demoMarketFor } from '@/features/demo/markets'
+import { LossCalculator } from '@/features/partner-pitch/LossCalculator'
 import { useAuth } from '@/features/auth/auth-context'
 import { useApplyAsPartner, useMyApplication } from '@/hooks/api'
 import { t } from '@/i18n'
@@ -135,13 +137,87 @@ function Apply() {
   return <ApplicationForm onDone={() => setAgain(false)} />
 }
 
+const BENEFITS = [
+  { icon: BadgePercent, title: 'pitch.benefit1Title', text: 'pitch.benefit1Text' },
+  { icon: Wallet, title: 'pitch.benefit2Title', text: 'pitch.benefit2Text' },
+  { icon: Users, title: 'pitch.benefit3Title', text: 'pitch.benefit3Text' },
+  { icon: Timer, title: 'pitch.benefit4Title', text: 'pitch.benefit4Text' },
+] as const
+
+/** Opened as /partner/apply#kalkulator (home page teaser): scroll there once AppShell has reset the scroll. */
+function useScrollToHash() {
+  const { hash } = useRouterLocation()
+  useEffect(() => {
+    if (!hash) return
+    const frame = requestAnimationFrame(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    return () => cancelAnimationFrame(frame)
+  }, [hash])
+}
+
+/** Public partner page: the pitch and the loss calculator for everyone, the application form for signed-in users. */
 export function PartnerApplyPage() {
-  return (
-    <div className="mx-auto max-w-2xl">
-      <PageHeader title={t('apply.title')} subtitle={t('apply.intro')} />
-      <RequireAuth>
+  const { hasRole } = useAuth()
+  useScrollToHash()
+
+  if (hasRole('business', 'admin')) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <PageHeader title={t('apply.title')} />
         <Apply />
-      </RequireAuth>
+      </div>
+    )
+  }
+
+  const demoCountry = demoMarketFor(market.code)
+  const rate = Math.round(PLATFORM_COMMISSION_RATE * 100)
+
+  return (
+    <div className="space-y-10 sm:space-y-14">
+      <section className="max-w-2xl pt-2">
+        <p className="text-xs font-bold tracking-widest text-accent-foreground uppercase">{t('pitch.eyebrow')}</p>
+        <h1 className="mt-2 text-3xl leading-tight font-extrabold tracking-tight text-balance sm:text-5xl">{t('pitch.title')}</h1>
+        <p className="mt-3 text-base text-muted-foreground sm:text-lg">{t('pitch.text')}</p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button asChild size="lg">
+            <a href="#prijava">
+              {t('pitch.cta')}
+              <ArrowDown />
+            </a>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <Link to={demoCountry ? `/demo?zemlja=${demoCountry.code.toLowerCase()}` : '/demo'}>
+              <PlayCircle />
+              {t('pitch.demo')}
+            </Link>
+          </Button>
+        </div>
+      </section>
+
+      <section id="kalkulator" className="scroll-mt-20">
+        <LossCalculator />
+      </section>
+
+      <section>
+        <h2 className="mb-5 text-xl font-extrabold tracking-tight sm:text-2xl">{t('pitch.benefitsTitle')}</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {BENEFITS.map(({ icon: Icon, title, text }) => (
+            <div key={title} className="space-y-2 rounded-2xl bg-secondary p-5">
+              <span className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <Icon className="size-5" />
+              </span>
+              <h3 className="font-bold text-secondary-foreground">{t(title)}</h3>
+              <p className="text-sm text-secondary-foreground/80">{t(text, { rate })}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="prijava" className="mx-auto max-w-2xl scroll-mt-20">
+        <PageHeader title={t('pitch.formTitle')} subtitle={t('pitch.formText')} />
+        <RequireAuth>
+          <Apply />
+        </RequireAuth>
+      </section>
     </div>
   )
 }

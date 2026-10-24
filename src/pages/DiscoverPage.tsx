@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { market } from '@/config/markets'
 import { useLocation } from '@/features/location/location-context'
 import { NewPartners } from '@/components/offers/NewPartners'
+import { PartnerTeaser } from '@/features/partner-pitch/PartnerTeaser'
 import { useOffers } from '@/hooks/api'
 import { t } from '@/i18n'
 
@@ -91,6 +92,8 @@ export function DiscoverPage() {
       </section>
 
       <NewPartners />
+
+      <PartnerTeaser />
 
       <OfferCarousel
         title={t('discover.popular')}

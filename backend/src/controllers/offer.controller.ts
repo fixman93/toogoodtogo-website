@@ -18,7 +18,7 @@ export async function listOfferLocations(req: Request, res: Response) {
 }
 
 export async function getOffer(req: Request, res: Response) {
-  ok(res, await offerService.get(idParams.parse(req.params).id))
+  ok(res, await offerService.get(idParams.parse(req.params).id, req.user?.id))
 }
 
 export async function createOffer(req: Request, res: Response) {

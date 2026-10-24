@@ -1,4 +1,4 @@
-import { Types, type PipelineStage } from 'mongoose'
+import { Types, type ClientSession, type PipelineStage } from 'mongoose'
 import { env } from '../config/env.js'
 import { MARKETS, getMarket } from '../config/markets.js'
 import { Business, Favorite, Offer, Reservation, ACTIVE_RESERVATION_STATUSES, effectivePriceExpr, type IBusiness, type IOffer } from '../models/index.js'
@@ -198,12 +198,27 @@ export async function locations(query: OfferLocationsQuery) {
   }))
 }
 
-export async function get(id: string) {
+/**
+ * Bags of this offer the customer already holds: open and collected
+ * reservations count, cancelled and expired ones don't. The offer's
+ * `maxPerReservation` caps this total per customer, not per reservation.
+ */
+export async function quantityHeldBy(offerId: string | Types.ObjectId, userId: string, session?: ClientSession) {
+  const [row] = await Reservation.aggregate<{ total: number }>([
+    { $match: { offer: new Types.ObjectId(String(offerId)), user: new Types.ObjectId(userId), status: { $in: [...ACTIVE_RESERVATION_STATUSES, 'collected'] } } },
+    { $group: { _id: null, total: { $sum: '$quantity' } } },
+  ]).session(session ?? null)
+  return row?.total ?? 0
+}
+
+/** With a signed-in customer, also says how many bags they already have (`myQuantity`). */
+export async function get(id: string, userId?: string) {
   const offer = await Offer.findById(id)
   if (!offer || offer.status === 'archived') throw ApiError.notFound('Ponuda nije pronađena.')
   const business = await Business.findById(offer.business)
   if (!business) throw ApiError.notFound('Ponuda nije pronađena.')
-  return serializeOffer(offer, business)
+  const dto = serializeOffer(offer, business)
+  return userId ? { ...dto, myQuantity: await quantityHeldBy(offer._id, userId) } : dto
 }
 
 export async function create(input: CreateOfferInput, actor: Actor) {

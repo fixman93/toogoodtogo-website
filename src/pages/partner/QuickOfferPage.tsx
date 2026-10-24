@@ -28,7 +28,24 @@ import { cn } from '@/lib/utils'
  */
 const LAST_LOCATION_KEY = 'foodnesi.quickOffer.location'
 
-type Template = { key: string; title: string; description: string; price: string; original: string; quantity: number; from: string; to: string; source?: Offer }
+type Template = {
+  key: string
+  title: string
+  description: string
+  price: string
+  original: string
+  quantity: number
+  /** Most bags one customer can take. */
+  maxPer: number
+  from: string
+  to: string
+  source?: Offer
+}
+
+/** Same default as the full offer form. */
+const DEFAULT_MAX_PER_CUSTOMER = 2
+/** API limit (offer and schedule validators). */
+const MAX_PER_CUSTOMER = 20
 
 const readLastLocation = () => {
   try {
@@ -52,6 +69,7 @@ function recentTemplates(offers: Offer[]): Template[] {
       price: String(fromMinor(o.basePriceMinor ?? o.priceMinor, o.currency)),
       original: String(fromMinor(o.originalPriceMinor, o.currency)),
       quantity: o.quantityTotal,
+      maxPer: o.maxPerReservation,
       from: toZonedInput(o.pickupStart, o.timezone).time,
       to: toZonedInput(o.pickupEnd, o.timezone).time,
       source: o,
@@ -67,12 +85,13 @@ function freshTemplate(business: Business, recent: Template[]): Template {
     price: last?.price ?? '',
     original: last?.original ?? '',
     quantity: last?.quantity ?? 5,
+    maxPer: last?.maxPer ?? DEFAULT_MAX_PER_CUSTOMER,
     from: last?.from ?? '19:00',
     to: last?.to ?? '20:30',
   }
 }
 
-function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function Stepper({ value, onChange, max = 500 }: { value: number; onChange: (v: number) => void; max?: number }) {
   return (
     <div className="flex items-center gap-2">
       <Button type="button" variant="outline" size="icon" className="size-12 rounded-full" aria-label="−" onClick={() => onChange(Math.max(1, value - 1))}>
@@ -81,7 +100,7 @@ function Stepper({ value, onChange }: { value: number; onChange: (v: number) => 
       <span className="w-12 text-center text-3xl font-extrabold tabular-nums" aria-live="polite">
         {value}
       </span>
-      <Button type="button" variant="outline" size="icon" className="size-12 rounded-full" aria-label="+" onClick={() => onChange(Math.min(500, value + 1))}>
+      <Button type="button" variant="outline" size="icon" className="size-12 rounded-full" aria-label="+" disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))}>
         <Plus />
       </Button>
     </div>
@@ -138,6 +157,8 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
   // Edits on top of the chosen template (reset when another one is picked).
   const [edits, setEdits] = useState<Partial<Template> & { day?: 'today' | 'tomorrow' }>({})
   const form = { ...chosen, ...edits }
+  // Never more per customer than there are bags (or than the API allows).
+  const maxPer = Math.max(1, Math.min(form.maxPer, form.quantity, MAX_PER_CUSTOMER))
   const tz = business.timezone
   const today = toZonedInput(new Date(), tz).date
   // Today if the pickup window hasn't ended yet, otherwise tomorrow.
@@ -180,6 +201,7 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
       // No regular price typed: assume the usual ~⅓ of the value.
       originalPriceMinor: original > 0 ? toMinor(original, business.currency) : priceMinor * 3,
       quantityTotal: form.quantity,
+      maxPerReservation: maxPer,
       pickupStart: zonedDateTimeToUtc(date, form.from, tz).toISOString(),
       pickupEnd: zonedDateTimeToUtc(date, form.to, tz).toISOString(),
     }
@@ -195,6 +217,7 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
             priceMinor: body.priceMinor,
             originalPriceMinor: body.originalPriceMinor,
             quantity: form.quantity,
+            maxPerReservation: maxPer,
             startTime: form.from,
             endTime: form.to,
             weekdays,
@@ -250,6 +273,14 @@ function OfferBuilder({ business, onPublished }: { business: Business; onPublish
             <Stepper value={form.quantity} onChange={(quantity) => set({ quantity })} />
           </div>
           <SuggestionHint businessId={business.id} weekdays={repeat ? weekdays : [isoWeekday(date)]} quantity={form.quantity} onApply={(quantity) => set({ quantity })} />
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              <span className="block text-sm font-semibold">{t('partner.field.maxPer')}</span>
+              <span className="block text-xs text-muted-foreground">{t('partner.field.maxPerHint')}</span>
+            </span>
+            <Stepper value={maxPer} max={Math.min(MAX_PER_CUSTOMER, form.quantity)} onChange={(value) => set({ maxPer: value })} />
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1 text-sm font-semibold">

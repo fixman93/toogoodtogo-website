@@ -204,7 +204,10 @@ export interface Offer {
   currency: string
   quantityTotal: number
   quantityAvailable: number
+  /** Most bags one customer can hold from this offer, across all their reservations. */
   maxPerReservation: number
+  /** Signed-in customer only: bags they already hold from this offer (open or collected). */
+  myQuantity?: number
   pickupStart: string
   pickupEnd: string
   timezone: string
@@ -730,6 +733,8 @@ export interface OfferScheduleInput {
   originalPriceMinor: number
   priceDrop?: { time: string; priceMinor: number } | null
   quantity: number
+  /** Most bags per customer on each published offer. */
+  maxPerReservation?: number
   startTime: string
   endTime: string
   weekdays: number[]

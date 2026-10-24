@@ -47,6 +47,9 @@ export const CURRENCIES: Record<string, CurrencyInfo> = {
   EUR: { minorUnits: 100, displayDecimals: 2, priceSteps: [3, 5, 8] },
 }
 
+/** Platform commission on collected sales; mirrors the backend default (backend/src/config/markets.ts). */
+export const PLATFORM_COMMISSION_RATE = 0.2
+
 export const currencyInfo = (code: string): CurrencyInfo => CURRENCIES[code] ?? { minorUnits: 100, displayDecimals: 2, priceSteps: [3, 5, 8] }
 
 const city = (id: string, name: string, locative: string, lat: number, lng: number): City => ({ id, name, locative, lat, lng })
