@@ -12,10 +12,15 @@ fi
 node -v
 npm -v
 
-cd "$CI_WORKSPACE"
+# Resolve the repo root relative to this script's own location instead of
+# relying on $CI_WORKSPACE, which is empty during ci_post_clone and left
+# npm install climbing up to mobile/package.json (no "build" script there).
+REPO_ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
+
+cd "$REPO_ROOT"
 npm install
 npm run build
 
-cd mobile
+cd "$REPO_ROOT/mobile"
 npm install
 npx cap sync ios
