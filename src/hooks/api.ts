@@ -28,6 +28,12 @@ export function useBusinessReviews(businessId: string | undefined) {
   })
 }
 
+export function useReportReview(businessId: string) {
+  return useMutation({
+    mutationFn: ({ reviewId, reason }: { reviewId: string; reason?: string }) => businessesApi.reportReview(businessId, reviewId, reason),
+  })
+}
+
 export function useMyBusinesses() {
   const { user } = useAuth()
   return useQuery({ queryKey: ['businesses', 'mine', user?.id], queryFn: () => businessesApi.list({ owner: 'me' }), enabled: !!user })
@@ -429,7 +435,7 @@ export function useAdminReservations(params: { status?: ReservationStatus; q?: s
   return useQuery({ queryKey: ['admin', 'reservations', params], queryFn: () => adminApi.reservations(params), placeholderData: keepPreviousData })
 }
 
-export function useAdminReviews(params: { hidden?: boolean; limit?: number }) {
+export function useAdminReviews(params: { hidden?: boolean; reported?: boolean; limit?: number }) {
   return useQuery({ queryKey: ['admin', 'reviews', params], queryFn: () => adminApi.reviews(params), placeholderData: keepPreviousData })
 }
 

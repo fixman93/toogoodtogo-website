@@ -1,6 +1,9 @@
 /** Small building blocks of the /demo phone mockups. */
 import type { ReactNode } from 'react'
+import { language } from '@/i18n'
 import { DemoQr } from './DemoQr'
+
+const en = language === 'en'
 
 export function NextButton({ onClick, tone = '', children }: { onClick: () => void; tone?: '' | 'orange' | 'ghost'; children: ReactNode }) {
   return (
@@ -25,7 +28,7 @@ export function OfferCard({ title, place, km, time, price, original, left, sweet
   return (
     <div className="card">
       <div className={`offer-img ${sweet ? 'sweet' : ''}`}>
-        <span className="left">Još {left}</span>
+        <span className="left">{en ? `${left} left` : `Još ${left}`}</span>
         <span className="logo">TP</span>
       </div>
       <div className="offer-body">
@@ -34,7 +37,7 @@ export function OfferCard({ title, place, km, time, price, original, left, sweet
           {place} · {km}
         </span>
         <div className="offer-row">
-          <span className="a-sub">Danas {time}</span>
+          <span className="a-sub">{en ? `Today ${time}` : `Danas ${time}`}</span>
           <span className="price">
             {price} <s>{original}</s>
           </span>
@@ -49,7 +52,7 @@ export function Push({ title, text }: { title: string; text: string }) {
     <div className="push">
       <span className="ic" />
       <div>
-        <small>sada</small>
+        <small>{en ? 'now' : 'sada'}</small>
         <b>{title}</b>
         <p>{text}</p>
       </div>
@@ -83,21 +86,21 @@ export function Reservation({ banner, price }: { banner?: string; price: string 
   return (
     <>
       <div className="row">
-        <span className="a-h grow">Rezervacija</span>
-        <span className="badge">Potvrđeno</span>
+        <span className="a-h grow">{en ? 'Reservation' : 'Rezervacija'}</span>
+        <span className="badge">{en ? 'Confirmed' : 'Potvrđeno'}</span>
       </div>
       <div className="card pad stack center">
         <DemoQr />
         <div className="code" style={{ fontSize: 20 }}>
           FN-4F7K
         </div>
-        <span className="a-sub">Pokaži QR kod na kasi. Kese su spremne iza pulta.</span>
+        <span className="a-sub">{en ? 'Show the QR code at the counter. Bags are ready behind the counter.' : 'Pokaži QR kod na kasi. Kese su spremne iza pulta.'}</span>
       </div>
       {banner && <div className="banner">{banner}</div>}
       <div className="card pad">
-        <Kv label="Kesa">Kesa iznenađenja – pecivo</Kv>
-        <Kv label="Preuzimanje">Danas 19:30–20:30</Kv>
-        <Kv label="Plaćaš na kasi">{price}</Kv>
+        <Kv label={en ? 'Bag' : 'Kesa'}>{en ? 'Surprise bag – pastries' : 'Kesa iznenađenja – pecivo'}</Kv>
+        <Kv label={en ? 'Pickup' : 'Preuzimanje'}>{en ? 'Today 19:30–20:30' : 'Danas 19:30–20:30'}</Kv>
+        <Kv label={en ? 'You pay at the counter' : 'Plaćaš na kasi'}>{price}</Kv>
       </div>
     </>
   )

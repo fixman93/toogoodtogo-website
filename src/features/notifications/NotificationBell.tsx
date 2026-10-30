@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Bell, BellRing, CalendarCheck, CheckCircle2, DoorOpen, Flame, Gift, LifeBuoy, MessageCircle, Megaphone, ShieldAlert, Store, Truck, UserPlus, XCircle, type LucideIcon } from 'lucide-react'
+import { Bell, BellRing, CalendarCheck, CheckCircle2, DoorOpen, Flag, Flame, Gift, LifeBuoy, MessageCircle, Megaphone, ShieldAlert, Store, Truck, UserPlus, XCircle, type LucideIcon } from 'lucide-react'
 import type { NotificationType } from '@/api/types'
 import { Sheet } from '@/components/common/Sheet'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -30,6 +30,7 @@ const ICONS: Record<NotificationType, LucideIcon> = {
   application_new: Store,
   application_approved: CheckCircle2,
   application_rejected: XCircle,
+  review_reported: Flag,
 }
 
 /** Header bell: unread badge + sheet with the latest notifications. */

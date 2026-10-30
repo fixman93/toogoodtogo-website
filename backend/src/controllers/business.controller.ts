@@ -9,7 +9,7 @@ import { businessListQuery, createBusinessBody, updateBusinessBody } from '../va
 import { z } from 'zod'
 import { idParams, objectId } from '../validators/common.js'
 import { manageOffersQuery } from '../validators/offer.validators.js'
-import { createReviewBody, reviewListQuery } from '../validators/review.validators.js'
+import { createReviewBody, reportReviewBody, reviewListQuery } from '../validators/review.validators.js'
 
 export async function listBusinesses(req: Request, res: Response) {
   const result = await businessService.list(businessListQuery.parse(req.query), req.user)
@@ -45,6 +45,11 @@ export async function reviewPhotos(req: Request, res: Response) {
 
 export async function createReview(req: Request, res: Response) {
   ok(res, await reviewService.create(idParams.parse(req.params).id, createReviewBody.parse(req.body), currentUser(req)), 201)
+}
+
+export async function reportReview(req: Request, res: Response) {
+  const { reviewId } = z.object({ reviewId: objectId }).parse(req.params)
+  ok(res, await reviewService.report(reviewId, currentUser(req), reportReviewBody.parse(req.body).reason), 201)
 }
 
 export async function listBusinessOffers(req: Request, res: Response) {

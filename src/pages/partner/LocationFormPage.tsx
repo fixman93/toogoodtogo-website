@@ -12,12 +12,12 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import { MARKETS, MARKET_LIST, market } from '@/config/markets'
+import { MARKETS, MARKET_LIST, MARKET_NAME_EN, market } from '@/config/markets'
 import { PartnerGuard } from '@/features/business/PartnerGuard'
 import { PartnerTermsGate } from '@/features/business/PartnerTermsNotice'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
 import { useBusiness, useDeleteBusiness, useSaveBusiness } from '@/hooks/api'
-import { t } from '@/i18n'
+import { language, t } from '@/i18n'
 import { geocodeAddress, reverseGeocodeAddress } from '@/lib/geocode'
 import { lazyWithReload } from '@/lib/chunks'
 import { fromMinor, toMinor } from '@/lib/format'
@@ -133,7 +133,13 @@ function LocationForm({ business }: { business?: Business }) {
       // A pin across the border switches the country — if we support it and the location is new.
       const next = found.countryCode ? MARKETS[found.countryCode] : country
       if (!next) return setCountryError(t('partner.field.countryUnsupported', { country: found.countryName ?? found.countryCode ?? '' }))
-      if (business && next.code !== country.code) return setCountryError(t('partner.field.countryLockedPin', { country: next.name, current: country.name }))
+      if (business && next.code !== country.code)
+        return setCountryError(
+          t('partner.field.countryLockedPin', {
+            country: language === 'en' ? MARKET_NAME_EN[next.code] ?? next.name : next.name,
+            current: language === 'en' ? MARKET_NAME_EN[country.code] ?? country.name : country.name,
+          }),
+        )
       setCountryError(null)
       // The pin decides the address: always replace it, so nothing from the previous spot stays behind.
       setForm((f) => ({
@@ -277,7 +283,7 @@ function LocationForm({ business }: { business?: Business }) {
           >
             {MARKET_LIST.map((m) => (
               <option key={m.code} value={m.code}>
-                {m.name} ({m.currency})
+                {language === 'en' ? MARKET_NAME_EN[m.code] ?? m.name : m.name} ({m.currency})
               </option>
             ))}
           </NativeSelect>

@@ -8,7 +8,6 @@
   },
   "ios": {
     "contentInset": "never",
-    "backgroundColor": "#faf8f2",
-    "scheme": "Foodnesi"
+    "backgroundColor": "#faf8f2"
   }
 }

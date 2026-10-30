@@ -156,6 +156,16 @@ export const MARKETS: Record<string, MarketConfig> = {
 
 export const MARKET_LIST = Object.values(MARKETS)
 
+/** English country names, for when the app language is English (MarketConfig.name itself stays Serbian). */
+export const MARKET_NAME_EN: Record<string, string> = {
+  RS: 'Serbia',
+  BA: 'Bosnia and Herzegovina',
+  ME: 'Montenegro',
+  HR: 'Croatia',
+  SI: 'Slovenia',
+  MK: 'North Macedonia',
+}
+
 const MARKET_KEY = 'foodnesi.market'
 const FALLBACK = MARKETS[import.meta.env.VITE_MARKET ?? 'RS'] ?? MARKETS.RS
 

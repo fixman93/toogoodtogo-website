@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
+import { MARKET_NAME_EN } from '@/config/markets'
+import { language } from '@/i18n'
 import { DEMO_MARKETS, type DemoMarket } from './markets'
+
+const en = language === 'en'
 
 /**
  * Country choice for /demo. Opens by itself when the link has no `?zemlja=`;
@@ -28,15 +32,15 @@ export function CountryPicker({ current, onPick, onClose }: { current: DemoMarke
         <div className="picker-head">
           <div>
             <div className="eyebrow">Foodnesi demo</div>
-            <h2 id="fn-demo-picker-title">Izaberite zemlju</h2>
+            <h2 id="fn-demo-picker-title">{en ? 'Choose a country' : 'Izaberite zemlju'}</h2>
           </div>
           {onClose && (
-            <button type="button" className="theme-btn" onClick={onClose} aria-label="Zatvori">
+            <button type="button" className="theme-btn" onClick={onClose} aria-label={en ? 'Close' : 'Zatvori'}>
               <X size={18} />
             </button>
           )}
         </div>
-        <p className="picker-lead">Demo prikazuje lokal, grad i cene u valuti te zemlje.</p>
+        <p className="picker-lead">{en ? 'The demo shows a shop, city and prices in that country’s currency.' : 'Demo prikazuje lokal, grad i cene u valuti te zemlje.'}</p>
         <div className="picker-list">
           {DEMO_MARKETS.map((m, i) => (
             <button
@@ -49,9 +53,9 @@ export function CountryPicker({ current, onPick, onClose }: { current: DemoMarke
             >
               <span className="picker-code">{m.code}</span>
               <span className="picker-text">
-                <b>{m.name}</b>
+                <b>{en ? MARKET_NAME_EN[m.code] ?? m.name : m.name}</b>
                 <span>
-                  {m.city} · cene u {m.currencyLabel}
+                  {m.city} · {en ? `prices in ${m.currencyLabel}` : `cene u ${m.currencyLabel}`}
                 </span>
               </span>
               <span className="picker-price">{m.money(m.bagPrice)}</span>

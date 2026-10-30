@@ -3,9 +3,14 @@ import { Link, useSearchParams } from 'react-router'
 import { ArrowDown, ArrowLeft, ArrowRight, Globe, Moon, Pause, Play, RotateCcw, Sun } from 'lucide-react'
 import { Logo } from '@/components/common/Logo'
 import { CountryPicker } from '@/features/demo/CountryPicker'
+import { MARKET_NAME_EN } from '@/config/markets'
 import { DEMO_COMMISSION_RATE, DEMO_MARKETS, demoMarketFor, demoStatement, type DemoMarket } from '@/features/demo/markets'
 import { ACTOR_LABEL, CUSTOMER_NAV, PARTNER_NAV, demoSteps, type Screen } from '@/features/demo/steps'
+import { language } from '@/i18n'
 import '@/features/demo/demo.css'
+
+/** This standalone presentation page isn't wired through t() — pick English copy directly from the global language toggle. */
+const en = language === 'en'
 
 /** How long each step stays on screen in auto-play. */
 const STEP_MS = 7000
@@ -17,7 +22,7 @@ const SIDES = ['customer', 'partner'] as const
 type Side = (typeof SIDES)[number]
 type Theme = 'light' | 'dark'
 
-const SIDE_LABEL: Record<Side, string> = { customer: 'Kupac', partner: 'Partner' }
+const SIDE_LABEL: Record<Side, string> = en ? { customer: 'Customer', partner: 'Partner' } : { customer: 'Kupac', partner: 'Partner' }
 
 /** Follows the system theme until the viewer picks one with the toggle. */
 function useDemoTheme() {
@@ -186,31 +191,31 @@ export default function DemoPage() {
 
   const acting = (side: Side) => step.actor === 'both' || step.actor === side
   const other: Side = shown === 'customer' ? 'partner' : 'customer'
-  const hint = step.actor === 'both' && !seen.includes(other) ? `Promena i na telefonu: ${SIDE_LABEL[other]}` : ''
+  const hint = step.actor === 'both' && !seen.includes(other) ? (en ? `Also changing on the phone: ${SIDE_LABEL[other]}` : `Promena i na telefonu: ${SIDE_LABEL[other]}`) : ''
   const clock = /\d/.test(step.time) ? step.time : '21:10'
 
   return (
     <div ref={rootRef} className="fn-demo" data-theme={theme} style={{ '--sheet-h': `${sheetHeight}px` } as CSSProperties}>
       <div className="wrap">
         <header className="top">
-          <Link to="/" aria-label="Foodnesi početna">
+          <Link to="/" aria-label={en ? 'Foodnesi home' : 'Foodnesi početna'}>
             <Logo light={theme === 'dark'} />
           </Link>
           <div className="top-links">
-            <button type="button" className="country-btn" onClick={() => setPickerOpen(true)} aria-label={`Zemlja: ${country.name}. Promeni`}>
+            <button type="button" className="country-btn" onClick={() => setPickerOpen(true)} aria-label={en ? `Country: ${MARKET_NAME_EN[country.code] ?? country.name}. Change` : `Zemlja: ${country.name}. Promeni`}>
               <Globe size={16} />
               {country.code} · {country.currencyLabel}
             </button>
             <Link to="/partner/apply" className="partner-link">
-              Postani partner
+              {en ? 'Become a partner' : 'Postani partner'}
             </Link>
-            <Link to="/">Otvori aplikaciju</Link>
+            <Link to="/">{en ? 'Open the app' : 'Otvori aplikaciju'}</Link>
             <button
               type="button"
               className="theme-btn"
               onClick={toggleTheme}
-              aria-label={theme === 'dark' ? 'Uključi svetlu temu' : 'Uključi tamnu temu'}
-              title={theme === 'dark' ? 'Svetla tema' : 'Tamna tema'}
+              aria-label={en ? (theme === 'dark' ? 'Turn on light theme' : 'Turn on dark theme') : theme === 'dark' ? 'Uključi svetlu temu' : 'Uključi tamnu temu'}
+              title={en ? (theme === 'dark' ? 'Light theme' : 'Dark theme') : theme === 'dark' ? 'Svetla tema' : 'Tamna tema'}
             >
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
@@ -219,28 +224,37 @@ export default function DemoPage() {
 
         <section className="intro">
           <div>
-            <div className="eyebrow">Demo · ceo tok jedne kese</div>
+            <div className="eyebrow">{en ? 'Demo · the full journey of one bag' : 'Demo · ceo tok jedne kese'}</div>
             <h1>
-              Od viška u pekari do <em>spašene kese</em> za 8 koraka
+              {en ? (
+                <>
+                  From bakery surplus to a <em>saved bag</em> in 8 steps
+                </>
+              ) : (
+                <>
+                  Od viška u pekari do <em>spašene kese</em> za 8 koraka
+                </>
+              )}
             </h1>
           </div>
           <div>
             <p>
-              Lokali na kraju dana prodaju višak hrane kao kesu iznenađenja po trećini cene. Kupac rezerviše u aplikaciji, dođe u termin i plati
-              na kasi. Pratite oba telefona, kupca i partnera, kroz ceo tok.
+              {en
+                ? 'Shops sell their end-of-day surplus as a surprise bag at a third of the price. The customer reserves it in the app, shows up in the pickup window and pays at the counter. Follow both phones, the customer’s and the partner’s, through the whole journey.'
+                : 'Lokali na kraju dana prodaju višak hrane kao kesu iznenađenja po trećini cene. Kupac rezerviše u aplikaciji, dođe u termin i plati na kasi. Pratite oba telefona, kupca i partnera, kroz ceo tok.'}
             </p>
             <div className="facts">
-              <span className="fact">Plaćanje na kasi</span>
-              <span className="fact">QR kod za preuzimanje</span>
-              <span className="fact">Web i iOS</span>
+              <span className="fact">{en ? 'Pay at the counter' : 'Plaćanje na kasi'}</span>
+              <span className="fact">{en ? 'QR code for pickup' : 'QR kod za preuzimanje'}</span>
+              <span className="fact">{en ? 'Web and iOS' : 'Web i iOS'}</span>
             </div>
             <button type="button" className="c-btn primary watch" onClick={watchDemo}>
-              Pogledaj demo <ArrowDown size={18} />
+              {en ? 'Watch the demo' : 'Pogledaj demo'} <ArrowDown size={18} />
             </button>
           </div>
         </section>
 
-        <nav className="stepper" aria-label="Koraci demoa">
+        <nav className="stepper" aria-label={en ? 'Demo steps' : 'Koraci demoa'}>
           {steps.map((s, i) => (
             <button
               key={s.title}
@@ -261,7 +275,15 @@ export default function DemoPage() {
               {playing && <i key={index} className="run" style={{ animationDuration: `${STEP_MS}ms` }} />}
             </div>
             <div className="when">
-              Korak {index + 1} od {steps.length} · {step.time}
+              {en ? (
+                <>
+                  Step {index + 1} of {steps.length} · {step.time}
+                </>
+              ) : (
+                <>
+                  Korak {index + 1} od {steps.length} · {step.time}
+                </>
+              )}
             </div>
             <span className="who">{ACTOR_LABEL[step.actor]}</span>
             <h2>{step.title}</h2>
@@ -273,19 +295,19 @@ export default function DemoPage() {
             </ul>
             <div className="ctrl">
               <button type="button" className="c-btn" onClick={back} disabled={index === 0}>
-                ← Nazad
+                {en ? '← Back' : '← Nazad'}
               </button>
               <button type="button" className="c-btn primary" onClick={forward}>
-                {index === last ? 'Ispočetka ↺' : 'Dalje →'}
+                {index === last ? (en ? 'Start over ↺' : 'Ispočetka ↺') : en ? 'Next →' : 'Dalje →'}
               </button>
               <button type="button" className="c-btn" aria-pressed={playing} onClick={() => setPlaying((p) => !p)}>
-                {playing ? '❚❚ Pauza' : '▶ Automatski'}
+                {playing ? (en ? '❚❚ Pause' : '❚❚ Pauza') : en ? '▶ Autoplay' : '▶ Automatski'}
               </button>
             </div>
-            <div className="kbd">Strelice ← → na tastaturi, ili kliknite dugmad u telefonima.</div>
+            <div className="kbd">{en ? 'Arrow keys ← → on the keyboard, or click the buttons on the phones.' : 'Strelice ← → na tastaturi, ili kliknite dugmad u telefonima.'}</div>
           </div>
 
-          <div className="switch" role="group" aria-label="Prikaži telefon">
+          <div className="switch" role="group" aria-label={en ? 'Show phone' : 'Prikaži telefon'}>
             {SIDES.map((side) => (
               <button key={side} type="button" aria-pressed={shown === side} onClick={() => show(side)}>
                 <span className={`dot ${acting(side) ? 'acting' : ''} ${acting(side) && !seen.includes(side) ? 'unseen' : ''}`} />
@@ -301,7 +323,7 @@ export default function DemoPage() {
             <div className="phone-wrap">
               <div className="side-label">
                 <span className="dot" />
-                Kupac · Ana
+                {en ? 'Customer · Ana' : 'Kupac · Ana'}
               </div>
               <Phone key={`c${index}`} clock={clock} network="5G" screen={step.customer(forward)} nav={CUSTOMER_NAV} />
             </div>
@@ -311,7 +333,7 @@ export default function DemoPage() {
             <div className="phone-wrap">
               <div className="side-label">
                 <span className="dot" />
-                Partner · Pekara {country.area}
+                {en ? `Partner · Bakery ${country.area}` : `Partner · Pekara ${country.area}`}
               </div>
               <Phone key={`p${index}`} clock={clock} network="Wi-Fi" screen={step.partner(forward)} nav={PARTNER_NAV} />
             </div>
@@ -327,9 +349,15 @@ export default function DemoPage() {
       <div className="wrap">
         <footer className="foot">
           <span>
-            Foodnesi · {country.name} · cene u {country.currencyLabel} · imena i brojke u demou su primeri
+            {en ? (
+              <>Foodnesi · {MARKET_NAME_EN[country.code] ?? country.name} · prices in {country.currencyLabel} · names and numbers in the demo are examples</>
+            ) : (
+              <>
+                Foodnesi · {country.name} · cene u {country.currencyLabel} · imena i brojke u demou su primeri
+              </>
+            )}
           </span>
-          <Link to="/">Otvori aplikaciju</Link>
+          <Link to="/">{en ? 'Open the app' : 'Otvori aplikaciju'}</Link>
         </footer>
       </div>
 
@@ -342,7 +370,7 @@ export default function DemoPage() {
               key={s.title}
               type="button"
               className={`seg ${i === index ? 'active' : ''} ${i < index ? 'done' : ''}`}
-              aria-label={`Korak ${i + 1}: ${s.title}`}
+              aria-label={en ? `Step ${i + 1}: ${s.title}` : `Korak ${i + 1}: ${s.title}`}
               aria-current={i === index ? 'step' : undefined}
               onClick={() => goTo(i)}
             >
@@ -356,7 +384,7 @@ export default function DemoPage() {
           </span>
           {hint ? (
             <button type="button" className="who" onClick={() => show(other)}>
-              Pogledaj i: {SIDE_LABEL[other]} →
+              {en ? `Also see: ${SIDE_LABEL[other]} →` : `Pogledaj i: ${SIDE_LABEL[other]} →`}
             </button>
           ) : (
             <span className="who">{ACTOR_LABEL[step.actor]}</span>
@@ -372,10 +400,10 @@ export default function DemoPage() {
           </ul>
         )}
         <button type="button" className="more" aria-expanded={expanded} onClick={() => setExpanded((open) => !open)}>
-          {expanded ? 'Manje' : 'Više detalja'}
+          {en ? (expanded ? 'Less' : 'More details') : expanded ? 'Manje' : 'Više detalja'}
         </button>
         <div className="sheet-ctrl">
-          <button type="button" className="c-btn" onClick={back} disabled={index === 0} aria-label="Prethodni korak">
+          <button type="button" className="c-btn" onClick={back} disabled={index === 0} aria-label={en ? 'Previous step' : 'Prethodni korak'}>
             <ArrowLeft size={20} />
           </button>
           <button
@@ -383,18 +411,18 @@ export default function DemoPage() {
             className="c-btn"
             onClick={() => setPlaying((p) => !p)}
             aria-pressed={playing}
-            aria-label={playing ? 'Pauziraj' : 'Pusti automatski'}
+            aria-label={en ? (playing ? 'Pause' : 'Play automatically') : playing ? 'Pauziraj' : 'Pusti automatski'}
           >
             {playing ? <Pause size={20} /> : <Play size={20} />}
           </button>
           <button type="button" className="c-btn primary" onClick={forward}>
             {index === last ? (
               <>
-                Ispočetka <RotateCcw size={18} />
+                {en ? 'Start over' : 'Ispočetka'} <RotateCcw size={18} />
               </>
             ) : (
               <>
-                Dalje <ArrowRight size={18} />
+                {en ? 'Next' : 'Dalje'} <ArrowRight size={18} />
               </>
             )}
           </button>
@@ -428,7 +456,7 @@ function Phone({ clock, network, screen, nav }: { clock: string; network: string
   )
 }
 
-const ROLES = [
+const ROLES_SR = [
   {
     tag: 'Kupac',
     title: 'Pronađi, rezerviši, preuzmi',
@@ -464,12 +492,54 @@ const ROLES = [
   },
 ]
 
+const ROLES_EN = [
+  {
+    tag: 'Customer',
+    title: 'Find, reserve, pick up',
+    nav: 'Discover · Browse · Reservations · Favorites · Profile',
+    items: [
+      'Offers nearby, as a list or on a map',
+      'Reserve up to 4 bags, QR code and email',
+      'Delivery at shops that offer it, with live tracking',
+      'Points, levels, challenges and inviting friends (−30% on their first bag)',
+    ],
+  },
+  {
+    tag: 'Partner',
+    title: 'Publish surplus, hand out bags',
+    nav: 'Portal · Orders · New offer · Scan · Profile',
+    items: [
+      'New offer in 3 steps, or a recurring offer by day',
+      'QR code scanner and a counter screen with a sound for new orders',
+      'Sales, monthly statement, donations',
+      'Staff team, promo codes, boosted offers, API and webhook',
+    ],
+  },
+  {
+    tag: 'Foodnesi team',
+    title: 'Approve and oversee',
+    nav: '/admin · Applications · Users · Locations · Reviews',
+    items: [
+      'Approves “Become a partner” applications',
+      'Pauses locations, blocks accounts, hides reviews',
+      'Warning when a customer arrives but the code wasn’t scanned',
+      'Log of every role change and moderation action',
+    ],
+  },
+]
+
+const ROLES = en ? ROLES_EN : ROLES_SR
+
 function Roles() {
   return (
     <section className="band">
       <div className="wrap">
-        <h2>Tri strane platforme</h2>
-        <p className="lead">Ista aplikacija ima tri uloge. Uloga se dodeljuje nalogu, pa kupac postaje partner tek kad ga tim Foodnesi odobri.</p>
+        <h2>{en ? 'Three sides of the platform' : 'Tri strane platforme'}</h2>
+        <p className="lead">
+          {en
+            ? 'The same app has three roles. A role is assigned to an account, so a customer only becomes a partner once the Foodnesi team approves it.'
+            : 'Ista aplikacija ima tri uloge. Uloga se dodeljuje nalogu, pa kupac postaje partner tek kad ga tim Foodnesi odobri.'}
+        </p>
         <div className="grid3">
           {ROLES.map((r) => (
             <article className="role" key={r.tag}>
@@ -489,7 +559,7 @@ function Roles() {
   )
 }
 
-const RULES: [string, string][] = [
+const RULES_SR: [string, string][] = [
   ['Otkazivanje', 'Kupac može da otkaže najkasnije 30 minuta pre početka preuzimanja.'],
   ['Isticanje', 'Rezervacija koja nije preuzeta ističe 60 minuta posle kraja termina.'],
   ['Dvostruko', 'Drugo skeniranje istog koda vraća „već preuzeta". Kesa se ne može izdati dva puta.'],
@@ -497,6 +567,17 @@ const RULES: [string, string][] = [
   ['Bez skena', 'Ako partner zaboravi da skenira, kupac sam potvrdi „Preuzeo/la sam". Partner to može da ospori.'],
   ['Ručno', 'Bez kamere: upiše se kod (FN-4F7K, fn4f7k i 4F7K rade isto) ili „Izdaj" na listi.'],
 ]
+
+const RULES_EN: [string, string][] = [
+  ['Cancellation', 'The customer can cancel up to 30 minutes before the pickup window starts.'],
+  ['Expiry', 'A reservation that wasn’t picked up expires 60 minutes after the window ends.'],
+  ['Duplicate', 'Scanning the same code again returns “already picked up”. A bag can’t be handed out twice.'],
+  ['Someone else’s code', 'The scanner only looks for the code among that partner’s own locations. A code for another location is rejected.'],
+  ['No scan', 'If the partner forgets to scan, the customer confirms “I picked it up” themselves. The partner can dispute it.'],
+  ['Manual', 'Without a camera: type the code (FN-4F7K, fn4f7k and 4F7K all work) or use “Hand over” on the list.'],
+]
+
+const RULES = en ? RULES_EN : RULES_SR
 
 type Tone = 'main' | 'ok' | 'bad' | 'warn'
 
@@ -531,22 +612,26 @@ function Lifecycle() {
   return (
     <section className="band">
       <div className="wrap">
-        <h2>Šta se dešava sa rezervacijom</h2>
-        <p className="lead">Svaka rezervacija ima jedan status. Sistem ga menja sam kad istekne termin, a partner i kupac ga menjaju svojim akcijama.</p>
+        <h2>{en ? 'What happens to a reservation' : 'Šta se dešava sa rezervacijom'}</h2>
+        <p className="lead">
+          {en
+            ? 'Every reservation has one status. The system changes it on its own when the window expires, and the partner and customer change it with their own actions.'
+            : 'Svaka rezervacija ima jedan status. Sistem ga menja sam kad istekne termin, a partner i kupac ga menjaju svojim akcijama.'}
+        </p>
         <div className="lifecycle">
-          <svg viewBox="0 0 760 230" role="img" aria-label="Rezervacija ide iz statusa Potvrđena u Preuzeta, Otkazana ili Istekla">
+          <svg viewBox="0 0 760 230" role="img" aria-label={en ? 'A reservation moves from Confirmed to Picked up, Cancelled or Expired' : 'Rezervacija ide iz statusa Potvrđena u Preuzeta, Otkazana ili Istekla'}>
             <defs>
               <marker id="fn-demo-arrow" viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto-start-reverse">
                 <path d="M0 0L10 5L0 10z" style={{ fill: 'var(--fg-muted)' }} />
               </marker>
             </defs>
-            <StatusNode x={20} y={87} w={190} label="Potvrđena" sub="odmah po rezervaciji" tone="main" />
-            <Transition toY={42} labelY={52} label={'QR sken · ručni kod · „Izdaj" · kupac potvrdi'} />
-            <Transition toY={115} labelY={108} label="kupac (do 30 min pre) ili partner" />
-            <Transition toY={188} labelY={184} label="sistem, 60 min posle termina" />
-            <StatusNode x={472} y={14} w={268} label="Preuzeta" sub="plaćeno na kasi · +10 bodova · ocena" tone="ok" />
-            <StatusNode x={472} y={87} w={268} label="Otkazana" sub="kesa se vraća u ponudu" tone="bad" />
-            <StatusNode x={472} y={160} w={268} label="Istekla" sub="nije preuzeta u terminu" tone="warn" />
+            <StatusNode x={20} y={87} w={190} label={en ? 'Confirmed' : 'Potvrđena'} sub={en ? 'right after reservation' : 'odmah po rezervaciji'} tone="main" />
+            <Transition toY={42} labelY={52} label={en ? 'QR scan · manual code · “Hand over” · customer confirms' : 'QR sken · ručni kod · „Izdaj" · kupac potvrdi'} />
+            <Transition toY={115} labelY={108} label={en ? 'customer (up to 30 min before) or partner' : 'kupac (do 30 min pre) ili partner'} />
+            <Transition toY={188} labelY={184} label={en ? 'system, 60 min after the window' : 'sistem, 60 min posle termina'} />
+            <StatusNode x={472} y={14} w={268} label={en ? 'Picked up' : 'Preuzeta'} sub={en ? 'paid at the counter · +10 points · rating' : 'plaćeno na kasi · +10 bodova · ocena'} tone="ok" />
+            <StatusNode x={472} y={87} w={268} label={en ? 'Cancelled' : 'Otkazana'} sub={en ? 'the bag goes back into the offer' : 'kesa se vraća u ponudu'} tone="bad" />
+            <StatusNode x={472} y={160} w={268} label={en ? 'Expired' : 'Istekla'} sub={en ? 'not picked up in the window' : 'nije preuzeta u terminu'} tone="warn" />
           </svg>
         </div>
         <div className="rules">
@@ -566,29 +651,29 @@ function Onboarding() {
   return (
     <section className="band">
       <div className="wrap">
-        <h2>Kako lokal postaje partner</h2>
-        <p className="lead">Od prijave do prve objavljene kese obično prođe jedan dan, koliko traje odobrenje.</p>
+        <h2>{en ? 'How a shop becomes a partner' : 'Kako lokal postaje partner'}</h2>
+        <p className="lead">{en ? 'From application to the first published bag usually takes one day, which is how long approval takes.' : 'Od prijave do prve objavljene kese obično prođe jedan dan, koliko traje odobrenje.'}</p>
         <ol className="onboard">
           <li>
-            <b>Prijava</b>
-            <span>Lokal popuni „Postani partner": naziv, adresa, kategorija, kontakt.</span>
+            <b>{en ? 'Application' : 'Prijava'}</b>
+            <span>{en ? 'The shop fills in “Become a partner”: name, address, category, contact.' : 'Lokal popuni „Postani partner": naziv, adresa, kategorija, kontakt.'}</span>
           </li>
           <li>
-            <b>Odobrenje</b>
-            <span>Tim Foodnesi pregleda prijavu. Nalog dobija ulogu partnera i stiže e-mail sa pravilima.</span>
+            <b>{en ? 'Approval' : 'Odobrenje'}</b>
+            <span>{en ? 'The Foodnesi team reviews the application. The account gets the partner role and an email with the rules.' : 'Tim Foodnesi pregleda prijavu. Nalog dobija ulogu partnera i stiže e-mail sa pravilima.'}</span>
           </li>
           <li>
-            <b>Lokacija</b>
-            <span>Adresa, pin na ulazu, radno vreme, uputstvo za preuzimanje, logo i naslovna slika.</span>
+            <b>{en ? 'Location' : 'Lokacija'}</b>
+            <span>{en ? 'Address, pin on the entrance, opening hours, pickup instructions, logo and cover photo.' : 'Adresa, pin na ulazu, radno vreme, uputstvo za preuzimanje, logo i naslovna slika.'}</span>
           </li>
           <li>
-            <b>Prva kesa</b>
-            <span>Nova ponuda u 3 koraka. Uz količinu stoji preporuka na osnovu prodaje iz poslednjih 8 nedelja.</span>
+            <b>{en ? 'First bag' : 'Prva kesa'}</b>
+            <span>{en ? 'A new offer in 3 steps. The quantity comes with a recommendation based on sales from the last 8 weeks.' : 'Nova ponuda u 3 koraka. Uz količinu stoji preporuka na osnovu prodaje iz poslednjih 8 nedelja.'}</span>
           </li>
         </ol>
         <div className="cta">
           <Link to="/partner/apply" className="c-btn primary">
-            Postani partner
+            {en ? 'Become a partner' : 'Postani partner'}
           </Link>
         </div>
       </div>
@@ -603,41 +688,44 @@ function Money({ country }: { country: DemoMarket }) {
     <section className="band">
       <div className="wrap money">
         <div>
-          <h2>Kako ide novac</h2>
+          <h2>{en ? 'How the money moves' : 'Kako ide novac'}</h2>
           <p className="lead" style={{ marginBottom: 16 }}>
-            Kupac plaća lokalu na kasi, pa novac odmah ostaje kod partnera. Foodnesi jednom mesečno šalje obračun provizije.
+            {en
+              ? 'The customer pays the shop at the counter, so the money stays with the partner right away. Foodnesi sends a commission statement once a month.'
+              : 'Kupac plaća lokalu na kasi, pa novac odmah ostaje kod partnera. Foodnesi jednom mesečno šalje obračun provizije.'}
           </p>
           <p>
-            Provizija je {rate} na preuzete kese, po stopi koja je važila u trenutku preuzimanja. Popuste koje finansira Foodnesi (promo kodovi, popust
-            od prijatelja) partner ne plaća, pa se oni odbijaju od obračuna. Istaknute ponude se dodaju.
+            {en
+              ? `Commission is ${rate} on picked-up bags, at the rate that applied at the time of pickup. Discounts funded by Foodnesi (promo codes, friend discount) aren’t paid by the partner, so they’re deducted from the statement. Boosted offers are added.`
+              : `Provizija je ${rate} na preuzete kese, po stopi koja je važila u trenutku preuzimanja. Popuste koje finansira Foodnesi (promo kodovi, popust od prijatelja) partner ne plaća, pa se oni odbijaju od obračuna. Istaknute ponude se dodaju.`}
           </p>
-          <p>Primer desno je ilustracija za jedan mesec jedne lokacije.</p>
+          <p>{en ? 'The example on the right illustrates one month for one location.' : 'Primer desno je ilustracija za jedan mesec jedne lokacije.'}</p>
         </div>
-        <div className="ledger" aria-label="Primer mesečnog obračuna">
+        <div className="ledger" aria-label={en ? 'Example monthly statement' : 'Primer mesečnog obračuna'}>
           <div className="kv">
-            <span>Preuzete kese</span>
+            <span>{en ? 'Bags picked up' : 'Preuzete kese'}</span>
             <b>
               {month.bags} × {country.money(country.bagPrice)}
             </b>
           </div>
           <div className="kv">
-            <span>Promet na kasi</span>
+            <span>{en ? 'Charged at the counter' : 'Promet na kasi'}</span>
             <b>{country.money(month.gross)}</b>
           </div>
           <div className="kv">
-            <span>Provizija {rate}</span>
+            <span>{en ? `Commission ${rate}` : `Provizija ${rate}`}</span>
             <b>{country.money(month.commission)}</b>
           </div>
           <div className="kv minus">
-            <span>Popusti koje plaća Foodnesi</span>
+            <span>{en ? 'Discounts paid by Foodnesi' : 'Popusti koje plaća Foodnesi'}</span>
             <b>−{country.money(month.discounts)}</b>
           </div>
           <div className="kv plus">
-            <span>Istaknuto „Na vrhu liste" × 2</span>
+            <span>{en ? 'Boosted “Top of the list” × 2' : 'Istaknuto „Na vrhu liste" × 2'}</span>
             <b>+{country.money(month.boosts)}</b>
           </div>
           <div className="kv total">
-            <span>Za uplatu Foodnesi</span>
+            <span>{en ? 'Owed to Foodnesi' : 'Za uplatu Foodnesi'}</span>
             <b>{country.money(month.total)}</b>
           </div>
         </div>

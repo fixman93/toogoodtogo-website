@@ -474,6 +474,7 @@ export type NotificationType =
   | 'reward'
   | 'application_approved'
   | 'application_rejected'
+  | 'review_reported'
 
 export interface AppNotification {
   id: string
@@ -527,6 +528,7 @@ export interface AdminReview {
   rating: number
   comment?: string
   isHidden: boolean
+  reportCount: number
   createdAt: string
   user: { name: string; email: string } | null
   business: { id: string; name: string } | null

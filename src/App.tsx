@@ -93,6 +93,7 @@ const router = createBrowserRouter([
       { path: 'uslovi', element: <TermsPage lang="sr" /> },
       // Public partner rules (linked from the activation e-mail) — keep this URL stable.
       { path: 'partner-uslovi', element: <PartnerTermsPage /> },
+      { path: 'partner-terms', element: <PartnerTermsPage lang="en" /> },
       { path: 'kontakt', element: <ContactPage /> },
       { path: 'support/:id', element: <SupportPage /> },
       { path: 'business/locations/new', element: <LocationFormPage /> },

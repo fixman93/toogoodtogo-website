@@ -10,14 +10,14 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { RequireAuth } from '@/components/common/RequireAuth'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { MARKET_LIST, market, setMarket } from '@/config/markets'
+import { MARKET_LIST, MARKET_NAME_EN, market, setMarket } from '@/config/markets'
 import { StandingNotice } from '@/features/business/StandingNotice'
 import { useAuth } from '@/features/auth/auth-context'
 import { PLATFORM_ROLES } from '@/api/types'
 import { useDeleteAccount, useReservations, useUpdatePreferences, useUpdateProfile, useUploadImage } from '@/hooks/api'
 import { isNativeApp } from '@/lib/platform'
 import { currentSubscription, disablePush, enablePush, pushSupported } from '@/lib/push'
-import { activeLocale, localize, setScript, script, t } from '@/i18n'
+import { activeLocale, language, localize, setLanguage, setScript, script, t } from '@/i18n'
 import { formatDate, formatMoney } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -135,7 +135,7 @@ function CountrySetting() {
       >
         {MARKET_LIST.map((m) => (
           <option key={m.code} value={m.code}>
-            {localize(m.name)}
+            {language === 'en' ? MARKET_NAME_EN[m.code] ?? m.name : localize(m.name)}
           </option>
         ))}
       </NativeSelect>
@@ -491,7 +491,23 @@ function Profile() {
       <section className="space-y-3">
         <h2 className="font-bold">{t('profile.settings')}</h2>
         <Card className="divide-y">
-          <SettingRow icon={Globe} label={t('profile.language')} value={script === 'cyrl' ? 'Српски' : 'Srpski'} />
+          <SettingRow icon={Globe} label={t('profile.language')}>
+            <div className="inline-flex rounded-full bg-muted p-1" role="radiogroup" aria-label={t('profile.language')}>
+              {(['sr-Latn', 'en'] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  role="radio"
+                  aria-checked={language === l}
+                  onClick={() => language !== l && setLanguage(l)}
+                  className={cn('h-8 rounded-full px-3 text-sm font-semibold', language === l ? 'bg-card shadow-sm' : 'text-muted-foreground')}
+                >
+                  {l === 'sr-Latn' ? 'Srpski' : 'English'}
+                </button>
+              ))}
+            </div>
+          </SettingRow>
+          {language === 'sr-Latn' && (
           <SettingRow icon={Languages} label={t('profile.script')}>
             <div className="inline-flex rounded-full bg-muted p-1" role="radiogroup" aria-label={t('profile.script')}>
               {(['latn', 'cyrl'] as const).map((s) => (
@@ -508,6 +524,7 @@ function Profile() {
               ))}
             </div>
           </SettingRow>
+          )}
           <CountrySetting />
           <SettingRow icon={Wallet} label={t('profile.currency')} value={market.currency} />
           <NotificationSettings />

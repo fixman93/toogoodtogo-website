@@ -175,8 +175,9 @@ export async function listReservations(query: { status?: string; q?: string; pag
   return { items: await toDto(rows, actor), meta: { page: query.page, limit: query.limit, total } }
 }
 
-export async function listReviews(query: { hidden?: boolean; page: number; limit: number }) {
-  const filter = query.hidden == null ? {} : query.hidden ? { isHidden: true } : { isHidden: { $ne: true } }
+export async function listReviews(query: { hidden?: boolean; reported?: boolean; page: number; limit: number }) {
+  const filter: Record<string, unknown> = query.hidden == null ? {} : query.hidden ? { isHidden: true } : { isHidden: { $ne: true } }
+  if (query.reported) filter['reportedBy.0'] = { $exists: true }
   const [rows, total] = await Promise.all([
     Review.find(filter).sort({ createdAt: -1 }).skip((query.page - 1) * query.limit).limit(query.limit).lean(),
     Review.countDocuments(filter),
@@ -193,6 +194,7 @@ export async function listReviews(query: { hidden?: boolean; page: number; limit
       rating: r.rating,
       comment: r.comment,
       isHidden: !!r.isHidden,
+      reportCount: r.reportedBy?.length ?? 0,
       createdAt: r.createdAt.toISOString(),
       user: userById.get(r.user.toString()) ? { name: userById.get(r.user.toString())!.name, email: userById.get(r.user.toString())!.email } : null,
       business: businessById.get(r.business.toString()) ? { id: r.business.toString(), name: businessById.get(r.business.toString())!.name } : null,

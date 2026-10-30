@@ -1,10 +1,12 @@
-import type { Types } from 'mongoose'
+import { Types } from 'mongoose'
 import { Business, Reservation, Review, User } from '../models/index.js'
 import { ApiError } from '../utils/ApiError.js'
 import { serializeReview } from '../utils/serializers.js'
 import { isOwnedUrl } from './storage.service.js'
 import { runAtomically } from '../utils/transaction.js'
 import type { Actor } from './access.service.js'
+import { audit } from './audit.service.js'
+import { notify } from './notification.service.js'
 
 export async function list(businessId: string, page: number, limit: number) {
   if (!(await Business.exists({ _id: businessId }))) throw ApiError.notFound('Lokal nije pronađen.')
@@ -59,6 +61,26 @@ export async function create(businessId: string, input: { reservationId: string;
 
   const user = await User.findById(actor.id).select('name').lean()
   return serializeReview(review, user)
+}
+
+/** A signed-in user flags a review as inappropriate; one report per user, notifies the platform team. */
+export async function report(reviewId: string, actor: Actor, reason?: string) {
+  const review = await Review.findById(reviewId)
+  if (!review || review.isHidden) throw ApiError.notFound('Ocena nije pronađena.')
+  if (review.user.toString() === actor.id) throw ApiError.badRequest('Ne možete prijaviti svoju ocenu.', 'OWN_REVIEW')
+  if (review.reportedBy.some((id) => id.toString() === actor.id)) return { reported: true }
+
+  review.reportedBy.push(new Types.ObjectId(actor.id))
+  await review.save()
+
+  const admins = await User.find({ role: { $in: ['admin', 'operations'] }, deletedAt: null }).select('_id').lean()
+  void notify(
+    admins.map((a) => a._id),
+    { type: 'review_reported', title: 'Prijavljena ocena', body: reason || 'Korisnik je prijavio ocenu kao neprimerenu.', link: '/admin?tab=reviews' },
+  )
+  void audit(actor, { action: 'review.reported', targetType: 'review', targetId: review._id, summary: `Prijavljena ocena (${review.reportedBy.length}x)`, details: reason ? { reason } : undefined })
+
+  return { reported: true }
 }
 
 /** Latest customer photos for a location ("Šta je bilo u kesi"). */

@@ -39,6 +39,8 @@ export const adminReservationsQuery = z.object({
 
 export const adminReviewsQuery = z.object({
   hidden: z.enum(['true', 'false']).optional().transform((v) => (v == null ? undefined : v === 'true')),
+  /** Only reviews with at least one user report. */
+  reported: z.enum(['true']).optional().transform((v) => v === 'true'),
   ...pagination,
   limit: z.coerce.number().int().min(1).max(100).default(50),
 })
