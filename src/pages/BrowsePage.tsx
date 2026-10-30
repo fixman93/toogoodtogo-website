@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { List, Loader2, LocateFixed, Map as MapIcon, SearchX, Search, SlidersHorizontal } from 'lucide-react'
 import { CATEGORIES, type Category, type OfferQuery, type OfferSort, type PickupDay, type TimeOfDay } from '@/api/types'
@@ -66,6 +66,7 @@ export function BrowsePage() {
   const [params, setParams] = useSearchParams()
   const { location, locateDevice, isLocating, error: locationError } = useLocation()
   const view = params.get('view') === 'map' ? 'map' : 'list'
+  const mapFullscreen = view === 'map' && params.get('full') === '1'
   const [search, setSearch] = useState(params.get('q') ?? '')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [limit, setLimit] = useState(PAGE_SIZE)
@@ -107,6 +108,8 @@ export function BrowsePage() {
   }
   const activeFilterCount = FILTER_KEYS.filter((k) => params.has(k)).length
   const { data, isLoading, isError, refetch, isFetching } = useOffers(query, { enabled: view === 'list' })
+
+  const setMapFullscreen = useCallback((on: boolean) => setParam('full', on ? '1' : undefined), []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Use the device's real position and sort by it. */
   const nearMe = async () => {
@@ -211,7 +214,18 @@ export function BrowsePage() {
               role="tab"
               type="button"
               aria-selected={view === id}
-              onClick={() => setParam('view', id === 'map' ? 'map' : undefined)}
+              onClick={() => {
+                setParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev)
+                    if (id === 'map') next.set('view', 'map')
+                    else next.delete('view')
+                    next.delete('full')
+                    return next
+                  },
+                  { replace: true },
+                )
+              }}
               className={cn(
                 'flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-all',
                 view === id ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
@@ -240,6 +254,8 @@ export function BrowsePage() {
 
         {view === 'map' ? (
           <MapView
+            fullscreen={mapFullscreen}
+            onFullscreenChange={setMapFullscreen}
             filters={{ q: query.q, category: query.category, maxPriceMinor: query.maxPriceMinor, currency: query.currency, pickupDay: query.pickupDay, timeOfDay: query.timeOfDay }}
           />
         ) : (

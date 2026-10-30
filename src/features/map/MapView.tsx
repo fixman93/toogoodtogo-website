@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, MapPinned, X } from 'lucide-react'
+import { Loader2, MapPinned, Maximize2, Minimize2, X } from 'lucide-react'
 import type { BoundingBox, GeoPoint, OfferFilters } from '@/api/types'
 import { EmptyState, ErrorState } from '@/components/common/StateViews'
 import { OfferCard } from '@/components/offers/OfferCard'
@@ -10,6 +10,7 @@ import { useOfferLocations, useOffers } from '@/hooks/api'
 import { MapLocationCard } from './MapLocationCard'
 import { t } from '@/i18n'
 import { lazyWithReload } from '@/lib/chunks'
+import { cn } from '@/lib/utils'
 
 const OffersMap = lazyWithReload(() => import('./OffersMap'))
 
@@ -24,8 +25,17 @@ const roundBox = (b: BoundingBox): BoundingBox => ({ minLat: round(b.minLat), ma
  * - Starts from the device's current location (asks for GPS on open).
  * - Pins: every location with live offers in the visible area, at any zoom.
  * - Below the map: offers nearest to the user, or the tapped location's offers.
+ * - Full screen: the same map (not remounted) covers the app; Esc or the button closes it.
  */
-export function MapView({ filters }: { filters: OfferFilters }) {
+export function MapView({
+  filters,
+  fullscreen = false,
+  onFullscreenChange,
+}: {
+  filters: OfferFilters
+  fullscreen?: boolean
+  onFullscreenChange?: (fullscreen: boolean) => void
+}) {
   const { location, locateDevice } = useLocation()
   const user: GeoPoint = { lat: location.lat, lng: location.lng }
   const [bbox, setBbox] = useState<BoundingBox | null>(null)
@@ -43,6 +53,23 @@ export function MapView({ filters }: { filters: OfferFilters }) {
       .catch(() => locateDevice())
   }, [locateDevice])
 
+  // Full screen: no page scroll behind the map; Esc closes the tapped location first, then full screen.
+  useEffect(() => {
+    if (!fullscreen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (selectedId) setSelectedId(undefined)
+      else onFullscreenChange?.(false)
+    }
+    document.addEventListener('keydown', onKey)
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = overflow
+    }
+  }, [fullscreen, selectedId, onFullscreenChange])
+
   const pins = useOfferLocations(bbox && { ...filters, ...bbox })
   const nearest = useOffers({ ...filters, lat: user.lat, lng: user.lng, sort: 'distance', limit: NEAREST_LIMIT })
   const selected = useOffers({ ...filters, businessId: selectedId, lat: user.lat, lng: user.lng, sort: 'pickup', limit: 30 }, { enabled: !!selectedId })
@@ -54,8 +81,16 @@ export function MapView({ filters }: { filters: OfferFilters }) {
   return (
     <div className="space-y-4">
       {/* The mask makes WebKit (iPhone Safari / iOS app) clip the WebGL map and its pins to the
-          rounded frame — overflow:hidden + border-radius alone doesn't while the page scrolls. */}
-      <div className="relative isolate h-[58dvh] min-h-80 transform-gpu overflow-hidden rounded-3xl border bg-muted [mask-image:radial-gradient(white,black)] lg:h-[65vh]">
+          rounded frame — overflow:hidden + border-radius alone doesn't while the page scrolls.
+          Full screen only restyles this frame, so the map keeps its position and loaded tiles. */}
+      <div
+        className={cn(
+          'isolate transform-gpu overflow-hidden bg-muted',
+          fullscreen
+            ? 'fixed inset-0 z-[60] h-dvh [&_.mapboxgl-ctrl-top-right]:mt-[env(safe-area-inset-top)] [&_.maplibregl-ctrl-top-right]:mt-[env(safe-area-inset-top)]'
+            : 'relative h-[58dvh] min-h-80 rounded-3xl border [mask-image:radial-gradient(white,black)] lg:h-[65vh]',
+        )}
+      >
         <Suspense
           fallback={
             <div className="flex size-full items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -75,6 +110,18 @@ export function MapView({ filters }: { filters: OfferFilters }) {
             onViewportChange={(b) => setBbox(roundBox(b))}
           />
         </Suspense>
+        {onFullscreenChange && (
+          <Button
+            size="icon"
+            variant="outline"
+            className="absolute top-[calc(env(safe-area-inset-top,0px)+0.75rem)] left-3 z-[1000] rounded-full bg-card/95 shadow"
+            aria-label={t(fullscreen ? 'map.exitFullscreen' : 'map.fullscreen')}
+            title={t(fullscreen ? 'map.exitFullscreen' : 'map.fullscreen')}
+            onClick={() => onFullscreenChange(!fullscreen)}
+          >
+            {fullscreen ? <Minimize2 /> : <Maximize2 />}
+          </Button>
+        )}
         {selectedId && (
           <MapLocationCard
             key={selectedId}
@@ -85,13 +132,13 @@ export function MapView({ filters }: { filters: OfferFilters }) {
           />
         )}
         {pins.isFetching && (
-          <span className="pointer-events-none absolute top-3 left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-card/95 px-3 py-1.5 text-xs font-semibold shadow">
+          <span className="pointer-events-none absolute top-[calc(env(safe-area-inset-top,0px)+0.75rem)] left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-card/95 px-3 py-1.5 text-xs font-semibold shadow">
             <Loader2 className="size-3.5 animate-spin" />
             {t('common.loading')}
           </span>
         )}
         {pins.isSuccess && !pins.isFetching && locations.length === 0 && !selectedId && (
-          <span className="pointer-events-none absolute inset-x-6 bottom-6 z-[1000] rounded-2xl bg-card/95 px-4 py-3 text-center text-sm font-medium shadow">
+          <span className="pointer-events-none absolute inset-x-6 bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] z-[1000] rounded-2xl bg-card/95 px-4 py-3 text-center text-sm font-medium shadow">
             {t('map.empty')}
           </span>
         )}

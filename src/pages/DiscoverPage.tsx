@@ -2,7 +2,8 @@ import heroBanner from '@/assets/images/web/hero.webp'
 import heroMobile from '@/assets/images/web/hero-mobile.webp'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Leaf, Map as MapIcon, Search } from 'lucide-react'
+import { Leaf, Map as MapIcon, MapPinned, Search } from 'lucide-react'
+import { EmptyState } from '@/components/common/StateViews'
 import { CategoryChips } from '@/components/offers/CategoryChips'
 import { OfferCarousel } from '@/components/offers/OfferCarousel'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,8 @@ import { useOffers } from '@/hooks/api'
 import { t } from '@/i18n'
 
 const NEARBY_RADIUS_KM = 15
+/** The map opens full screen from Discover: easier to look around and tap a location. */
+const MAP_URL = '/browse?view=map&full=1'
 
 export function DiscoverPage() {
   const navigate = useNavigate()
@@ -66,7 +69,7 @@ export function DiscoverPage() {
       <CategoryChips value={undefined} onChange={(category) => navigate(category ? `/browse?category=${category}` : '/browse')} />
 
       <Button asChild variant="secondary" size="lg" className="w-full sm:w-auto">
-        <Link to="/browse?view=map">
+        <Link to={MAP_URL}>
           <MapIcon />
           {t('map.showOnMap')}
         </Link>
@@ -79,6 +82,22 @@ export function DiscoverPage() {
         isError={nearby.isError}
         onRetry={nearby.refetch}
         seeAllTo="/browse?sort=distance"
+        emptyState={
+          <EmptyState
+            icon={MapPinned}
+            title={t('discover.nearbyEmptyTitle')}
+            text={t('discover.nearbyEmptyText')}
+            className="rounded-2xl border bg-card py-10"
+            action={
+              <Button asChild>
+                <Link to={MAP_URL}>
+                  <MapIcon />
+                  {t('discover.nearbyEmptyAction')}
+                </Link>
+              </Button>
+            }
+          />
+        }
       />
 
       <section className="flex items-start gap-4 rounded-2xl bg-secondary p-5">
