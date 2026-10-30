@@ -17,3 +17,4 @@ businessRoutes.delete('/:id/staff/:userId', authenticate, requireRole('business'
 businessRoutes.get('/:id/reviews', c.listReviews)
 businessRoutes.get('/:id/photos', c.reviewPhotos)
 businessRoutes.post('/:id/reviews', authenticate, c.createReview)
+businessRoutes.post('/:id/reviews/:reviewId/report', authenticate, c.reportReview)

@@ -11,3 +11,5 @@ export const createReviewBody = z.object({
 })
 
 export const reviewListQuery = z.object({ ...pagination })
+
+export const reportReviewBody = z.object({ reason: z.string().trim().max(500).optional() })

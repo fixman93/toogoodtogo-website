@@ -1,8 +1,9 @@
 import { market } from '@/config/markets'
+import { en } from './en'
 import { toCyrillic } from './script'
 import { srLatn, type MessageKey, type Messages, type PluralMessage } from './sr-Latn'
 
-const catalogues: Record<string, Messages> = { 'sr-Latn': srLatn }
+const catalogues: Record<string, Messages> = { 'sr-Latn': srLatn, en }
 
 export type Script = 'latn' | 'cyrl'
 const SCRIPT_KEY = 'foodnesi.script'
@@ -16,8 +17,30 @@ export const script: Script = (() => {
   }
 })()
 
-/** Locale for Intl formatting (dates, numbers) in the active script. */
-export const activeLocale = script === 'cyrl' ? market.locale.replace('Latn', 'Cyrl') : market.locale
+export type Language = 'sr-Latn' | 'en'
+const LANGUAGE_KEY = 'foodnesi.language'
+
+/** App language, independent of country/market; chosen in Profile → Settings, stored per device. */
+export const language: Language = (() => {
+  try {
+    return localStorage.getItem(LANGUAGE_KEY) === 'en' ? 'en' : market.language
+  } catch {
+    return market.language
+  }
+})()
+
+/** Switching language re-renders everything, so the simplest correct thing is a reload. */
+export function setLanguage(next: Language) {
+  try {
+    localStorage.setItem(LANGUAGE_KEY, next)
+  } catch {
+    /* ignore */
+  }
+  window.location.reload()
+}
+
+/** Locale for Intl formatting (dates, numbers): English when the language is English, else the active script. */
+export const activeLocale = language === 'en' ? 'en-US' : script === 'cyrl' ? market.locale.replace('Latn', 'Cyrl') : market.locale
 
 /** Switching script re-renders everything, so the simplest correct thing is a reload. */
 export function setScript(next: Script) {
@@ -31,12 +54,12 @@ export function setScript(next: Script) {
 
 /** Show free text (e.g. API error messages) in the active script. */
 export function localize(text: string) {
-  return script === 'cyrl' ? toCyrillic(text) : text
+  return language === 'sr-Latn' && script === 'cyrl' ? toCyrillic(text) : text
 }
 
-if (typeof document !== 'undefined') document.documentElement.lang = script === 'cyrl' ? 'sr-Cyrl' : 'sr-Latn'
+if (typeof document !== 'undefined') document.documentElement.lang = language === 'en' ? 'en' : script === 'cyrl' ? 'sr-Cyrl' : 'sr-Latn'
 
-const messages = catalogues[market.language] ?? srLatn
+const messages = catalogues[language] ?? srLatn
 const pluralRules = new Intl.PluralRules(activeLocale)
 
 type Params = Record<string, string | number>

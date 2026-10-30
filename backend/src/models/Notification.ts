@@ -25,6 +25,7 @@ export const NOTIFICATION_TYPES = [
   'reward',
   'application_approved',
   'application_rejected',
+  'review_reported',
 ] as const
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number]
 

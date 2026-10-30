@@ -147,6 +147,8 @@ export const businessesApi = {
     unwrap<Review>(api.post(`/businesses/${id}/reviews`, body)),
   /** "Šta je bilo u kesi": latest customer photos. */
   photos: (id: string) => unwrap<ReviewPhoto[]>(api.get(`/businesses/${id}/photos`)),
+  reportReview: (id: string, reviewId: string, reason?: string) =>
+    unwrap<{ reported: true }>(api.post(`/businesses/${id}/reviews/${reviewId}/report`, { reason })),
 }
 
 export interface CreateReservationBody {
@@ -205,7 +207,7 @@ export const adminApi = {
   setBlocked: (id: string, blocked: boolean) => unwrap<AdminUser>(api.patch(`/admin/users/${id}/block`, { blocked })),
   reservations: (params: { status?: ReservationStatus; q?: string; limit?: number }) =>
     api.get<ApiList<Reservation>>('/admin/reservations', { params }).then((res) => res.data),
-  reviews: (params: { hidden?: boolean; limit?: number }) => api.get<ApiList<AdminReview>>('/admin/reviews', { params }).then((res) => res.data),
+  reviews: (params: { hidden?: boolean; reported?: boolean; limit?: number }) => api.get<ApiList<AdminReview>>('/admin/reviews', { params }).then((res) => res.data),
   setReviewHidden: (id: string, hidden: boolean) => unwrap<{ id: string; isHidden: boolean }>(api.patch(`/admin/reviews/${id}`, { hidden })),
   applications: (params: { status?: ApplicationStatus; limit?: number }) =>
     api.get<ApiList<PartnerApplication>>('/admin/applications', { params }).then((res) => res.data),

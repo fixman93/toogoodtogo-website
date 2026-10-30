@@ -11,6 +11,8 @@ export interface IReview {
   photos: string[]
   /** Hidden by moderation: not shown and not counted in the rating. */
   isHidden: boolean
+  /** Customers who reported this review as inappropriate (one report per user). */
+  reportedBy: Types.ObjectId[]
   createdAt: Date
   updatedAt: Date
 }
@@ -24,6 +26,7 @@ const reviewSchema = new Schema<IReview>(
     comment: { type: String, trim: true, maxlength: 1000 },
     photos: { type: [String], default: [], validate: (v: string[]) => v.length <= 3 },
     isHidden: { type: Boolean, default: false },
+    reportedBy: { type: [{ type: Schema.Types.ObjectId, ref: 'User' }], default: [] },
   },
   { timestamps: true },
 )

@@ -1,10 +1,50 @@
 import { useState } from 'react'
-import { Star } from 'lucide-react'
+import { Flag, Loader2, Star } from 'lucide-react'
 import { PhotoViewer } from '@/components/offers/BagPhotos'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useBusinessReviews } from '@/hooks/api'
+import { Textarea } from '@/components/ui/textarea'
+import { useAuth } from '@/features/auth/auth-context'
+import { useBusinessReviews, useReportReview } from '@/hooks/api'
 import { t } from '@/i18n'
 import { formatDate } from '@/lib/format'
+
+function ReportReview({ businessId, reviewId }: { businessId: string; reviewId: string }) {
+  const report = useReportReview(businessId)
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  if (report.isSuccess) {
+    return <span className="text-xs text-muted-foreground">{t('offer.reportReviewSent')}</span>
+  }
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive">
+        <Flag className="size-3" />
+        {t('offer.reportReview')}
+      </button>
+    )
+  }
+  return (
+    <div className="space-y-2 rounded-lg border p-2">
+      <p className="text-xs">{t('offer.reportReviewConfirm')}</p>
+      <Textarea
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder={t('offer.reportReviewReason')}
+        className="min-h-16 text-xs"
+      />
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" className="flex-1" onClick={() => setOpen(false)}>
+          {t('common.cancel')}
+        </Button>
+        <Button size="sm" variant="destructive" className="flex-1" disabled={report.isPending} onClick={() => report.mutate({ reviewId, reason: reason.trim() || undefined })}>
+          {report.isPending && <Loader2 className="animate-spin" />}
+          {t('offer.reportReviewSubmit')}
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 export function Stars({ value, size = 'size-3.5' }: { value: number; size?: string }) {
   return (
@@ -17,6 +57,7 @@ export function Stars({ value, size = 'size-3.5' }: { value: number; size?: stri
 }
 
 export function ReviewList({ businessId }: { businessId: string }) {
+  const { user } = useAuth()
   const { data, isLoading } = useBusinessReviews(businessId)
   const [photo, setPhoto] = useState<string | null>(null)
   if (isLoading) return <Skeleton className="h-24" />
@@ -39,7 +80,10 @@ export function ReviewList({ businessId }: { businessId: string }) {
               ))}
             </div>
           )}
-          <p className="text-xs text-muted-foreground/80">{formatDate(review.createdAt)}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground/80">{formatDate(review.createdAt)}</p>
+            {user && user.id !== review.user.id && <ReportReview businessId={businessId} reviewId={review.id} />}
+          </div>
         </li>
       ))}
       {photo && <PhotoViewer url={photo} onClose={() => setPhoto(null)} />}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
-import { AlertTriangle, Ban, MapPinCheck, CalendarCheck, ScanLine, ShieldCheck, CheckCircle2, ChevronDown, ClipboardList, History, Leaf, Loader2, MapPin, MessageSquare, PauseCircle, PlayCircle, ReceiptText, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
+import { AlertTriangle, Ban, MapPinCheck, CalendarCheck, ScanLine, ShieldCheck, CheckCircle2, ChevronDown, ClipboardList, Flag, History, Leaf, Loader2, MapPin, MessageSquare, PauseCircle, PlayCircle, ReceiptText, Search, ShoppingBag, Store, Users, type LucideIcon } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { PLATFORM_ROLES, type AdminBusiness, type AdminReview, type AdminUser, type ApplicationStatus, type PartnerApplication, type Permission, type PaymentDirection, type PaymentMethod, type PlatformStatementPartner, type Reservation, type ReservationStatus, type Role, type TicketStatus } from '@/api/types'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -732,6 +732,12 @@ function ReviewRow({ r }: { r: AdminReview }) {
         <div className="flex items-center gap-2">
           <Stars value={r.rating} />
           {r.isHidden && <Badge variant="muted">{t('admin.hidden')}</Badge>}
+          {r.reportCount > 0 && (
+            <Badge variant="destructive" className="gap-1">
+              <Flag className="size-3" />
+              {t('admin.reportCount', { count: r.reportCount })}
+            </Badge>
+          )}
         </div>
         <Button size="sm" variant={r.isHidden ? 'secondary' : 'ghost'} disabled={toggle.isPending} onClick={() => toggle.mutate({ id: r.id, hidden: !r.isHidden })}>
           {r.isHidden ? t('admin.showReview') : t('admin.hideReview')}
@@ -747,14 +753,21 @@ function ReviewRow({ r }: { r: AdminReview }) {
 
 function ReviewsTab() {
   const [hidden, setHidden] = useState<'hidden' | 'visible'>()
-  const { data, isLoading, isError, refetch } = useAdminReviews({ hidden: hidden == null ? undefined : hidden === 'hidden', limit: 100 })
+  const [reportedOnly, setReportedOnly] = useState(false)
+  const { data, isLoading, isError, refetch } = useAdminReviews({ hidden: hidden == null ? undefined : hidden === 'hidden', reported: reportedOnly || undefined, limit: 100 })
   return (
     <div className="space-y-4">
-      <Chips<'hidden' | 'visible'>
-        value={hidden}
-        onChange={setHidden}
-        options={[{ label: t('admin.all') }, { value: 'visible', label: t('admin.showReview') }, { value: 'hidden', label: t('admin.hidden') }]}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Chips<'hidden' | 'visible'>
+          value={hidden}
+          onChange={setHidden}
+          options={[{ label: t('admin.all') }, { value: 'visible', label: t('admin.showReview') }, { value: 'hidden', label: t('admin.hidden') }]}
+        />
+        <Button size="sm" variant={reportedOnly ? 'secondary' : 'outline'} onClick={() => setReportedOnly((v) => !v)}>
+          <Flag className="size-3.5" />
+          {t('admin.reportedOnly')}
+        </Button>
+      </div>
       {isLoading ? (
         <Skeleton className="h-40 rounded-2xl" />
       ) : isError ? (
