@@ -12,6 +12,7 @@ import { pushRoutes } from './push.routes.js'
 import { supportRoutes } from './support.routes.js'
 import { uploadRoutes } from './upload.routes.js'
 import { pickupRoutes, reservationRoutes } from './reservation.routes.js'
+import { rewardRoutes } from './reward.routes.js'
 import { scheduleRoutes } from './schedule.routes.js'
 import { contactRoutes } from './contact.routes.js'
 
@@ -35,6 +36,7 @@ apiRouter.use('/promotions', promotionRoutes)
 apiRouter.use('/support', supportRoutes)
 apiRouter.use('/uploads', uploadRoutes)
 apiRouter.use('/reservations', reservationRoutes)
+apiRouter.use('/rewards', rewardRoutes)
 apiRouter.use('/favorites', favoriteRoutes)
 apiRouter.use('/offer-schedules', scheduleRoutes)
 // Public contact form → e-mail to the team.

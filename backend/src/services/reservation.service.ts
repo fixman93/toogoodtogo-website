@@ -5,9 +5,12 @@ import { getMarket, marketFor } from '../config/markets.js'
 import {
   ACTIVE_RESERVATION_STATUSES,
   Business,
+  LoyaltyTransaction,
   Offer,
   Reservation,
   Review,
+  Reward,
+  RewardRedemption,
   User,
   effectivePriceMinor,
   type IBusiness,
@@ -29,7 +32,7 @@ import { audit } from './audit.service.js'
 import { notify } from './notification.service.js'
 import { sendReservationTicket } from './ticket.service.js'
 import * as promotions from './promotion.service.js'
-import { POINTS_PER_BAG, rewardPickup, welcomeDiscountPercent } from './loyalty.service.js'
+import { loyaltyConfig, rewardPickup, welcomeDiscountPercent } from './loyalty.service.js'
 
 /** Shown as the "promo code" of an invited friend's first bag. */
 const WELCOME_CODE = 'PREPORUKA'
@@ -171,11 +174,33 @@ export async function create(input: CreateReservationInput, actor: Actor) {
       await promotions.consume(promo, session)
       onRollback(() => promotions.release(promo._id))
     }
-    const discountMinor = promo
-      ? promotions.discountFor(promo, subtotal)
-      : welcomePercent
-        ? promotions.discountFor({ discountType: 'percent', value: welcomePercent }, subtotal)
-        : 0
+
+    // Foodnesi Rewards: a free_bag redemption makes up to its granted bag count fully free
+    // (promo codes never zero a price — see promotions.discountFor — so this bypasses it on purpose).
+    let rewardDiscountMinor = 0
+    if (input.rewardRedemptionId) {
+      const redemption = await RewardRedemption.findOneAndUpdate(
+        { _id: input.rewardRedemptionId, user: actor.id, status: 'unlocked', $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: new Date() } }] },
+        { $set: { status: 'redeemed', redeemedAt: new Date() } },
+        { new: true, session },
+      )
+      if (!redemption) throw ApiError.conflict('Nagrada nije dostupna za iskorišćavanje.', 'REWARD_NOT_AVAILABLE')
+      onRollback(() => RewardRedemption.updateOne({ _id: redemption._id }, { $set: { status: 'unlocked' }, $unset: { redeemedAt: 1, reservation: 1 } }))
+      const reward = await Reward.findById(redemption.reward).lean()
+      if (!reward || reward.type !== 'free_bag') {
+        throw ApiError.badRequest('Ova nagrada se ne koristi na ovaj način.', 'REWARD_NOT_APPLICABLE')
+      }
+      rewardDiscountMinor = Math.min(subtotal, unitPrice * reward.value)
+    }
+
+    const discountMinor =
+      rewardDiscountMinor > 0
+        ? rewardDiscountMinor
+        : promo
+          ? promotions.discountFor(promo, subtotal)
+          : welcomePercent
+            ? promotions.discountFor({ discountType: 'percent', value: welcomePercent }, subtotal)
+            : 0
 
     const [created] = await Reservation.create(
       [
@@ -203,8 +228,13 @@ export async function create(input: CreateReservationInput, actor: Actor) {
                 },
               }
             : {}),
-          ...(promo ? { promotion: promo._id, promoCode: promo.code, discountFundedBy: promo.owner ? 'partner' : 'platform' } : {}),
-          ...(!promo && discountMinor > 0 ? { promoCode: WELCOME_CODE, discountFundedBy: 'platform' } : {}),
+          ...(rewardDiscountMinor > 0
+            ? { promoCode: 'FOODNESI-REWARD', discountFundedBy: 'platform' as const }
+            : promo
+              ? { promotion: promo._id, promoCode: promo.code, discountFundedBy: promo.owner ? ('partner' as const) : ('platform' as const) }
+              : discountMinor > 0
+                ? { promoCode: WELCOME_CODE, discountFundedBy: 'platform' as const }
+                : {}),
           currency: offer.currency,
           offerTitle: offer.title,
           offerImageUrl: offer.imageUrl,
@@ -221,6 +251,9 @@ export async function create(input: CreateReservationInput, actor: Actor) {
       ],
       { session },
     )
+    if (input.rewardRedemptionId) {
+      await RewardRedemption.updateOne({ _id: input.rewardRedemptionId }, { $set: { reservation: created._id } }, { session })
+    }
     return created
   })
 
@@ -379,7 +412,7 @@ async function markCollected(reservation: ReservationDoc, actor: Actor, via: Col
     { new: true },
   )
   if (!updated) throw collectError(await Reservation.findById(reservation._id))
-  void rewardPickup(updated.user, updated.quantity)
+  await rewardPickup(updated.user, updated.quantity, updated._id)
   void dispatchReservationEvent('reservation.collected', updated)
   void notify([updated.user], {
     type: 'reservation_collected',
@@ -785,7 +818,7 @@ export async function answerPickupCheck(id: string, answer: 'collected' | 'not_c
     { new: true },
   )
   if (!updated) throw ApiError.conflict('Već si odgovorio/la.', 'ALREADY_ANSWERED')
-  void rewardPickup(updated.user, updated.quantity)
+  await rewardPickup(updated.user, updated.quantity, updated._id)
   void dispatchReservationEvent('reservation.collected', updated)
   if (business) {
     void notify([business.owner], {
@@ -835,7 +868,25 @@ export async function resolveDispute(id: string, decision: 'upheld' | 'rejected'
   reservation.set({ 'dispute.status': decision, 'dispute.resolvedAt': now, 'dispute.resolvedBy': actor.id, 'dispute.note': note })
   if (decision === 'upheld') {
     reservation.set({ status: 'expired', collectedAt: undefined, commissionRate: undefined })
-    await User.updateOne({ _id: reservation.user }, [{ $set: { points: { $max: [0, { $subtract: ['$points', reservation.quantity * POINTS_PER_BAG] }] } } }])
+    const lostPoints = reservation.quantity * (await loyaltyConfig()).pointsPerBag
+    const reverted = await User.findOneAndUpdate(
+      { _id: reservation.user },
+      [{ $set: { points: { $max: [0, { $subtract: ['$points', lostPoints] }] }, totalVerifiedPickups: { $max: [0, { $subtract: ['$totalVerifiedPickups', reservation.quantity] }] } } }],
+      { new: true },
+    ).select('points').lean()
+    // Already-unlocked/redeemed rewards are not clawed back — only the raw counters move.
+    if (reverted) {
+      await LoyaltyTransaction.create({
+        user: reservation.user,
+        kind: 'dispute_reversal',
+        points: -lostPoints,
+        pickupDelta: -reservation.quantity,
+        reservation: reservation._id,
+        balanceAfter: reverted.points,
+      }).catch((error) => {
+        if ((error as { code?: number })?.code !== 11000) console.error('Dispute reversal ledger write failed', error)
+      })
+    }
   }
   await reservation.save()
   const business = await Business.findById(reservation.business).select('owner name').lean()

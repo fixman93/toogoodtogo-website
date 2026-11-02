@@ -45,3 +45,11 @@ adminRoutes.get('/integrity/alerts', requirePermission('integrity.view'), c.inte
 adminRoutes.patch('/disputes/:id', requirePermission('partners.manage'), c.resolveDispute)
 adminRoutes.patch('/businesses/:id/commission', requirePermission('finance.view'), c.setCommission)
 adminRoutes.get('/donations', requirePermission('donations.view'), c.listDonations)
+// Foodnesi Rewards: program config, catalog, and redemption/fulfillment oversight.
+adminRoutes.get('/rewards/config', requirePermission('rewards.manage'), c.getLoyaltyConfig)
+adminRoutes.patch('/rewards/config', requirePermission('rewards.manage'), c.setLoyaltyConfig)
+adminRoutes.get('/rewards', requirePermission('rewards.manage'), c.listRewards)
+adminRoutes.post('/rewards', requirePermission('rewards.manage'), c.createReward)
+adminRoutes.patch('/rewards/:id', requirePermission('rewards.manage'), c.updateReward)
+adminRoutes.get('/rewards/redemptions', requirePermission('rewards.manage'), c.listRedemptions)
+adminRoutes.patch('/rewards/redemptions/:id/fulfillment', requirePermission('rewards.manage'), c.setRedemptionFulfillment)

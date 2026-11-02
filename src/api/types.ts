@@ -29,6 +29,7 @@ export type Permission =
   | 'reviews.moderate'
   | 'support.manage'
   | 'promotions.manage'
+  | 'rewards.manage'
   | 'finance.view'
   | 'finance.manage'
   | 'donations.view'
@@ -532,6 +533,78 @@ export interface AdminReview {
   createdAt: string
   user: { name: string; email: string } | null
   business: { id: string; name: string } | null
+}
+
+// ---------------------------------------------------------------------------
+// Foodnesi Rewards
+
+export type RewardType = 'bonus_points' | 'discount_percent' | 'free_bag' | 'voucher'
+export type RedemptionStatus = 'automatic' | 'locked' | 'unlocked' | 'redeemed' | 'expired' | 'void'
+
+export interface RewardCatalogItem {
+  id: string
+  key: string
+  title: string
+  description: string | null
+  type: RewardType
+  thresholdPickups: number
+  value: number
+  voucherDescription: string | null
+  repeatable: boolean
+  state: RedemptionStatus
+  redemptionId: string | null
+  promoCode: string | null
+  expiresAt?: string | null
+  progress: { current: number; target: number }
+}
+
+export interface RewardCatalog {
+  totalVerifiedPickups: number
+  points: number
+  rewards: RewardCatalogItem[]
+}
+
+export interface RewardRedemptionDto {
+  id: string
+  reward: Omit<RewardCatalogItem, 'state' | 'redemptionId' | 'progress'> | null
+  status: RedemptionStatus
+  unlockedAt: string
+  redeemedAt: string | null
+  expiresAt: string | null
+}
+
+export type RedeemRewardResult =
+  | { type: 'discount_percent'; promoCode: string; discountPercent: number }
+  | { type: 'voucher'; voucherDescription: string | null; ticketId: string }
+
+export interface LoyaltyConfig {
+  enabled: boolean
+  pointsPerBag: number
+  updatedAt: string | null
+}
+
+export interface AdminReward {
+  id: string
+  key: string
+  title: string
+  description: string | null
+  type: RewardType
+  thresholdPickups: number
+  value: number
+  voucherDescription: string | null
+  repeatable: boolean
+  isActive: boolean
+  createdAt: string
+}
+
+export interface AdminRedemption {
+  id: string
+  user: { id: string; name: string; email: string; phone: string | null } | null
+  reward: Omit<AdminReward, 'isActive' | 'createdAt'> | null
+  status: RedemptionStatus
+  unlockedAt: string
+  redeemedAt: string | null
+  fulfillmentNote: string | null
 }
 
 export interface AuditEntry {

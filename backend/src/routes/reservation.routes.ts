@@ -1,5 +1,7 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import * as c from '../controllers/reservation.controller.js'
+import { env } from '../config/env.js'
 import { authenticate, requireRole } from '../middleware/auth.js'
 
 export const reservationRoutes = Router()
@@ -7,14 +9,23 @@ export const reservationRoutes = Router()
 export const pickupRoutes = Router()
 pickupRoutes.get('/:token', c.sharedPass)
 
+// Scanning device abuse / runaway scripts, not normal counter use.
+const scanLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: env.SCAN_RATE_LIMIT_MAX,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMITED', message: 'Previše pokušaja. Sačekaj malo.' } },
+})
+
 reservationRoutes.use(authenticate)
 reservationRoutes.get('/', c.listReservations)
 reservationRoutes.get('/:id', c.getReservation)
 reservationRoutes.post('/', c.createReservation)
 // Scan / type a pickup code at the counter (business staff).
-reservationRoutes.post('/collect', requireRole('business', 'staff', 'admin'), c.collectByCode)
+reservationRoutes.post('/collect', scanLimiter, requireRole('business', 'staff', 'admin'), c.collectByCode)
 // Check a code without handing over (scanner result screen).
-reservationRoutes.post('/verify', requireRole('business', 'staff', 'admin'), c.verifyCode)
+reservationRoutes.post('/verify', scanLimiter, requireRole('business', 'staff', 'admin'), c.verifyCode)
 reservationRoutes.patch('/:id/cancel', c.cancelReservation)
 reservationRoutes.post('/:id/share', c.shareReservation)
 // Customer's phone at the shop during the pickup window (arrival check).
@@ -29,4 +40,4 @@ reservationRoutes.post('/:id/delivery/location', requireRole('business', 'staff'
 reservationRoutes.post('/:id/delivery/arrived', requireRole('business', 'staff', 'admin'), c.courierArrived)
 // Quick preset messages (customer ↔ courier).
 reservationRoutes.post('/:id/delivery/message', c.deliveryMessage)
-reservationRoutes.patch('/:id/collect', requireRole('business', 'staff', 'admin'), c.collectReservation)
+reservationRoutes.patch('/:id/collect', scanLimiter, requireRole('business', 'staff', 'admin'), c.collectReservation)

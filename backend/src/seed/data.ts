@@ -12,6 +12,26 @@ export const TEST_CUSTOMER = { name: 'Test Kupac', email: 'test.kupac@foodnesi.t
 /** Also the pre-rename addresses, so a database seeded earlier still counts as test data. */
 export const TEST_EMAILS: string[] = [TEST_PARTNER.email, TEST_CUSTOMER.email, 'test.partner@zalogaj.rs', 'test.kupac@zalogaj.rs']
 
+/** Foodnesi Rewards: the initial catalog (admin-editable afterwards — see /admin "Nagrade"). */
+export const REWARD_CATALOG = [
+  { key: 'bonus_points_3', title: 'Bonus bodovi', description: 'Svako 3. preuzimanje.', type: 'bonus_points', thresholdPickups: 3, value: 50, repeatable: true },
+  { key: 'discount_10pct_5', title: '10% popusta', description: 'Popust na sledeću rezervaciju.', type: 'discount_percent', thresholdPickups: 5, value: 10, repeatable: false },
+  { key: 'free_bag_10', title: 'Besplatna kesa', description: 'Jedna besplatna kesa.', type: 'free_bag', thresholdPickups: 10, value: 1, repeatable: false },
+  // Two free bags at 20 pickups = two independent single-bag rewards (unlocked together, redeemed separately).
+  { key: 'free_bag_20_a', title: 'Besplatna kesa (1/2)', description: 'Prva od dve besplatne kese na 20 preuzimanja.', type: 'free_bag', thresholdPickups: 20, value: 1, repeatable: false },
+  { key: 'free_bag_20_b', title: 'Besplatna kesa (2/2)', description: 'Druga od dve besplatne kese na 20 preuzimanja.', type: 'free_bag', thresholdPickups: 20, value: 1, repeatable: false },
+  {
+    key: 'vip_voucher_30',
+    title: 'VIP nagrada',
+    description: '2 noćenja u SAT Apartmanima na Tari.',
+    type: 'voucher',
+    thresholdPickups: 30,
+    value: 0,
+    voucherDescription: '2 noćenja — SAT Apartmani, Tara',
+    repeatable: false,
+  },
+] as const
+
 export interface SeedLocation {
   name: string
   category: Category

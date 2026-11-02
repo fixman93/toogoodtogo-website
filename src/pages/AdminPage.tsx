@@ -55,6 +55,7 @@ import { formatDate, formatDayLabel, formatMoney, formatPickupWindow, formatTime
 import { currentMonth } from '@/lib/time'
 import { TicketStatusBadge, TicketThread } from '@/features/support/TicketThread'
 import { PromotionsManager } from '@/features/promotions/PromotionsManager'
+import { RewardsTab } from '@/features/admin/RewardsTab'
 import { DonationTable } from '@/pages/partner/DonationsPage'
 import { OpenMonths, SettlementInfo, StatementSummary } from '@/pages/partner/StatementPage'
 import { ConfirmDelete } from '@/components/common/ConfirmDelete'
@@ -62,7 +63,7 @@ import { NoteItem } from '@/features/business/StandingNotice'
 import { cn } from '@/lib/utils'
 import { MARKETS } from '@/config/markets'
 
-const TABS = ['overview', 'applications', 'users', 'partners', 'businesses', 'reservations', 'reviews', 'support', 'promotions', 'finance', 'integrity', 'donations', 'audit'] as const
+const TABS = ['overview', 'applications', 'users', 'partners', 'businesses', 'reservations', 'reviews', 'support', 'promotions', 'rewards', 'finance', 'integrity', 'donations', 'audit'] as const
 type Tab = (typeof TABS)[number]
 /** Which permission each tab needs (mirrors the API). */
 const TAB_PERMISSION: Record<Tab, Permission> = {
@@ -75,6 +76,7 @@ const TAB_PERMISSION: Record<Tab, Permission> = {
   reviews: 'reviews.moderate',
   support: 'support.manage',
   promotions: 'promotions.manage',
+  rewards: 'rewards.manage',
   finance: 'finance.view',
   integrity: 'integrity.view',
   donations: 'donations.view',
@@ -1633,6 +1635,7 @@ function AdminPanel() {
       {tab === 'reviews' && <ReviewsTab />}
       {tab === 'support' && <SupportTab />}
       {tab === 'promotions' && <PromotionsManager platform />}
+      {tab === 'rewards' && <RewardsTab />}
       {tab === 'finance' && <FinanceTab />}
       {tab === 'integrity' && <IntegrityTab />}
       {tab === 'donations' && <DonationsTab />}

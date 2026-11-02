@@ -65,6 +65,8 @@ export interface IUser {
   notificationPrefs: { push: boolean; email: boolean }
   /** Loyalty points (rescued bags, referrals). */
   points: number
+  /** Bags successfully collected (scanned or self-confirmed) — drives Foodnesi Rewards unlocks. */
+  totalVerifiedPickups: number
   /** Personal invite code; friends who sign up with it earn both a bonus. */
   referralCode?: string
   referredBy?: Types.ObjectId
@@ -100,6 +102,7 @@ const userSchema = new Schema<IUser>(
     partnerStatusAt: Date,
     staffOf: { type: [{ type: Schema.Types.ObjectId, ref: 'Business' }], default: [], index: true },
     points: { type: Number, default: 0, min: 0 },
+    totalVerifiedPickups: { type: Number, default: 0, min: 0 },
     referralCode: { type: String, unique: true, sparse: true, uppercase: true },
     referredBy: { type: Schema.Types.ObjectId, ref: 'User' },
     referralRewarded: { type: Boolean, default: false },

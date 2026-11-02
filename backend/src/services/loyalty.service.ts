@@ -5,7 +5,7 @@
 import { randomBytes } from 'node:crypto'
 import type { Types } from 'mongoose'
 import { marketFor } from '../config/markets.js'
-import { Business, Reservation, User } from '../models/index.js'
+import { Business, LoyaltyConfig, LoyaltyTransaction, Reservation, Reward, RewardRedemption, User } from '../models/index.js'
 import { notify } from './notification.service.js'
 
 export const POINTS_PER_BAG = 10
@@ -80,6 +80,47 @@ export async function findReferrer(code?: string) {
   return User.findOne({ referralCode: code.trim().toUpperCase(), deletedAt: null }).select('_id')
 }
 
+// ---------------------------------------------------------------------------
+// Foodnesi Rewards: admin-configurable rate + catalog unlocking.
+
+/** Admin-editable rate/kill-switch. Falls back to the hardcoded default until an admin touches it. */
+export async function loyaltyConfig() {
+  const doc = await LoyaltyConfig.findById('default').lean()
+  return { enabled: doc?.enabled ?? true, pointsPerBag: doc?.pointsPerBag ?? POINTS_PER_BAG }
+}
+
+/**
+ * Unlock any catalog rewards `totalPickups` now qualifies for.
+ * - `bonus_points` (repeatable): an automatic points grant, no RewardRedemption.
+ * - everything else: one RewardRedemption per crossing, guarded by a unique
+ *   index on (user, reward, unlockedAtPickupCount) so a concurrent double
+ *   award just loses the race (caught below, not an error).
+ */
+async function unlockRewards(userId: Types.ObjectId, totalPickups: number) {
+  const rewards = await Reward.find({ isActive: true, thresholdPickups: { $lte: totalPickups } }).lean()
+  for (const reward of rewards) {
+    if (reward.type === 'bonus_points') {
+      const fires = reward.repeatable ? totalPickups % reward.thresholdPickups === 0 : totalPickups === reward.thresholdPickups
+      if (!fires) continue
+      const user = await User.findOneAndUpdate({ _id: userId }, { $inc: { points: reward.value } }, { new: true }).select('points').lean()
+      if (!user) continue
+      await LoyaltyTransaction.create({ user: userId, kind: 'bonus_milestone', points: reward.value, pickupDelta: 0, balanceAfter: user.points, note: reward.title })
+      void notify([userId], { type: 'reward', title: `+${reward.value} bodova!`, body: reward.title, link: '/rewards' })
+      continue
+    }
+    const fires = reward.repeatable ? totalPickups % reward.thresholdPickups === 0 : totalPickups === reward.thresholdPickups
+    if (!fires) continue
+    try {
+      const expiresAt = reward.type === 'voucher' ? undefined : new Date(Date.now() + 90 * 86_400_000)
+      await RewardRedemption.create({ user: userId, reward: reward._id, rewardKey: reward.key, unlockedAtPickupCount: totalPickups, expiresAt })
+      void notify([userId], { type: 'reward', title: 'Nova nagrada otključana!', body: reward.title, link: '/rewards' })
+    } catch (error) {
+      // Unique-index violation: this milestone was already unlocked (a concurrent pickup got there first).
+      if ((error as { code?: number }).code !== 11000) console.error('Reward unlock failed', error)
+    }
+  }
+}
+
 /** Weekly challenge and streak bonuses, each paid once. */
 async function rewardChallenges(userId: Types.ObjectId) {
   const user = await User.findById(userId).select('countryCode challengeWeek streakRewarded')
@@ -109,25 +150,39 @@ async function rewardChallenges(userId: Types.ObjectId) {
   }
 }
 
-/** Called after a pickup is confirmed. */
-export async function rewardPickup(userId: Types.ObjectId, bags: number) {
+/** Called after a pickup is confirmed. `reservationId` links the ledger row to it. */
+export async function rewardPickup(userId: Types.ObjectId, bags: number, reservationId?: Types.ObjectId) {
   try {
-    await User.updateOne({ _id: userId }, { $inc: { points: bags * POINTS_PER_BAG } })
+    const config = await loyaltyConfig()
+    const earned = bags * config.pointsPerBag
+    const updatedUser = await User.findOneAndUpdate({ _id: userId }, { $inc: { points: earned, totalVerifiedPickups: bags } }, { new: true }).select('points totalVerifiedPickups').lean()
+    if (updatedUser) {
+      try {
+        await LoyaltyTransaction.create({ user: userId, kind: 'pickup', points: earned, pickupDelta: bags, reservation: reservationId, balanceAfter: updatedUser.points })
+      } catch (error) {
+        if ((error as { code?: number }).code !== 11000) throw error // duplicate for this reservation — already recorded, not an error
+      }
+      if (config.enabled) await unlockRewards(userId, updatedUser.totalVerifiedPickups)
+    }
     await rewardChallenges(userId)
     // Referral bonus on the invited friend's first pickup (once).
-    const user = await User.findOneAndUpdate(
+    const referred = await User.findOneAndUpdate(
       { _id: userId, referredBy: { $ne: null }, referralRewarded: false },
       { $set: { referralRewarded: true } },
       { new: true },
     )
-    if (!user?.referredBy) return
+    if (!referred?.referredBy) return
     const firstPickup = (await Reservation.countDocuments({ user: userId, status: 'collected' })) <= 1
     if (!firstPickup) return
-    await User.updateMany({ _id: { $in: [userId, user.referredBy] } }, { $inc: { points: REFERRAL_BONUS } })
-    void notify([user.referredBy], {
+    const [, referrer] = await Promise.all([
+      User.findOneAndUpdate({ _id: userId }, { $inc: { points: REFERRAL_BONUS } }, { new: true }).select('points').lean(),
+      User.findOneAndUpdate({ _id: referred.referredBy }, { $inc: { points: REFERRAL_BONUS } }, { new: true }).select('points').lean(),
+    ])
+    if (referrer) await LoyaltyTransaction.create({ user: referred.referredBy, kind: 'referral', points: REFERRAL_BONUS, pickupDelta: 0, balanceAfter: referrer.points })
+    void notify([referred.referredBy], {
       type: 'reward',
       title: `+${REFERRAL_BONUS} bodova!`,
-      body: `${user.name} je preuzeo prvu kesu uz tvoju preporuku.`,
+      body: `${referred.name} je preuzeo prvu kesu uz tvoju preporuku.`,
       link: '/profile',
     })
   } catch (error) {

@@ -13,6 +13,7 @@ import { DeliveryPage } from '@/pages/partner/DeliveryPage'
 import { SchedulesPage } from '@/pages/partner/SchedulesPage'
 import { CounterPage } from '@/pages/partner/CounterPage'
 import { ImpactPage } from '@/pages/ImpactPage'
+import { RewardsPage } from '@/pages/RewardsPage'
 import { OfferFormPage } from '@/pages/partner/OfferFormPage'
 import { SalesPage } from '@/pages/partner/SalesPage'
 import { DonationsPage } from '@/pages/partner/DonationsPage'
@@ -79,6 +80,7 @@ const router = createBrowserRouter([
       { path: 'business/schedules', element: <SchedulesPage /> },
       { path: 'business/counter', element: <CounterPage /> },
       { path: 'impact', element: <ImpactPage /> },
+      { path: 'rewards', element: <RewardsPage /> },
       { path: 'business/promotions', element: <PromotionsPage /> },
       { path: 'business/donations', element: <DonationsPage /> },
       { path: 'business/statements', element: <StatementPage /> },

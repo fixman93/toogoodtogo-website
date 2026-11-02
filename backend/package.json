@@ -12,9 +12,11 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "seed": "tsx src/seed/seed.ts",
     "set-role": "tsx src/scripts/set-role.ts",
-    "review:apple": "tsx src/scripts/apple-review-accounts.ts"
+    "review:apple": "tsx src/scripts/apple-review-accounts.ts",
+    "rewards:seed": "tsx src/scripts/seed-rewards-catalog.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1152.0",
@@ -41,7 +43,9 @@
     "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.5",
     "@types/web-push": "^3.6.4",
+    "mongodb-memory-server": "^11.3.0",
     "tsx": "^4.23.15",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vitest": "^5.1.0"
   }
 }

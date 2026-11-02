@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { Bell, Camera, Download, FileText, Phone, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Store, Trash2, Wallet } from 'lucide-react'
+import { Bell, Camera, Download, FileText, Phone, ChevronRight, Cloud, Gift, Globe, Languages, LifeBuoy, Mail, Trophy, Leaf, Loader2, LogOut, ShieldCheck, Sparkles, Store, Trash2, Wallet } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { authApi } from '@/api/services'
 import { PasswordInput } from '@/components/ui/password-input'
@@ -252,12 +252,20 @@ function Rewards() {
       <p className="text-xs text-muted-foreground">
         {level.nextAt ? t('profile.nextLevel', { points: level.nextAt - points, level: localize(level.nextName ?? '') }) : t('profile.maxLevel')} · {t('profile.pointsHint')}
       </p>
-      <Button asChild variant="secondary" className="w-full">
-        <Link to="/impact">
-          <Leaf />
-          {t('impact.open')}
-        </Link>
-      </Button>
+      <div className="flex gap-2">
+        <Button asChild variant="secondary" className="flex-1">
+          <Link to="/impact">
+            <Leaf />
+            {t('impact.open')}
+          </Link>
+        </Button>
+        <Button asChild variant="secondary" className="flex-1">
+          <Link to="/rewards">
+            <Sparkles />
+            {t('rewards.open')}
+          </Link>
+        </Button>
+      </div>
       {inviteUrl && (
         <div className="space-y-2 border-t pt-3">
           <p className="font-semibold">{t('profile.invite')}</p>

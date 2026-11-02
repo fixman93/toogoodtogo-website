@@ -15,10 +15,10 @@ import mongoose from 'mongoose'
 import { connectDatabase, disconnectDatabase } from '../config/db.js'
 import { env } from '../config/env.js'
 import { getMarket } from '../config/markets.js'
-import { Business, Offer, User } from '../models/index.js'
+import { Business, LoyaltyConfig, Offer, Reward, User } from '../models/index.js'
 import { slugify } from '../utils/text.js'
 import { zonedTime } from '../utils/time.js'
-import { SEED_DAYS, TEST_CUSTOMER, TEST_EMAILS, TEST_PARTNER, testLocations, testOfferTemplates } from './data.js'
+import { REWARD_CATALOG, SEED_DAYS, TEST_CUSTOMER, TEST_EMAILS, TEST_PARTNER, testLocations, testOfferTemplates } from './data.js'
 
 async function seed() {
   if (env.NODE_ENV === 'production') throw new Error('Refusing to seed with NODE_ENV=production.')
@@ -41,6 +41,9 @@ async function seed() {
   const passwordHash = await bcrypt.hash(password, 12)
   const partner = await User.create({ ...TEST_PARTNER, passwordHash })
   await User.create({ ...TEST_CUSTOMER, passwordHash })
+
+  await Reward.insertMany(REWARD_CATALOG)
+  await LoyaltyConfig.create({ _id: 'default' })
 
   const locations = await Promise.all(
     testLocations.map((l) =>
@@ -97,7 +100,7 @@ async function seed() {
     }
   }
 
-  console.log(`🌱 Test data: 1 partner, ${locations.length} locations, ${offerCount} offers (next ${SEED_DAYS} days), 1 customer.`)
+  console.log(`🌱 Test data: 1 partner, ${locations.length} locations, ${offerCount} offers (next ${SEED_DAYS} days), 1 customer, ${REWARD_CATALOG.length} rewards.`)
   console.log(`   Partner:  ${TEST_PARTNER.email}`)
   console.log(`   Customer: ${TEST_CUSTOMER.email}`)
   console.log(`   Password (both): ${password}`)

@@ -20,6 +20,8 @@ const schema = z.object({
   DEFAULT_MARKET: z.string().default('RS'),
   /** Max login/register attempts per IP per 15 minutes. */
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
+  /** Max pickup-code scan/verify attempts per IP per minute (a busy counter can scan dozens/minute). */
+  SCAN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
   /**
    * Public web app URL — used for links in e-mails and push notifications.
    * Falls back to the first CORS origin (the web app) when not set.

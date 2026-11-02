@@ -1,8 +1,8 @@
 /** TanStack Query hooks — the only way screens read or mutate server state. */
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { uploadsApi, type CreateReservationBody, type ImageKind } from '@/api/services'
-import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, promotionsApi, reservationsApi, schedulesApi, supportApi, waitlistApi } from '@/api/services'
-import type { BoostKind, DeliveryMessageKey, OfferScheduleInput, Donation, PromotionInput, TicketCategory, TicketStatus, WebhookEvent, ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role, User } from '@/api/types'
+import { adminApi, authApi, businessesApi, favoritesApi, notificationsApi, offersApi, partnerApi, promotionsApi, reservationsApi, rewardsApi, schedulesApi, supportApi, waitlistApi } from '@/api/services'
+import type { AdminReward, BoostKind, DeliveryMessageKey, OfferScheduleInput, Donation, PromotionInput, RedemptionStatus, TicketCategory, TicketStatus, WebhookEvent, ApplicationStatus, BoundingBox, BusinessInput, PartnerApplicationInput, ReservationStatus, Favorite, FavoriteTarget, OfferFilters, OfferInput, OfferPatch, OfferQuery, Reservation, Role, User } from '@/api/types'
 import { ME_QUERY_KEY, useAuth } from '@/features/auth/auth-context'
 
 export function useOffers(query: OfferQuery, options: { enabled?: boolean } = {}) {
@@ -784,4 +784,59 @@ export function useDeliveryMessage() {
 
 export function useIntegrityAlerts() {
   return useQuery({ queryKey: ['admin', 'integrity', 'alerts'], queryFn: adminApi.integrityAlerts })
+}
+
+// ---------------------------------------------------------------------------
+// Foodnesi Rewards
+
+export function useRewards() {
+  const { user } = useAuth()
+  return useQuery({ queryKey: ['rewards', user?.id], queryFn: rewardsApi.catalog, enabled: !!user })
+}
+
+export function useMyRedemptions() {
+  const { user } = useAuth()
+  return useQuery({ queryKey: ['rewards', 'redemptions', user?.id], queryFn: rewardsApi.myRedemptions, enabled: !!user })
+}
+
+export function useRedeemReward() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (redemptionId: string) => rewardsApi.redeem(redemptionId),
+    onSettled: () => refresh(queryClient, [['rewards']]),
+  })
+}
+
+export function useLoyaltyConfig() {
+  return useQuery({ queryKey: ['admin', 'rewards', 'config'], queryFn: adminApi.loyaltyConfig })
+}
+
+export function useSetLoyaltyConfig() {
+  const queryClient = useQueryClient()
+  return useMutation({ mutationFn: adminApi.setLoyaltyConfig, onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin', 'rewards'] }) })
+}
+
+export function useAdminRewards() {
+  return useQuery({ queryKey: ['admin', 'rewards', 'catalog'], queryFn: adminApi.rewards })
+}
+
+export function useUpdateReward() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & Partial<Pick<AdminReward, 'title' | 'description' | 'thresholdPickups' | 'value' | 'voucherDescription' | 'repeatable' | 'isActive'>>) =>
+      adminApi.updateReward(id, body),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin', 'rewards', 'catalog'] }),
+  })
+}
+
+export function useAdminRedemptions(params: { status?: RedemptionStatus; needsFulfillment?: boolean } = {}) {
+  return useQuery({ queryKey: ['admin', 'rewards', 'redemptions', params], queryFn: () => adminApi.redemptions(params) })
+}
+
+export function useSetRedemptionFulfillment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) => adminApi.setRedemptionFulfillment(id, note),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['admin', 'rewards', 'redemptions'] }),
+  })
 }

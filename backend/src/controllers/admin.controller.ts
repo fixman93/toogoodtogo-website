@@ -10,6 +10,7 @@ import * as onboardingService from '../services/partner-onboarding.service.js'
 import * as integrityService from '../services/integrity.service.js'
 import * as staffService from '../services/staff.service.js'
 import * as reservationService from '../services/reservation.service.js'
+import * as rewardService from '../services/reward.service.js'
 import { z } from 'zod'
 import { list, ok } from '../utils/respond.js'
 import {
@@ -31,6 +32,7 @@ import {
   partnerContractBody,
 } from '../validators/admin.validators.js'
 import { idParams } from '../validators/common.js'
+import { adminRedemptionsQuery, adminRewardCreateBody, adminRewardUpdateBody, loyaltyConfigBody } from '../validators/reward.validators.js'
 
 export async function getStats(_req: Request, res: Response) {
   ok(res, await adminService.stats())
@@ -171,4 +173,33 @@ export async function getStaffAccess(req: Request, res: Response) {
 export async function setStaffAccess(req: Request, res: Response) {
   const { businessIds } = z.object({ businessIds: z.array(z.string().regex(/^[a-f\d]{24}$/i)).max(200) }).parse(req.body)
   ok(res, await staffService.setStaffAccess(idParams.parse(req.params).id, businessIds, currentUser(req)))
+}
+
+export async function getLoyaltyConfig(_req: Request, res: Response) {
+  ok(res, await rewardService.getLoyaltyConfig())
+}
+
+export async function setLoyaltyConfig(req: Request, res: Response) {
+  ok(res, await rewardService.setLoyaltyConfig(loyaltyConfigBody.parse(req.body), currentUser(req)))
+}
+
+export async function listRewards(_req: Request, res: Response) {
+  ok(res, await rewardService.adminListRewards())
+}
+
+export async function createReward(req: Request, res: Response) {
+  ok(res, await rewardService.adminCreateReward(adminRewardCreateBody.parse(req.body), currentUser(req)), 201)
+}
+
+export async function updateReward(req: Request, res: Response) {
+  ok(res, await rewardService.adminUpdateReward(idParams.parse(req.params).id, adminRewardUpdateBody.parse(req.body), currentUser(req)))
+}
+
+export async function listRedemptions(req: Request, res: Response) {
+  ok(res, await rewardService.adminListRedemptions(adminRedemptionsQuery.parse(req.query)))
+}
+
+export async function setRedemptionFulfillment(req: Request, res: Response) {
+  const { note } = z.object({ note: z.string().trim().min(2).max(500) }).parse(req.body)
+  ok(res, await rewardService.adminSetFulfillment(idParams.parse(req.params).id, note, currentUser(req)))
 }

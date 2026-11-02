@@ -29,7 +29,14 @@ import type {
   WebhookEvent,
   WebhookInfo,
   AdminBusiness,
+  AdminRedemption,
   AdminReview,
+  AdminReward,
+  LoyaltyConfig,
+  RedeemRewardResult,
+  RedemptionStatus,
+  RewardCatalog,
+  RewardRedemptionDto,
   AppNotification,
   ApplicationStatus,
   AuditEntry,
@@ -155,8 +162,16 @@ export interface CreateReservationBody {
   offerId: string
   quantity: number
   promoCode?: string
+  /** Foodnesi Rewards: an unlocked free_bag reward to apply to this reservation. */
+  rewardRedemptionId?: string
   fulfillment?: 'pickup' | 'delivery'
   delivery?: { address: string; lat: number; lng: number; note?: string }
+}
+
+export const rewardsApi = {
+  catalog: () => unwrap<RewardCatalog>(api.get('/rewards')),
+  myRedemptions: () => unwrap<RewardRedemptionDto[]>(api.get('/rewards/redemptions')),
+  redeem: (redemptionId: string) => unwrap<RedeemRewardResult>(api.post(`/rewards/${redemptionId}/redeem`)),
 }
 
 export const reservationsApi = {
@@ -241,6 +256,14 @@ export const adminApi = {
   deletePartner: (id: string, reason: string) => api.delete(`/admin/partners/${id}`, { data: { reason } }).then(() => undefined),
   setCommission: (businessId: string, rate: number | null) => unwrap<{ businessId: string; commissionRate: number | null }>(api.patch(`/admin/businesses/${businessId}/commission`, { rate })),
   donations: () => unwrap<DonationList>(api.get('/admin/donations')),
+  loyaltyConfig: () => unwrap<LoyaltyConfig>(api.get('/admin/rewards/config')),
+  setLoyaltyConfig: (body: { enabled?: boolean; pointsPerBag?: number }) => unwrap<LoyaltyConfig>(api.patch('/admin/rewards/config', body)),
+  rewards: () => unwrap<AdminReward[]>(api.get('/admin/rewards')),
+  updateReward: (id: string, body: Partial<Pick<AdminReward, 'title' | 'description' | 'thresholdPickups' | 'value' | 'voucherDescription' | 'repeatable' | 'isActive'>>) =>
+    unwrap<AdminReward>(api.patch(`/admin/rewards/${id}`, body)),
+  redemptions: (params: { status?: RedemptionStatus; needsFulfillment?: boolean } = {}) =>
+    unwrap<AdminRedemption[]>(api.get('/admin/rewards/redemptions', { params })),
+  setRedemptionFulfillment: (id: string, note: string) => unwrap<{ id: string; fulfillmentNote: string | null }>(api.patch(`/admin/rewards/redemptions/${id}/fulfillment`, { note })),
 }
 
 export const partnerApi = {

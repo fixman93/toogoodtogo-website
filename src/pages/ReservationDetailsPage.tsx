@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
 import { Link, useLocation as useRouterLocation, useParams } from 'react-router'
-import { ArrowLeft, CalendarClock, CheckCircle2, ExternalLink, Info, Leaf, Loader2, MapPin, ReceiptText, Send, Star, Truck, Camera, X, MapPinCheck } from 'lucide-react'
+import { ArrowLeft, CalendarClock, CheckCircle2, ExternalLink, Info, Leaf, Loader2, MapPin, ReceiptText, Send, Sparkles, Star, Truck, Camera, X, MapPinCheck } from 'lucide-react'
 import type { Reservation } from '@/api/types'
 import { ApiError } from '@/api/client'
 import { RequireAuth } from '@/components/common/RequireAuth'
@@ -33,11 +33,17 @@ function Details() {
   const queryClient = useQueryClient()
 
   // When the shop scans the code, polling flips the status to "collected":
-  // refresh lists so history and profile stats include the new pickup.
+  // refresh lists so history and profile stats include the new pickup, and
+  // flag it as a just-now transition (not a revisit) for the rewards nudge below.
   const previousStatus = useRef(r?.status)
+  const [justCollected, setJustCollected] = useState(false)
   useEffect(() => {
     if (previousStatus.current && previousStatus.current !== r?.status) {
       queryClient.invalidateQueries({ queryKey: ['reservations', 'list'] })
+      if (previousStatus.current === 'confirmed' && r?.status === 'collected') {
+        setJustCollected(true)
+        queryClient.invalidateQueries({ queryKey: ['rewards'] })
+      }
     }
     previousStatus.current = r?.status
   }, [r?.status, queryClient])
@@ -78,6 +84,12 @@ function Details() {
             </p>
             {r.collectedAt && (
               <p className="mt-1 text-xs text-muted-foreground">{t('reservations.collectedAt', { time: formatTime(r.collectedAt, r.timezone) })}</p>
+            )}
+            {justCollected && (
+              <Link to="/rewards" className="mt-2 flex items-center gap-1 text-sm font-bold text-success underline">
+                <Sparkles className="size-4" />
+                {t('rewards.earnedHint')}
+              </Link>
             )}
           </div>
         </div>

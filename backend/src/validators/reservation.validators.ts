@@ -5,6 +5,8 @@ export const createReservationBody = z.object({
   offerId: objectId,
   quantity: z.number().int().min(1).max(20).default(1),
   promoCode: z.string().trim().min(2).max(30).optional(),
+  /** Foodnesi Rewards: an unlocked free_bag reward to apply to this reservation. */
+  rewardRedemptionId: objectId.optional(),
   fulfillment: z.enum(['pickup', 'delivery']).default('pickup'),
   /** Required for delivery: where to bring it. */
   delivery: z

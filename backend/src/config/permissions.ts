@@ -18,6 +18,7 @@ export const PERMISSIONS = [
   'finance.manage',
   'donations.view',
   'audit.view',
+  'rewards.manage',
 ] as const
 export type Permission = (typeof PERMISSIONS)[number]
 
@@ -35,6 +36,7 @@ const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'reviews.moderate',
     'promotions.manage',
     'donations.view',
+    'rewards.manage',
   ],
   support: ['stats.view', 'users.view', 'reservations.view', 'reviews.moderate', 'support.manage'],
   finance: ['stats.view', 'reservations.view', 'finance.view', 'finance.manage', 'integrity.view', 'donations.view'],
