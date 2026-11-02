@@ -302,6 +302,7 @@ export const en = {
   'offer.limitReached': 'You already have the max bags from this offer',
   'offer.reserve': 'Reserve',
   'offer.reserveFor': 'Reserve for {price}',
+  'offer.reserveConfirmTitle': 'Confirm reservation',
   'offer.loginToReserve': 'Sign in to reserve',
   'offer.payAtPickup': 'Pay at pickup, in the shop.',
   'offer.reserved': 'Reservation confirmed!',

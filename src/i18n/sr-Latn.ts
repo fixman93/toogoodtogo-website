@@ -306,6 +306,7 @@ export const srLatn = {
   'offer.limitReached': 'Već imaš najviše kesa iz ove ponude',
   'offer.reserve': 'Rezerviši',
   'offer.reserveFor': 'Rezerviši za {price}',
+  'offer.reserveConfirmTitle': 'Potvrdi rezervaciju',
   'offer.loginToReserve': 'Prijavi se da bi rezervisao',
   'offer.payAtPickup': 'Plaćanje pri preuzimanju u lokalu.',
   'offer.reserved': 'Rezervacija je potvrđena!',

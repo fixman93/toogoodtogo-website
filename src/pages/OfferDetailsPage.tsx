@@ -37,8 +37,12 @@ function ReservePanel({ offer }: { offer: Offer }) {
   // The preview is for a specific quantity; changing it re-checks the code.
   const applied = promo && promo.quantity === quantity ? promo : null
   const applyPromo = (code: string) =>
-    check.mutate({ code, offerId: offer.id, quantity }, { onSuccess: (r) => setPromo({ code: r.code, discountMinor: r.discountMinor, quantity }) })
+    check.mutate(
+      { code, offerId: offer.id, quantity },
+      { onSuccess: (r) => { setConfirming(false); setPromo({ code: r.code, discountMinor: r.discountMinor, quantity }) } },
+    )
   const reserve = useCreateReservation()
+  const [confirming, setConfirming] = useState(false)
   const delivery = offer.business.delivery?.enabled ? offer.business.delivery : null
   const [mode, setMode] = useState<'pickup' | 'delivery'>('pickup')
   const [target, setTarget] = useState<DeliveryTarget | null>(null)
@@ -85,13 +89,33 @@ function ReservePanel({ offer }: { offer: Offer }) {
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold">{t('offer.quantity')}</span>
           <div className="flex items-center gap-1 rounded-full border bg-card p-1">
-            <Button variant="ghost" size="icon" className="size-9" aria-label="-" disabled={quantity <= 1} onClick={() => setQuantity((q) => q - 1)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-9"
+              aria-label="-"
+              disabled={quantity <= 1}
+              onClick={() => {
+                setConfirming(false)
+                setQuantity((q) => q - 1)
+              }}
+            >
               <Minus />
             </Button>
             <span className="w-8 text-center font-bold tabular-nums" aria-live="polite">
               {quantity}
             </span>
-            <Button variant="ghost" size="icon" className="size-9" aria-label="+" disabled={quantity >= max} onClick={() => setQuantity((q) => q + 1)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-9"
+              aria-label="+"
+              disabled={quantity >= max}
+              onClick={() => {
+                setConfirming(false)
+                setQuantity((q) => q + 1)
+              }}
+            >
               <Plus />
             </Button>
           </div>
@@ -111,21 +135,46 @@ function ReservePanel({ offer }: { offer: Offer }) {
           currency={offer.currency}
           subtotalMinor={subtotal}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={(m) => {
+            setConfirming(false)
+            setMode(m)
+          }}
           target={target}
-          onTargetChange={setTarget}
+          onTargetChange={(next) => {
+            setConfirming(false)
+            setTarget(next)
+          }}
         />
       )}
-      <Button size="lg" className="w-full" disabled={soldOut || limitReached || reserve.isPending || (!!user && needsAddress)} onClick={submit}>
-        {reserve.isPending && <Loader2 className="animate-spin" />}
-        {soldOut
-          ? t('offer.soldOut')
-          : limitReached
-            ? t('offer.limitReached')
-            : user
-            ? t(mode === 'delivery' ? 'delivery.orderFor' : 'offer.reserveFor', { price: formatMoney(subtotal + fee, offer.currency) })
-            : t('offer.loginToReserve')}
-      </Button>
+      {confirming ? (
+        <Card className="space-y-3 p-4 text-center">
+          <p className="text-sm font-semibold">{t('offer.reserveConfirmTitle')}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setConfirming(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button className="flex-1" disabled={reserve.isPending} onClick={submit}>
+              {reserve.isPending && <Loader2 className="animate-spin" />}
+              {t(mode === 'delivery' ? 'delivery.orderFor' : 'offer.reserveFor', { price: formatMoney(subtotal + fee, offer.currency) })}
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <Button
+          size="lg"
+          className="w-full"
+          disabled={soldOut || limitReached || reserve.isPending || (!!user && needsAddress)}
+          onClick={() => (user ? setConfirming(true) : submit())}
+        >
+          {soldOut
+            ? t('offer.soldOut')
+            : limitReached
+              ? t('offer.limitReached')
+              : user
+              ? t(mode === 'delivery' ? 'delivery.orderFor' : 'offer.reserveFor', { price: formatMoney(subtotal + fee, offer.currency) })
+              : t('offer.loginToReserve')}
+        </Button>
+      )}
       {!soldOut && (
         <p className="flex items-start justify-center gap-1.5 text-center text-xs text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" />
@@ -148,7 +197,14 @@ function ReservePanel({ offer }: { offer: Offer }) {
           {applied ? (
             <p className="font-semibold text-success">
               {t('offer.promoApplied', { code: applied.code, amount: formatMoney(applied.discountMinor, offer.currency) })}{' '}
-              <button type="button" className="text-xs text-muted-foreground underline" onClick={() => setPromo(null)}>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline"
+                onClick={() => {
+                  setConfirming(false)
+                  setPromo(null)
+                }}
+              >
                 {t('offer.promoRemove')}
               </button>
             </p>
