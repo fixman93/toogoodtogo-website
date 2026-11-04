@@ -36,22 +36,23 @@ export function MapView({
   fullscreen?: boolean
   onFullscreenChange?: (fullscreen: boolean) => void
 }) {
-  const { location, locateDevice } = useLocation()
+  const { location, isDeviceLocation, locateDevice } = useLocation()
   const user: GeoPoint = { lat: location.lat, lng: location.lng }
   const [bbox, setBbox] = useState<BoundingBox | null>(null)
   const [selectedId, setSelectedId] = useState<string>()
 
   // Current location is the primary starting point: ask for it once when the
-  // map opens, unless the user has already blocked location access.
+  // map first opens. Already have a device fix (this visit or a past one,
+  // persisted by LocationProvider) → reuse it, don't ask/re-fetch again.
   const asked = useRef(false)
   useEffect(() => {
-    if (asked.current) return
+    if (asked.current || isDeviceLocation) return
     asked.current = true
     const permissions = navigator.permissions?.query({ name: 'geolocation' as PermissionName })
     void (permissions ?? Promise.resolve({ state: 'prompt' } as PermissionStatus))
       .then((status) => status.state !== 'denied' && locateDevice())
       .catch(() => locateDevice())
-  }, [locateDevice])
+  }, [locateDevice, isDeviceLocation])
 
   // Full screen: no page scroll behind the map; Esc closes the tapped location first, then full screen.
   useEffect(() => {

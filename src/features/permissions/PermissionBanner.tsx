@@ -70,7 +70,12 @@ export function PermissionBanner() {
       if (isIosBrowserTab()) next.notifications = 'ios-install'
       else if (!pushSupported()) next.notifications = 'ok'
       else if (Notification.permission === 'denied') next.notifications = 'denied'
-      else next.notifications = (await currentSubscription().catch(() => null)) ? 'ok' : 'ask'
+      else if (await currentSubscription().catch(() => null)) next.notifications = 'ok'
+      else if (Notification.permission === 'granted') {
+        // Already allowed before — the subscription just lapsed (service worker
+        // re-registered, key rotated…). Re-subscribe quietly instead of asking again.
+        next.notifications = (await enablePush().catch(() => 'denied')) === 'enabled' ? 'ok' : 'ask'
+      } else next.notifications = 'ask'
     }
     // Camera: only nag when it was blocked (the scanner asks by itself the first time).
     if (scanner) next.camera = (await queryPermission('camera')) === 'denied' ? 'denied' : 'ok'

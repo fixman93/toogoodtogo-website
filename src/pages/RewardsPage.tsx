@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowLeft, Check, Copy, Gift, Loader2, Lock, Percent, Sparkles, Ticket } from 'lucide-react'
+import { ArrowLeft, Check, Copy, Crown, Gift, Loader2, Lock, Percent, Sparkles, Ticket } from 'lucide-react'
 import type { RewardCatalogItem } from '@/api/types'
 import { ApiError } from '@/api/client'
 import { RequireAuth } from '@/components/common/RequireAuth'
@@ -45,6 +45,63 @@ function CopyCode({ code }: { code: string }) {
   )
 }
 
+/** The VIP voucher is a once-in-a-lifetime physical reward — it gets its own showcase treatment. */
+function VipRewardCard({ item }: { item: RewardCatalogItem }) {
+  const redeem = useRedeemReward()
+  const left = Math.max(0, item.thresholdPickups - item.progress.current)
+  const pct = Math.min(100, Math.round((item.progress.current / item.progress.target) * 100))
+
+  return (
+    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#fdab2f] via-[#e85d2f] to-[#7c2d12] p-5 text-white shadow-lg sm:p-7">
+      <div aria-hidden className="pointer-events-none absolute -top-10 -right-10 size-40 rounded-full bg-white/15 blur-2xl sm:size-56" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-12 -left-8 size-32 rounded-full bg-black/10 blur-2xl sm:size-44" />
+
+      <div className="relative space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-extrabold tracking-wide uppercase backdrop-blur">
+            <Crown className="size-3.5" />
+            VIP
+          </span>
+          {item.state === 'redeemed' && <Badge variant="glass">{t('rewards.redeemed')}</Badge>}
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-white/20 backdrop-blur sm:size-16">
+            <Crown className="size-7 sm:size-8" />
+          </div>
+          <div>
+            <p className="text-xl font-extrabold sm:text-2xl">{item.title}</p>
+            {item.voucherDescription && <p className="text-sm font-semibold text-white/90 sm:text-base">{item.voucherDescription}</p>}
+          </div>
+        </div>
+
+        {item.state === 'locked' && (
+          <>
+            <div className="h-2.5 overflow-hidden rounded-full bg-white/25" aria-hidden>
+              <div className="h-full rounded-full bg-white transition-[width]" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="text-sm font-bold">{t('rewards.leftToGo', { count: left, title: item.title })}</p>
+          </>
+        )}
+
+        {item.state === 'unlocked' && (
+          <Button
+            size="lg"
+            className="w-full bg-white font-bold text-foreground hover:bg-white/90"
+            disabled={redeem.isPending}
+            onClick={() => item.redemptionId && redeem.mutate(item.redemptionId)}
+          >
+            {redeem.isPending && <Loader2 className="animate-spin" />}
+            {t('rewards.claim')}
+          </Button>
+        )}
+        {redeem.isError && redeem.variables === item.redemptionId && <p className="text-sm font-semibold text-white">{redeem.error instanceof ApiError ? redeem.error.message : t('common.errorText')}</p>}
+        {item.state === 'redeemed' && <p className="text-sm font-semibold">{t('rewards.voucherClaimed')}</p>}
+      </div>
+    </div>
+  )
+}
+
 function RewardCard({ item }: { item: RewardCatalogItem }) {
   const redeem = useRedeemReward()
   const Icon = ICONS[item.type]
@@ -81,7 +138,7 @@ function RewardCard({ item }: { item: RewardCatalogItem }) {
 
       {item.state === 'unlocked' && item.type === 'free_bag' && <p className="text-sm text-success">{t('rewards.freeBagHint')}</p>}
 
-      {item.state === 'unlocked' && (item.type === 'discount_percent' || item.type === 'voucher') && (
+      {item.state === 'unlocked' && item.type === 'discount_percent' && (
         <Button size="sm" className="w-full" disabled={redeem.isPending} onClick={() => item.redemptionId && redeem.mutate(item.redemptionId)}>
           {redeem.isPending && <Loader2 className="animate-spin" />}
           {t('rewards.claim')}
@@ -98,7 +155,6 @@ function RewardCard({ item }: { item: RewardCatalogItem }) {
         </div>
       )}
       {item.state === 'redeemed' && item.type === 'free_bag' && <p className="text-sm text-muted-foreground">{t('rewards.freeBagUsed')}</p>}
-      {item.state === 'redeemed' && item.type === 'voucher' && <p className="text-sm text-success">{t('rewards.voucherClaimed')}</p>}
     </Card>
   )
 }
@@ -121,9 +177,7 @@ function RewardsView() {
         </div>
       </Card>
       <div className="space-y-3">
-        {data.rewards.map((item) => (
-          <RewardCard key={item.id} item={item} />
-        ))}
+        {data.rewards.map((item) => (item.type === 'voucher' ? <VipRewardCard key={item.id} item={item} /> : <RewardCard key={item.id} item={item} />))}
       </div>
     </div>
   )
