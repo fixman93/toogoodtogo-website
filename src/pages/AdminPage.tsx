@@ -1442,6 +1442,9 @@ function DisputeRow({ r }: { r: Reservation }) {
       <p className="rounded-lg bg-muted/60 p-2">
         <span className="font-semibold">{t('integrity.partnerSays')}:</span> {r.dispute?.reason}
       </p>
+      <p className={cn('rounded-lg p-2 font-medium', r.presence ? 'bg-success/12 text-success' : 'bg-destructive/10 text-destructive')}>
+        {r.presence ? t('integrity.presenceYes', { at: formatTime(r.presence.firstAt, r.timezone), meters: r.presence.minDistanceMeters }) : t('integrity.presenceNo')}
+      </p>
       <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('integrity.notePlaceholder')} maxLength={500} className="h-10 rounded-lg" />
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" disabled={resolve.isPending} onClick={() => resolve.mutate({ id: r.id, decision: 'upheld', note: note.trim() || undefined })}>

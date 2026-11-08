@@ -868,6 +868,8 @@ export const srLatn = {
   'integrity.openDisputes': { one: '{count} spor', few: '{count} spora', other: '{count} sporova' },
   'integrity.partnerSays': 'Partner kaže',
   'integrity.notePlaceholder': 'Napomena partneru (opciono)',
+  'integrity.presenceYes': 'GPS dokaz: kupčev telefon registrovan u lokalu {at}, najbliže {meters} m.',
+  'integrity.presenceNo': 'Nema GPS dokaza da je kupac bio u lokalu u tom periodu.',
   'integrity.uphold': 'Partner je u pravu – nije preuzeto',
   'integrity.reject': 'Odbij – ostaje preuzeto',
   'integrity.risk.high': 'Visok rizik',

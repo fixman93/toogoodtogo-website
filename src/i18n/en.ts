@@ -869,6 +869,8 @@ export const en = {
   'integrity.openDisputes': { one: '{count} dispute', few: '{count} disputes', other: '{count} disputes' },
   'integrity.partnerSays': 'The partner says',
   'integrity.notePlaceholder': 'Note to the partner (optional)',
+  'integrity.presenceYes': 'GPS evidence: customer’s phone was at the shop {at}, closest {meters} m.',
+  'integrity.presenceNo': 'No GPS evidence the customer was at the shop in that window.',
   'integrity.uphold': 'The partner is right – not picked up',
   'integrity.reject': 'Reject – stays picked up',
   'integrity.risk.high': 'High risk',
